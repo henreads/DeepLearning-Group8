@@ -29,11 +29,10 @@ def normalize_map(wafer_map: np.ndarray, image_size: int) -> np.ndarray:
 
 def infer_label_from_row(row: pd.Series) -> str | None:
     failure = unwrap_legacy_value(row.get("failureType", "")).lower()
-    train_test = unwrap_legacy_value(row.get("trianTestLabel", "")).lower()
 
     if failure and failure != "none":
         return LABEL_DEFECT
-    if failure == "none" or train_test == "training":
+    if failure == "none":
         return LABEL_NORMAL
     return None
 
@@ -49,22 +48,46 @@ def split_normals(normal_df: pd.DataFrame, seed: int) -> pd.DataFrame:
     return shuffled
 
 
+def sample_test_defects(
+    defect_df: pd.DataFrame,
+    normal_df: pd.DataFrame,
+    train_subset_cfg: dict,
+    seed: int,
+) -> pd.DataFrame:
+    use_all_defects = bool(train_subset_cfg.get("use_all_defects_for_test", True))
+    if use_all_defects:
+        sampled = defect_df.copy()
+        sampled["split"] = "test"
+        return sampled
+
+    test_normal_count = int((normal_df["split"] == "test").sum())
+    fraction = float(train_subset_cfg.get("test_defect_fraction_of_test_normals", 1.0))
+    requested = max(1, int(round(test_normal_count * fraction)))
+    sampled = defect_df.sample(n=min(requested, len(defect_df)), random_state=seed).copy()
+    sampled["split"] = "test"
+    return sampled
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", default="configs/data.toml")
     parser.add_argument("--dev", action="store_true")
+    parser.add_argument("--normal-limit", type=int, default=None)
+    parser.add_argument("--metadata-path", default=None)
     args = parser.parse_args()
 
     config = load_toml(args.config)
     dataset_cfg = config["dataset"]
     dev_cfg = config["dev_subset"]
+    train_subset_cfg = config.get("train_subset", {})
     split_seed = config["splits"]["random_seed"]
     image_size = int(dataset_cfg["image_size"])
 
     raw_pickle = Path(dataset_cfg["raw_pickle"])
     processed_root = Path(dataset_cfg["processed_root"])
     arrays_dir = processed_root / "arrays"
-    metadata_path = Path(dataset_cfg["dev_metadata_csv"] if args.dev else dataset_cfg["metadata_csv"])
+    default_metadata_path = dataset_cfg["dev_metadata_csv"] if args.dev else dataset_cfg["metadata_csv"]
+    metadata_path = Path(args.metadata_path or default_metadata_path)
 
     if not raw_pickle.exists():
         raise FileNotFoundError(f"Raw dataset file not found: {raw_pickle}")
@@ -85,12 +108,20 @@ def main() -> None:
     if args.dev:
         normal_df = normal_df.sample(n=min(dev_cfg["normal_count"], len(normal_df)), random_state=split_seed)
         defect_df = defect_df.sample(n=min(dev_cfg["defect_count"], len(defect_df)), random_state=split_seed)
+    elif args.normal_limit is not None:
+        normal_df = normal_df.sample(n=min(args.normal_limit, len(normal_df)), random_state=split_seed)
+    elif train_subset_cfg.get("normal_count"):
+        normal_df = normal_df.sample(
+            n=min(int(train_subset_cfg["normal_count"]), len(normal_df)),
+            random_state=split_seed,
+        )
 
     normal_df = split_normals(normal_df, split_seed)
-    defect_df["split"] = "test"
+    defect_df = sample_test_defects(defect_df, normal_df, train_subset_cfg, split_seed)
 
     export_df = pd.concat([normal_df, defect_df], ignore_index=True)
     records: list[dict[str, object]] = []
+    repo_root = Path.cwd().resolve()
 
     for row_index, row in export_df.iterrows():
         file_name = f"wafer_{row_index:07d}.npy"
@@ -98,9 +129,10 @@ def main() -> None:
         raw_map = np.asarray(row["waferMap"])
         wafer_map = normalize_map(raw_map, image_size=image_size)
         np.save(array_path, wafer_map)
+        relative_array_path = array_path.resolve().relative_to(repo_root).as_posix()
         records.append(
             {
-                "array_path": array_path.as_posix(),
+                "array_path": relative_array_path,
                 "label": row["label"],
                 "defect_type": row["failureTypeText"] or "unlabeled",
                 "is_anomaly": int(row["label"] == LABEL_DEFECT),

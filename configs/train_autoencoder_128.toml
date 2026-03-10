@@ -1,0 +1,22 @@
+[run]
+output_dir = "artifacts/x128/autoencoder_baseline"
+seed = 42
+
+[data]
+metadata_csv = "data/processed/x128/wm811k/metadata_50k_5pct.csv"
+image_size = 128
+batch_size = 32
+num_workers = 0
+
+[training]
+epochs = 50
+learning_rate = 0.001
+weight_decay = 0.0001
+device = "auto"
+early_stopping_patience = 5
+early_stopping_min_delta = 0.00005
+checkpoint_every = 5
+resume_from = ""
+
+[model]
+latent_dim = 128

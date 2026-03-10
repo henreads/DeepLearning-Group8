@@ -1,12 +1,12 @@
 [dataset]
 name = "wm811k"
 raw_pickle = "data/raw/LSWMD.pkl"
-processed_root = "data/processed/x64/wm811k"
-metadata_csv = "data/processed/x64/wm811k/metadata.csv"
-metadata_50k_csv = "data/processed/x64/wm811k/metadata_50k.csv"
-metadata_50k_5pct_csv = "data/processed/x64/wm811k/metadata_50k_5pct.csv"
-dev_metadata_csv = "data/processed/x64/wm811k/metadata_dev.csv"
-image_size = 64
+processed_root = "data/processed/x128/wm811k"
+metadata_csv = "data/processed/x128/wm811k/metadata.csv"
+metadata_50k_csv = "data/processed/x128/wm811k/metadata_50k.csv"
+metadata_50k_5pct_csv = "data/processed/x128/wm811k/metadata_50k_5pct.csv"
+dev_metadata_csv = "data/processed/x128/wm811k/metadata_dev.csv"
+image_size = 128
 normal_label = "none"
 defect_label = "pattern"
 
