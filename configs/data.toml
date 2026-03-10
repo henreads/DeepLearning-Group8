@@ -1,0 +1,21 @@
+[dataset]
+name = "wm811k"
+raw_pickle = "data/raw/LSWMD.pkl"
+processed_root = "data/processed/wm811k"
+metadata_csv = "data/processed/wm811k/metadata.csv"
+dev_metadata_csv = "data/processed/wm811k/metadata_dev.csv"
+image_size = 64
+normal_label = "none"
+defect_label = "pattern"
+
+[splits]
+train_normal_fraction = 0.8
+val_normal_fraction = 0.1
+test_normal_fraction = 0.1
+random_seed = 42
+
+[dev_subset]
+enabled = true
+normal_count = 2000
+defect_count = 400
+
