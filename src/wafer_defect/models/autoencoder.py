@@ -1,3 +1,5 @@
+"""Convolutional autoencoder baseline used for reconstruction-based detection."""
+
 from __future__ import annotations
 
 import torch

@@ -1,3 +1,5 @@
+"""Prepare processed WM-811K arrays and split metadata from the raw pickle."""
+
 from __future__ import annotations
 
 import argparse
@@ -70,7 +72,7 @@ def sample_test_defects(
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="configs/data.toml")
+    parser.add_argument("--config", default="configs/data/data.toml")
     parser.add_argument("--dev", action="store_true")
     parser.add_argument("--normal-limit", type=int, default=None)
     parser.add_argument("--metadata-path", default=None)

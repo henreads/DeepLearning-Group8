@@ -1,15 +1,13 @@
-from __future__ import annotations
+"""Training loop for reconstruction-only autoencoder models."""
 
-from dataclasses import dataclass
+from __future__ import annotations
 
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
 
-
-@dataclass
-class EpochMetrics:
-    loss: float
+from wafer_defect.scoring import reconstruction_mse
+from wafer_defect.training.common import EpochMetrics
 
 
 def run_autoencoder_epoch(
@@ -18,7 +16,6 @@ def run_autoencoder_epoch(
     device: torch.device,
     optimizer: torch.optim.Optimizer | None = None,
 ) -> EpochMetrics:
-    criterion = nn.MSELoss()
     is_training = optimizer is not None
     model.train(is_training)
 
@@ -35,7 +32,8 @@ def run_autoencoder_epoch(
 
         normal_inputs = inputs[normal_mask]
         reconstructions = model(normal_inputs)
-        loss = criterion(reconstructions, normal_inputs)
+        per_sample_loss = reconstruction_mse(normal_inputs, reconstructions)
+        loss = per_sample_loss.mean()
 
         if is_training:
             optimizer.zero_grad(set_to_none=True)
@@ -46,5 +44,5 @@ def run_autoencoder_epoch(
         total_loss += loss.item() * batch_size
         total_items += batch_size
 
-    return EpochMetrics(loss=total_loss / max(total_items, 1))
-
+    average_loss = total_loss / max(total_items, 1)
+    return EpochMetrics(loss=average_loss, reconstruction_loss=average_loss)

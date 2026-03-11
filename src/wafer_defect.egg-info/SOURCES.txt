@@ -10,4 +10,6 @@ src/wafer_defect.egg-info/top_level.txt
 src/wafer_defect/data/legacy_pickle.py
 src/wafer_defect/data/wm811k.py
 src/wafer_defect/models/autoencoder.py
-src/wafer_defect/training/engine.py
+src/wafer_defect/training/autoencoder.py
+src/wafer_defect/training/common.py
+src/wafer_defect/training/vae.py

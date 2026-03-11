@@ -15,12 +15,14 @@ The initial codebase is organized around a simple baseline workflow:
 1. Place the raw WM-811K pickle under `data/raw/`
 2. Build processed arrays plus metadata CSV files
 3. Train a PyTorch autoencoder baseline on normal wafers
-4. Save weights and training history for reproducibility
+4. Train a convolutional VAE on the same split for comparison
+5. Save weights, evaluation outputs, and training history for reproducibility
 
 ## Repository Layout
 
 ```text
-configs/               Experiment and data settings
+configs/data/          Dataset preparation settings
+configs/training/      Model training settings
 scripts/               Entry points for dataset prep and training
 src/wafer_defect/      Package code
 data/raw/              Local raw dataset files (ignored by git)
@@ -62,15 +64,33 @@ Prepare a small development subset:
 python scripts/prepare_wm811k.py --dev
 ```
 
+The default config locations are now:
+
+- data prep: `configs/data/data.toml`
+- training: `configs/training/*.toml`
+
 Train the baseline autoencoder:
 
 ```powershell
 python scripts/train_autoencoder.py
 ```
 
+Train the VAE follow-up model:
+
+```powershell
+python scripts/train_vae.py
+```
+
+Evaluate any reconstruction-based checkpoint on the shared validation/test protocol:
+
+```powershell
+python scripts/evaluate_reconstruction_model.py --checkpoint artifacts/x64/autoencoder_baseline/best_model.pt
+python scripts/evaluate_reconstruction_model.py --checkpoint artifacts/x64/vae_baseline/best_model.pt
+```
+
 ## Immediate Next Steps
 
 - Verify the exact WM-811K file format after download
 - Tighten label parsing in the preparation script against the real dataset
-- Add anomaly-score evaluation on the test split
-- Add a saved-model reload script for report reproducibility
+- Compare the 64x64 autoencoder and VAE on the saved evaluation summaries
+- Add a Deep SVDD experiment if time allows

@@ -1,3 +1,5 @@
+"""Dataset loader for processed WM-811K wafer-map arrays and split metadata."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -10,11 +12,62 @@ from torch.utils.data import Dataset
 
 class WaferMapDataset(Dataset):
     def __init__(self, metadata_csv: str | Path, split: str, image_size: int = 64) -> None:
-        self.metadata_path = Path(metadata_csv).resolve()
+        self.metadata_path = self._resolve_metadata_path(Path(metadata_csv), image_size).resolve()
         self.repo_root = self._find_repo_root(self.metadata_path)
         self.metadata = pd.read_csv(self.metadata_path)
         self.metadata = self.metadata[self.metadata["split"] == split].reset_index(drop=True)
         self.image_size = image_size
+
+    @staticmethod
+    def _candidate_repo_roots() -> list[Path]:
+        roots: list[Path] = []
+        module_root = Path(__file__).resolve().parents[3]
+        roots.append(module_root)
+
+        cwd = Path.cwd().resolve()
+        roots.extend([cwd, *cwd.parents])
+
+        unique_roots: list[Path] = []
+        seen: set[Path] = set()
+        for root in roots:
+            if root not in seen:
+                unique_roots.append(root)
+                seen.add(root)
+        return unique_roots
+
+    @staticmethod
+    def _resolve_metadata_path(metadata_path: Path, image_size: int) -> Path:
+        if metadata_path.exists():
+            return metadata_path
+
+        cwd_candidate = (Path.cwd() / metadata_path).resolve()
+        if cwd_candidate.exists():
+            return cwd_candidate
+
+        matches: list[Path] = []
+        for repo_root in WaferMapDataset._candidate_repo_roots():
+            direct_candidate = (repo_root / metadata_path).resolve()
+            if direct_candidate.exists():
+                return direct_candidate
+
+            processed_root = repo_root / "data" / "processed"
+            if processed_root.exists():
+                matches.extend(processed_root.rglob(metadata_path.name))
+
+        unique_matches: list[Path] = []
+        seen: set[Path] = set()
+        for match in sorted(path.resolve() for path in matches):
+            if match not in seen:
+                unique_matches.append(match)
+                seen.add(match)
+
+        preferred_matches = [match for match in unique_matches if f"x{image_size}" in match.parts]
+        if len(preferred_matches) == 1:
+            return preferred_matches[0]
+        if len(unique_matches) == 1:
+            return unique_matches[0]
+
+        raise FileNotFoundError(f"Could not resolve metadata path: {metadata_path}")
 
     @staticmethod
     def _find_repo_root(metadata_path: Path) -> Path:

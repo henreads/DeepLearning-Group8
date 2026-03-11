@@ -1,15 +1,15 @@
 [run]
-output_dir = "artifacts/x128/autoencoder_baseline"
+output_dir = "artifacts/x64/vae_baseline"
 seed = 42
 
 [data]
-metadata_csv = "data/processed/x128/wm811k/metadata_50k_5pct.csv"
-image_size = 128
-batch_size = 32
+metadata_csv = "data/processed/x64/wm811k/metadata_50k_5pct.csv"
+image_size = 64
+batch_size = 64
 num_workers = 0
 
 [training]
-epochs = 50
+epochs = 30
 learning_rate = 0.001
 weight_decay = 0.0001
 device = "auto"
@@ -19,4 +19,6 @@ checkpoint_every = 5
 resume_from = ""
 
 [model]
+type = "vae"
 latent_dim = 128
+beta = 0.005

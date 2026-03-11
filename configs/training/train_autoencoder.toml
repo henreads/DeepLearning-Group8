@@ -19,4 +19,5 @@ checkpoint_every = 5
 resume_from = ""
 
 [model]
+type = "autoencoder"
 latent_dim = 128

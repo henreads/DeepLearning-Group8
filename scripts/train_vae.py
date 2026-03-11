@@ -1,4 +1,4 @@
-"""Train the baseline convolutional autoencoder on normal wafers only."""
+"""Train the convolutional VAE baseline on normal wafers only."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ from torch.utils.data import DataLoader
 
 from wafer_defect.config import load_toml
 from wafer_defect.data.wm811k import WaferMapDataset
-from wafer_defect.models.autoencoder import ConvAutoencoder
-from wafer_defect.training.autoencoder import run_autoencoder_epoch
+from wafer_defect.models.vae import ConvVariationalAutoencoder
+from wafer_defect.training.vae import run_vae_epoch
 
 
 def set_seed(seed: int) -> None:
@@ -31,7 +31,7 @@ def resolve_device(device_name: str) -> torch.device:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="configs/training/train_autoencoder.toml")
+    parser.add_argument("--config", default="configs/training/train_vae.toml")
     args = parser.parse_args()
 
     config = load_toml(args.config)
@@ -40,8 +40,8 @@ def main() -> None:
 
     set_seed(int(config["run"]["seed"]))
     device = resolve_device(config["training"]["device"])
-
     image_size = int(config["data"].get("image_size", 64))
+    beta = float(config["model"].get("beta", 0.01))
 
     train_dataset = WaferMapDataset(config["data"]["metadata_csv"], split="train", image_size=image_size)
     val_dataset = WaferMapDataset(config["data"]["metadata_csv"], split="val", image_size=image_size)
@@ -59,7 +59,7 @@ def main() -> None:
         num_workers=int(config["data"]["num_workers"]),
     )
 
-    model = ConvAutoencoder(
+    model = ConvVariationalAutoencoder(
         latent_dim=int(config["model"]["latent_dim"]),
         image_size=image_size,
     ).to(device)
@@ -96,12 +96,16 @@ def main() -> None:
         print(f"Resumed from {resume_path} at epoch {start_epoch}")
 
     for epoch in range(start_epoch, int(config["training"]["epochs"])):
-        train_metrics = run_autoencoder_epoch(model, train_loader, device, optimizer)
-        val_metrics = run_autoencoder_epoch(model, val_loader, device)
+        train_metrics = run_vae_epoch(model, train_loader, device, beta=beta, optimizer=optimizer)
+        val_metrics = run_vae_epoch(model, val_loader, device, beta=beta)
         record = {
             "epoch": epoch + 1,
             "train_loss": train_metrics.loss,
+            "train_reconstruction_loss": train_metrics.reconstruction_loss,
+            "train_kl_loss": train_metrics.kl_loss,
             "val_loss": val_metrics.loss,
+            "val_reconstruction_loss": val_metrics.reconstruction_loss,
+            "val_kl_loss": val_metrics.kl_loss,
         }
         history.append(record)
         print(record)
@@ -170,6 +174,7 @@ def main() -> None:
         "best_epoch": best_epoch,
         "best_val_loss": best_val_loss,
         "epochs_ran": len(history),
+        "beta": beta,
         "resumed_from": resume_from,
     }
     with (output_dir / "summary.json").open("w", encoding="utf-8") as handle:

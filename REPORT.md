@@ -14,12 +14,13 @@ The goal of the baseline is:
 
 Relevant files:
 
-- [configs/data.toml](configs/data.toml)
-- [configs/train_autoencoder.toml](configs/train_autoencoder.toml)
+- [configs/data/data.toml](configs/data/data.toml)
+- [configs/training/train_autoencoder.toml](configs/training/train_autoencoder.toml)
 - [scripts/prepare_wm811k.py](scripts/prepare_wm811k.py)
 - [scripts/train_autoencoder.py](scripts/train_autoencoder.py)
 - [src/wafer_defect/models/autoencoder.py](src/wafer_defect/models/autoencoder.py)
-- [src/wafer_defect/training/engine.py](src/wafer_defect/training/engine.py)
+- [src/wafer_defect/training/autoencoder.py](src/wafer_defect/training/autoencoder.py)
+- [src/wafer_defect/training/vae.py](src/wafer_defect/training/vae.py)
 - [notebooks/02_autoencoder_training.ipynb](notebooks/02_autoencoder_training.ipynb)
 
 ### Data preparation
@@ -68,7 +69,7 @@ This was chosen to avoid evaluating on all anomalies at once and to produce a mo
 
 ## Model and Training Configuration
 
-Current training settings from [train_autoencoder.toml](configs/train_autoencoder.toml):
+Current training settings from [train_autoencoder.toml](configs/training/train_autoencoder.toml):
 
 - model: convolutional autoencoder
 - latent dimension: `128`
@@ -257,6 +258,66 @@ Completed work:
 - validation-threshold metrics
 - threshold sweep analysis
 - higher-resolution `128x128` comparison experiment
+- convolutional VAE baseline
+- scriptable reconstruction-model evaluation
+- VAE beta-sweep automation
+
+## VAE Follow-Up Experiment
+
+A `64x64` VAE was trained on the same split as the strongest autoencoder baseline, then tuned with a small beta sweep.
+
+Initial VAE run with `beta = 0.01`:
+
+- validation threshold: `0.035629`
+- precision: `0.280323`
+- recall: `0.416000`
+- F1: `0.334944`
+- AUROC: `0.766392`
+- AUPRC: `0.369030`
+- best test-sweep F1: `0.416667`
+
+Best VAE setting from the beta sweep:
+
+- chosen beta: `0.005`
+- validation threshold: `0.034248`
+- precision: `0.286104`
+- recall: `0.420000`
+- F1: `0.340357`
+- AUROC: `0.771391`
+- AUPRC: `0.372184`
+- confusion matrix: `[[4738, 262], [145, 105]]`
+- best test-sweep threshold: `0.038787`
+- best test-sweep F1: `0.420253`
+
+Comparison against the strongest autoencoder baseline:
+
+| model | val-threshold precision | val-threshold recall | val-threshold F1 | AUROC | AUPRC | best sweep F1 |
+| ----- | ----------------------- | -------------------- | ---------------- | ----- | ----- | ------------- |
+| Autoencoder `64x64` | `0.346154` | `0.504000` | `0.410423` | `0.809694` | `0.447970` | `0.473318` |
+| VAE `beta = 0.01` | `0.280323` | `0.416000` | `0.334944` | `0.766392` | `0.369030` | `0.416667` |
+| VAE `beta = 0.005` | `0.286104` | `0.420000` | `0.340357` | `0.771391` | `0.372184` | `0.420253` |
+
+Interpretation:
+
+- the VAE learned a real anomaly signal
+- lowering `beta` from `0.01` to `0.005` improved the VAE slightly
+- even the best VAE setting remained clearly below the `64x64` autoencoder baseline
+- reconstruction-based anomaly detection is useful, but still only moderately separable on this task
+
+## Threshold Selection Rule
+
+For the main reported result:
+
+- use the threshold derived from validation-normal scores
+
+For analysis only:
+
+- report the best test-set threshold sweep as an operating-point study
+
+Reason:
+
+- the validation threshold is the fair evaluation threshold
+- the best sweep threshold uses test labels and should not be treated as the deployment threshold
 
 ## Current Baseline Conclusion
 
@@ -270,13 +331,47 @@ Current conclusion:
 - thresholded detection quality is still limited
 - the model misses a substantial fraction of defect wafers
 - increasing resolution to `128x128` did not improve results in the current model
+- VAE beta tuning improved results slightly, but still did not beat the `64x64` autoencoder baseline
 
 ## Recommended Next Steps
 
 Recommended follow-up experiments:
 
 - inspect false negatives visually
-- compare with a VAE baseline
 - compare with Deep SVDD
 - try a stronger anomaly method such as PatchCore if time allows
 - report both validation-threshold metrics and threshold-sweep analysis, but keep the validation-derived threshold as the main result
+
+## VAE Beta Sweep
+
+The repo now includes a simple sweep script:
+
+- [run_vae_beta_sweep.py](scripts/run_vae_beta_sweep.py)
+
+Default beta values:
+
+- `0.001`
+- `0.005`
+- `0.01`
+- `0.05`
+
+Example command:
+
+```powershell
+python scripts/run_vae_beta_sweep.py
+```
+
+Outputs:
+
+- per-beta training artifacts under `artifacts/x64/vae_beta_sweep/`
+- per-beta evaluation summaries under each run's `evaluation/` folder
+- aggregated summary at `artifacts/x64/vae_beta_sweep/beta_sweep_summary.json`
+
+Observed sweep ranking:
+
+1. `beta = 0.005`
+2. `beta = 0.001`
+3. `beta = 0.01`
+4. `beta = 0.05`
+
+This indicates that a small amount of KL regularization helps, but heavier regularization degrades anomaly-detection performance in the current VAE setup.
