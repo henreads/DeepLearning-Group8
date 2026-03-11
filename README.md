@@ -1,8 +1,10 @@
 # DeepLearning-Group8
 
 # Automated IC Wafer Defect Classification
+
 **Group Number:** 08
 **Group Members:**
+
 - Henry Lee Jun, 1004219
 - Chia Tang, 1007200
 - Genson Low, 1005931
@@ -37,6 +39,82 @@ Install the package in editable mode inside your virtual environment:
 ```powershell
 pip install -e .
 ```
+
+For notebooks used in this repo, also install:
+
+```powershell
+pip install jupyter matplotlib
+```
+
+## Fresh Clone Setup
+
+Use these steps on a new machine or fresh clone.
+
+1. Clone the repo and enter it:
+
+```powershell
+git clone <repo-url>
+cd DeepLearning-Group8
+```
+
+2. Create and activate a Python 3.11 virtual environment:
+
+```powershell
+py -3.11 -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+```
+
+3. Install the project in editable mode:
+
+```powershell
+pip install -e .
+pip install jupyter matplotlib
+```
+
+4. Place the raw WM-811K pickle here:
+
+```text
+data/raw/LSWMD.pkl
+```
+
+5. Build the processed dataset used by the main experiments:
+
+```powershell
+python scripts/prepare_wm811k.py
+```
+
+6. Verify the expected processed metadata exists:
+
+```powershell
+dir data\processed\x64\wm811k
+```
+
+The main `64x64` training configs expect:
+
+```text
+data/processed/x64/wm811k/metadata_50k_5pct.csv
+```
+
+7. Train or open notebooks only after the processed metadata exists:
+
+```powershell
+python scripts/train_autoencoder.py
+jupyter notebook
+```
+
+Open notebooks from the repo root so relative paths resolve correctly.
+
+## Common Path Issues
+
+If a fresh setup fails, check these first:
+
+- you are running commands from the repository root
+- you ran `pip install -e .`
+- the raw dataset file is exactly `data/raw/LSWMD.pkl`
+- you already ran `python scripts/prepare_wm811k.py`
+- `data/processed/x64/wm811k/metadata_50k_5pct.csv` exists before training
+- Jupyter was launched from the repo root, not from another folder
 
 ## Expected Dataset Input
 
@@ -87,10 +165,3 @@ Evaluate any reconstruction-based checkpoint on the shared validation/test proto
 python scripts/evaluate_reconstruction_model.py --checkpoint artifacts/x64/autoencoder_baseline/best_model.pt
 python scripts/evaluate_reconstruction_model.py --checkpoint artifacts/x64/vae_baseline/best_model.pt
 ```
-
-## Immediate Next Steps
-
-- Verify the exact WM-811K file format after download
-- Tighten label parsing in the preparation script against the real dataset
-- Compare the 64x64 autoencoder and VAE on the saved evaluation summaries
-- Add a Deep SVDD experiment if time allows

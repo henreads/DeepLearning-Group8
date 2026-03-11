@@ -20,6 +20,7 @@ Relevant files:
 - [configs/training/train_svdd.toml](configs/training/train_svdd.toml)
 - [scripts/prepare_wm811k.py](scripts/prepare_wm811k.py)
 - [scripts/train_autoencoder.py](scripts/train_autoencoder.py)
+- [scripts/evaluate_autoencoder_scores.py](scripts/evaluate_autoencoder_scores.py)
 - [scripts/train_vae.py](scripts/train_vae.py)
 - [scripts/train_svdd.py](scripts/train_svdd.py)
 - [scripts/evaluate_reconstruction_model.py](scripts/evaluate_reconstruction_model.py)
@@ -27,6 +28,8 @@ Relevant files:
 - [src/wafer_defect/models/autoencoder.py](src/wafer_defect/models/autoencoder.py)
 - [src/wafer_defect/models/vae.py](src/wafer_defect/models/vae.py)
 - [src/wafer_defect/models/svdd.py](src/wafer_defect/models/svdd.py)
+- [src/wafer_defect/scoring.py](src/wafer_defect/scoring.py)
+- [src/wafer_defect/evaluation.py](src/wafer_defect/evaluation.py)
 - [src/wafer_defect/training/autoencoder.py](src/wafer_defect/training/autoencoder.py)
 - [src/wafer_defect/training/vae.py](src/wafer_defect/training/vae.py)
 - [src/wafer_defect/training/svdd.py](src/wafer_defect/training/svdd.py)
@@ -64,31 +67,38 @@ Split rule:
 
 Main comparison across completed experiments:
 
-| experiment    | model       | image size | val-threshold precision | val-threshold recall | val-threshold F1 | AUROC      | AUPRC      | best sweep F1 |
-| ------------- | ----------- | ---------- | ----------------------- | -------------------- | ---------------- | ---------- | ---------- | ------------- |
-| AE-64         | Autoencoder | `64x64`    | `0.346154`              | `0.504000`           | `0.410423`       | `0.809694` | `0.447970` | `0.473318`    |
-| AE-128        | Autoencoder | `128x128`  | `0.309973`              | `0.460000`           | `0.370370`       | `0.795673` | `0.393266` | `0.426724`    |
-| VAE-64-b0.01  | VAE         | `64x64`    | `0.280323`              | `0.416000`           | `0.334944`       | `0.766392` | `0.369030` | `0.416667`    |
-| VAE-64-b0.005 | VAE         | `64x64`    | `0.286104`              | `0.420000`           | `0.340357`       | `0.771391` | `0.372184` | `0.420253`    |
-| SVDD-64       | Deep SVDD   | `64x64`    | `0.304709`              | `0.440000`           | `0.360065`       | `0.787506` | `0.213108` | `0.366288`    |
+| experiment    | model       | score | image size | val-threshold precision | val-threshold recall | val-threshold F1 | AUROC      | AUPRC      | best sweep F1 |
+| ------------- | ----------- | ----- | ---------- | ----------------------- | -------------------- | ---------------- | ---------- | ---------- | ------------- |
+| AE-64-topk    | Autoencoder | `topk_abs_mean` | `64x64`    | `0.390374`              | `0.584000`           | `0.467949`       | `0.839282` | `0.522171` | `0.509091`    |
+| AE-64-topk-43ep | Autoencoder | `topk_abs_mean` | `64x64`    | `0.381579`              | `0.580000`           | `0.460317`       | `0.834819` | `0.525162` | `0.520661`    |
+| AE-64-mse     | Autoencoder | `mse_mean` | `64x64`    | `0.346154`              | `0.504000`           | `0.410423`       | `0.809694` | `0.447970` | `0.473318`    |
+| AE-128-mse    | Autoencoder | `mse_mean` | `128x128`  | `0.309973`              | `0.460000`           | `0.370370`       | `0.795673` | `0.393266` | `0.426724`    |
+| VAE-64-b0.01  | VAE         | `vae_score` | `64x64`    | `0.280323`              | `0.416000`           | `0.334944`       | `0.766392` | `0.369030` | `0.416667`    |
+| VAE-64-b0.005 | VAE         | `vae_score` | `64x64`    | `0.286104`              | `0.420000`           | `0.340357`       | `0.771391` | `0.372184` | `0.420253`    |
+| SVDD-64       | Deep SVDD   | `latent_distance` | `64x64`    | `0.304709`              | `0.440000`           | `0.360065`       | `0.787506` | `0.213108` | `0.366288`    |
 
 ![Overall experiment comparison](artifacts/report_plots/overall_experiment_comparison.png)
 
 Current ranking:
 
-1. Autoencoder `64x64`
-2. Autoencoder `128x128`
-3. Deep SVDD `64x64`
-4. VAE `64x64`, `beta = 0.005`
-5. VAE `64x64`, `beta = 0.01`
+1. Autoencoder `64x64` with `topk_abs_mean`
+2. Autoencoder `64x64` with `topk_abs_mean`, longer-epoch rerun
+3. Autoencoder `64x64` with `mse_mean`
+4. Autoencoder `128x128` with `mse_mean`
+5. Deep SVDD `64x64`
+6. VAE `64x64`, `beta = 0.005`
+7. VAE `64x64`, `beta = 0.01`
 
 High-level interpretation:
 
-- the `64x64` autoencoder remains the strongest experiment overall
+- the strongest result is now the `64x64` autoencoder with `topk_abs_mean` scoring
+- the same `64x64` autoencoder improved materially when the scoring rule changed, even without retraining
+- retraining that same autoencoder longer produced only marginal changes, which suggests epoch count alone is not the main bottleneck
 - increasing the autoencoder resolution to `128x128` did not improve results
 - VAE beta tuning helped slightly, but the VAE remained below both autoencoder runs
 - Deep SVDD beat the tuned VAE on validation-threshold F1 and AUROC, but still did not beat the best autoencoder
 - Deep SVDD had especially weak AUPRC, which suggests poorer ranking quality under class imbalance
+- local-error-focused scoring appears more effective than full-image averaging on wafer maps
 - all tested approaches learn a real anomaly signal, but class separation is still only moderate
 
 ## Evaluation Rule
@@ -126,7 +136,7 @@ Configuration:
 
 Training observations:
 
-- saved history: [history.json](artifacts/x64/autoencoder_baseline/history.json)
+- original run history was later overwritten by a longer rerun in the same artifact directory
 - epoch 1: train `0.026390`, val `0.024768`
 - epoch 10: train `0.024169`, val `0.024185`
 - epoch 20: train `0.020241`, val `0.020260`
@@ -150,14 +160,14 @@ Interpretation:
 
 - training was stable and validation loss kept improving
 - the model learned a useful anomaly signal
-- this remains the strongest experiment so far
+- this was the strongest model architecture at the time of the first run
+- later score ablation showed that the same checkpoint can perform substantially better with a different anomaly score
 - false positives and false negatives are still substantial, so the baseline is not yet strong enough to be the final project result by itself
 
 Note:
 
-- [summary.json](artifacts/x64/autoencoder_baseline/summary.json) records `best_epoch = 24` and `best_val_loss = 0.019792`
-- [history.json](artifacts/x64/autoencoder_baseline/history.json) shows epoch 25 reached `0.019755`
-- the saved summary appears slightly stale relative to the final history
+- the current [summary.json](artifacts/x64/autoencoder_baseline/summary.json) and [history.json](artifacts/x64/autoencoder_baseline/history.json) now correspond to the later longer-epoch rerun, not this original `25`-epoch baseline
+- the original `25`-epoch baseline metrics above are kept for comparison because they were the first completed AE result on the shared split
 
 ## Experiment 2: Autoencoder `128x128`
 
@@ -199,7 +209,137 @@ Interpretation:
 
 ![Autoencoder resolution comparison](artifacts/report_plots/autoencoder_resolution_comparison.png)
 
-## Experiment 3: VAE `64x64`, `beta = 0.01`
+## Experiment 3: Autoencoder `64x64` Score Ablation
+
+Purpose:
+
+- test whether the current best `64x64` autoencoder checkpoint can be improved by changing only the anomaly score
+- determine whether score design is part of the bottleneck before retraining new models
+
+Implementation:
+
+- script: [evaluate_autoencoder_scores.py](scripts/evaluate_autoencoder_scores.py)
+- scoring helpers: [scoring.py](src/wafer_defect/scoring.py)
+- artifacts: [artifacts/x64/autoencoder_baseline/score_ablation](artifacts/x64/autoencoder_baseline/score_ablation)
+- checkpoint used: `artifacts/x64/autoencoder_baseline/best_model.pt`
+
+Scoring rules evaluated:
+
+- `mse_mean`: mean squared reconstruction error over all pixels
+- `mae_mean`: mean absolute reconstruction error over all pixels
+- `max_abs`: maximum absolute reconstruction error over any single pixel
+- `topk_abs_mean`: mean absolute reconstruction error over the top `1%` highest-error pixels
+- `foreground_mse`: mean squared reconstruction error only on non-background pixels
+- `foreground_mae`: mean absolute reconstruction error only on non-background pixels
+- `pooled_mae_mean`: mean absolute reconstruction error after local average pooling of the error map
+
+What these mean in practice:
+
+- full-image means ask whether average reconstruction quality is enough to separate classes
+- max-error asks whether the single worst pixel is informative
+- top-k error asks whether small local high-error regions carry more signal than the global average
+- foreground-only scores ask whether background pixels are diluting anomaly evidence
+- pooled error asks whether smoothed local regions rank better than raw noisy pixel spikes
+
+Results:
+
+| score name | val-threshold F1 | AUROC | AUPRC | best sweep F1 |
+| ---------- | ---------------- | ----- | ----- | ------------- |
+| `topk_abs_mean` | `0.467949` | `0.839282` | `0.522171` | `0.509091` |
+| `mse_mean` | `0.410423` | `0.809694` | `0.447970` | `0.473318` |
+| `max_abs` | `0.323944` | `0.778442` | `0.239525` | `0.330341` |
+| `foreground_mse` | `0.317263` | `0.760905` | `0.354126` | `0.377358` |
+| `mae_mean` | `0.299835` | `0.762006` | `0.326166` | `0.352645` |
+| `pooled_mae_mean` | `0.292763` | `0.754371` | `0.315182` | `0.342342` |
+| `foreground_mae` | `0.239203` | `0.727066` | `0.278870` | `0.301370` |
+
+![AE-64 score ablation](artifacts/report_plots/ae64_score_ablation.png)
+
+Best score from the ablation:
+
+- score: `topk_abs_mean`
+- validation-threshold precision: `0.390374`
+- validation-threshold recall: `0.584000`
+- validation-threshold F1: `0.467949`
+- AUROC: `0.839282`
+- AUPRC: `0.522171`
+- best threshold-sweep F1: `0.509091`
+
+Interpretation:
+
+- `topk_abs_mean` clearly outperformed the original `mse_mean` score on every main metric
+- this shows the current `64x64` autoencoder checkpoint already contained more anomaly information than the original score extracted from it
+- local defect regions matter more than full-image averaging on this dataset
+- background dilution is real, but foreground-only averaging alone did not beat the top-k score
+- `max_abs` was too unstable, which suggests that a single extreme pixel is noisier than a small cluster of high-error pixels
+- this is the strongest result in the report so far, and it was achieved without retraining the model
+
+Longer-epoch rerun using the selected score:
+
+- notebook: [02_autoencoder_training.ipynb](notebooks/02_autoencoder_training.ipynb)
+- artifact dir: [artifacts/x64/autoencoder_baseline](artifacts/x64/autoencoder_baseline)
+- training override: `50` max epochs
+- actual epochs run: `43`
+- best epoch from [summary.json](artifacts/x64/autoencoder_baseline/summary.json): `38`
+- best validation loss from [summary.json](artifacts/x64/autoencoder_baseline/summary.json): `0.019262`
+- evaluation score: `topk_abs_mean`
+
+Longer-rerun evaluation:
+
+- validation threshold: `0.630657`
+- precision: `0.381579`
+- recall: `0.580000`
+- F1: `0.460317`
+- AUROC: `0.834819`
+- AUPRC: `0.525162`
+- confusion matrix: `[[4765, 235], [105, 145]]`
+- best test-sweep threshold: `0.666356`
+- best test-sweep precision: `0.538462`
+- best test-sweep recall: `0.504000`
+- best test-sweep F1: `0.520661`
+
+Interpretation of the rerun:
+
+- longer training kept the model in essentially the same performance band as the earlier `topk_abs_mean` result
+- validation-threshold F1 dropped slightly from `0.467949` to `0.460317`
+- AUPRC improved slightly from `0.522171` to `0.525162`
+- best threshold-sweep F1 improved slightly from `0.509091` to `0.520661`
+- the rerun shifted the thresholded behavior toward slightly better ranking and sweep performance, but not a clear overall breakthrough
+- this suggests that simply extending training is a lower-leverage change than score design or more targeted model changes
+
+Failure-mode analysis from the selected AE run:
+
+- notebook section: [02_autoencoder_training.ipynb](notebooks/02_autoencoder_training.ipynb)
+- evaluated on the validation-threshold predictions from the longer rerun
+- error-type counts and mean scores:
+  - true positive: `145`, mean score `0.758864`
+  - false negative: `105`, mean score `0.540085`
+  - false positive: `235`, mean score `0.671556`
+  - true negative: `4765`, mean score `0.512200`
+
+Defect-type recall on the anomaly test set:
+
+| defect type | count | detected | recall | mean score |
+| ----------- | ----- | -------- | ------ | ---------- |
+| `Edge-Ring` | `84` | `68` | `0.809524` | `0.734189` |
+| `Center` | `50` | `36` | `0.720000` | `0.726195` |
+| `Edge-Loc` | `53` | `23` | `0.433962` | `0.605984` |
+| `Loc` | `34` | `7` | `0.205882` | `0.552777` |
+| `Donut` | `7` | `4` | `0.571429` | `0.646222` |
+| `Scratch` | `15` | `3` | `0.200000` | `0.581900` |
+| `Random` | `5` | `3` | `0.600000` | `0.656655` |
+| `Near-full` | `2` | `1` | `0.500000` | `0.657818` |
+
+Failure-analysis interpretation:
+
+- the selected AE score separates the classes meaningfully, but the normal and anomaly score ranges still overlap
+- the model is much stronger on broad or globally visible defects such as `Edge-Ring` and `Center`
+- the weakest categories are more local or subtle patterns such as `Loc`, `Edge-Loc`, and `Scratch`
+- false positives are all normal wafers by label, but their mean score `0.671556` is still relatively close to the operating region used for anomaly decisions
+- this suggests that the current AE pipeline captures coarse structural deviations well, but still struggles on smaller localized defects
+- that failure pattern makes one more focused AE tuning pass reasonable, but it also supports moving to a stronger local-anomaly method if the next AE change does not improve `Loc` / `Scratch` recall
+
+## Experiment 4: VAE `64x64`, `beta = 0.01`
 
 Purpose:
 
@@ -228,7 +368,7 @@ Interpretation:
 - this first VAE run was clearly below the `64x64` autoencoder baseline
 - this motivated a small beta sweep rather than dropping the VAE immediately
 
-## Experiment 4: VAE `64x64` Beta Sweep
+## Experiment 5: VAE `64x64` Beta Sweep
 
 Purpose:
 
@@ -281,7 +421,7 @@ Interpretation:
 - some KL regularization helps, but heavier regularization hurts in this setup
 - even the best VAE remained clearly below the `64x64` autoencoder
 
-## Experiment 5: Deep SVDD `64x64`
+## Experiment 6: Deep SVDD `64x64`
 
 Purpose:
 
@@ -326,12 +466,17 @@ Interpretation:
 
 Across all completed experiments:
 
-- the `64x64` autoencoder is still the best-performing model
+- the best current result is the `64x64` autoencoder scored with `topk_abs_mean`
+- the original `64x64` autoencoder checkpoint improved substantially just by changing the scoring rule
+- retraining that autoencoder longer did not materially change the outcome, so epoch count alone is unlikely to be the key lever
 - simply increasing autoencoder resolution did not help
 - the VAE underperformed the autoencoder even after beta tuning
 - Deep SVDD was a stronger alternative than the tuned VAE in some thresholded metrics, but not enough to replace the autoencoder baseline
 - all tested models show overlap between normal and anomaly score distributions, which explains the moderate F1 values and missed anomalies
-- the bottleneck looks more like limited class separation than threshold selection alone
+- the score-ablation result shows that part of the bottleneck was the scoring rule, not only the model architecture
+- after fixing the score, the remaining bottleneck still looks more like limited class separation than threshold selection alone
+- the AE failure analysis shows that the remaining weakness is concentrated in smaller local defects rather than large global defect patterns
+- this makes the next decision clearer: either tune the AE specifically for local defects, or move to a method that is naturally stronger on local anomaly structure
 
 ## What Was Implemented
 
@@ -344,6 +489,7 @@ Completed work:
 - `50k`-normal subset generation
 - anomaly-capped test split generation
 - convolutional autoencoder baseline
+- autoencoder score-ablation evaluation
 - convolutional VAE baseline
 - Deep SVDD baseline
 - notebook-based end-to-end training for AE, VAE, and SVDD
@@ -358,7 +504,9 @@ Completed work:
 
 Recommended follow-up work:
 
-- inspect false negatives and false positives visually for the `64x64` autoencoder and Deep SVDD
+- compare the `topk_abs_mean` and `mse_mean` rankings on the same wafers
+- avoid spending more time on longer-epoch reruns alone unless another change is paired with them
+- run one focused AE follow-up aimed at local defects, such as smaller latent size, denoising training, or `L1` reconstruction loss
 - compare where the autoencoder and Deep SVDD disagree on the same test wafers
-- try a stronger anomaly method such as PatchCore if time allows
+- move to a stronger local-anomaly method such as PatchCore if the next focused AE run does not improve `Loc`, `Edge-Loc`, and `Scratch` recall
 - keep the validation-derived threshold as the main reported result, and treat test-set threshold sweeps as analysis only
