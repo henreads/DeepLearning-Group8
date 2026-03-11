@@ -22,3 +22,7 @@ def vae_anomaly_score(
     beta: float,
 ) -> torch.Tensor:
     return reconstruction_mse(inputs, reconstructions) + beta * normalized_kl_divergence(mu, logvar)
+
+
+def svdd_distance(embeddings: torch.Tensor, center: torch.Tensor) -> torch.Tensor:
+    return torch.sum((embeddings - center.unsqueeze(0)).pow(2), dim=1)

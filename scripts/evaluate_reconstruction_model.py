@@ -1,4 +1,4 @@
-"""Evaluate saved autoencoder or VAE checkpoints on the shared anomaly protocol."""
+"""Evaluate saved anomaly-model checkpoints on the shared anomaly protocol."""
 
 from __future__ import annotations
 
@@ -15,8 +15,9 @@ from torch.utils.data import DataLoader
 from wafer_defect.data.wm811k import WaferMapDataset
 from wafer_defect.evaluation.reconstruction_metrics import summarize_threshold_metrics, sweep_threshold_metrics
 from wafer_defect.models.autoencoder import ConvAutoencoder
+from wafer_defect.models.svdd import ConvDeepSVDD
 from wafer_defect.models.vae import ConvVariationalAutoencoder, VAEOutput
-from wafer_defect.scoring import reconstruction_mse, vae_anomaly_score
+from wafer_defect.scoring import reconstruction_mse, svdd_distance, vae_anomaly_score
 
 
 def resolve_device(device_name: str) -> torch.device:
@@ -29,7 +30,7 @@ def infer_model_type(config: dict[str, Any], override: str) -> str:
     if override:
         return override.lower()
     model_type = str(config.get("model", {}).get("type", "autoencoder")).lower()
-    if model_type not in {"autoencoder", "vae"}:
+    if model_type not in {"autoencoder", "vae", "svdd"}:
         raise ValueError(f"Unsupported model type: {model_type}")
     return model_type
 
@@ -54,6 +55,8 @@ def build_model(config: dict[str, Any], model_type: str, image_size: int) -> tor
         return ConvAutoencoder(latent_dim=latent_dim, image_size=image_size)
     if model_type == "vae":
         return ConvVariationalAutoencoder(latent_dim=latent_dim, image_size=image_size)
+    if model_type == "svdd":
+        return ConvDeepSVDD(latent_dim=latent_dim, image_size=image_size)
     raise ValueError(f"Unsupported model type: {model_type}")
 
 
@@ -74,7 +77,7 @@ def collect_scores(
             if model_type == "autoencoder":
                 reconstructions = model(inputs)
                 scores = reconstruction_mse(inputs, reconstructions)
-            else:
+            elif model_type == "vae":
                 outputs = model(inputs)
                 if not isinstance(outputs, VAEOutput):
                     raise TypeError("VAE model must return VAEOutput")
@@ -85,6 +88,9 @@ def collect_scores(
                     outputs.logvar,
                     beta=beta,
                 )
+            else:
+                embeddings = model(inputs)
+                scores = svdd_distance(embeddings, model.center)
 
             for score, label in zip(scores.cpu().tolist(), labels.tolist()):
                 rows.append({"score": float(score), "is_anomaly": int(label)})

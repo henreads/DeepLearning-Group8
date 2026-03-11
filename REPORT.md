@@ -1,155 +1,171 @@
-# Wafer Defect Autoencoder Baseline Report
+# Wafer Defect Anomaly Detection Report
 
 ## Scope
 
-This report summarizes the current anomaly-detection baseline built for the WM-811K / LSWMD wafer map project.
+This report summarizes the anomaly-detection experiments run so far for the WM-811K / LSWMD wafer map project.
 
-The goal of the baseline is:
+Shared goal across experiments:
 
 - train only on normal wafers (`failureType == none`)
-- treat defect wafers as anomalies at test time
-- use reconstruction error from a convolutional autoencoder as the anomaly score
+- treat labeled defect wafers as anomalies at test time
+- compare anomaly-scoring approaches under one consistent split and evaluation protocol
 
-## Current Project Setup
+## Shared Setup
 
 Relevant files:
 
 - [configs/data/data.toml](configs/data/data.toml)
 - [configs/training/train_autoencoder.toml](configs/training/train_autoencoder.toml)
+- [configs/training/train_vae.toml](configs/training/train_vae.toml)
+- [configs/training/train_svdd.toml](configs/training/train_svdd.toml)
 - [scripts/prepare_wm811k.py](scripts/prepare_wm811k.py)
 - [scripts/train_autoencoder.py](scripts/train_autoencoder.py)
+- [scripts/train_vae.py](scripts/train_vae.py)
+- [scripts/train_svdd.py](scripts/train_svdd.py)
+- [scripts/evaluate_reconstruction_model.py](scripts/evaluate_reconstruction_model.py)
+- [scripts/run_vae_beta_sweep.py](scripts/run_vae_beta_sweep.py)
 - [src/wafer_defect/models/autoencoder.py](src/wafer_defect/models/autoencoder.py)
+- [src/wafer_defect/models/vae.py](src/wafer_defect/models/vae.py)
+- [src/wafer_defect/models/svdd.py](src/wafer_defect/models/svdd.py)
 - [src/wafer_defect/training/autoencoder.py](src/wafer_defect/training/autoencoder.py)
 - [src/wafer_defect/training/vae.py](src/wafer_defect/training/vae.py)
+- [src/wafer_defect/training/svdd.py](src/wafer_defect/training/svdd.py)
 - [notebooks/02_autoencoder_training.ipynb](notebooks/02_autoencoder_training.ipynb)
+- [notebooks/03_vae_training.ipynb](notebooks/03_vae_training.ipynb)
+- [notebooks/04_svdd_training.ipynb](notebooks/04_svdd_training.ipynb)
 
-### Data preparation
+Data preparation:
 
-The dataset is prepared by [prepare_wm811k.py](scripts/prepare_wm811k.py).
+- [prepare_wm811k.py](scripts/prepare_wm811k.py) reads the legacy `LSWMD.pkl` file
+- only explicitly labeled rows are kept
+- `failureType == none` is treated as normal
+- all other explicit failure types are treated as anomaly
+- wafer maps are resized and saved as `.npy`
+- metadata CSV files store repo-relative array paths
 
-Key preprocessing behavior:
-
-- reads the legacy `LSWMD.pkl` format
-- keeps only explicitly labeled rows
-- labels `failureType == none` as normal
-- labels all other explicit failure types as defect / anomaly
-- resizes wafer maps to `64 x 64`
-- saves processed arrays as `.npy`
-- writes repo-relative paths into metadata CSV files
-
-### Split logic
-
-Normal wafers are split by `split_normals(...)` into:
-
-- `80%` train
-- `10%` val
-- `10%` test
-
-Defects are added only to the `test` split by `sample_test_defects(...)`.
-
-## Active Metadata Configuration
-
-The active training config uses:
+Primary metadata used by the main experiments:
 
 - [metadata_50k_5pct.csv](data/processed/x64/wm811k/metadata_50k_5pct.csv)
 
-This metadata was created from:
-
-- `50,000` sampled normal wafers
-- test anomalies capped at `5%` of the number of test-normal wafers
-
-Current effective split:
+Effective split for the main `64x64` experiments:
 
 - train: `40,000` normal
 - val: `5,000` normal
 - test: `5,000` normal
 - test: `250` anomaly
 
-This was chosen to avoid evaluating on all anomalies at once and to produce a more controlled test distribution.
+Split rule:
 
-## Model and Training Configuration
+- normals are split `80 / 10 / 10`
+- defects are added only to the test split
+- test anomalies are capped at `5%` of the number of test-normal wafers
 
-Current training settings from [train_autoencoder.toml](configs/training/train_autoencoder.toml):
+## Overall Comparison
 
-- model: convolutional autoencoder
+Main comparison across completed experiments:
+
+| experiment    | model       | image size | val-threshold precision | val-threshold recall | val-threshold F1 | AUROC      | AUPRC      | best sweep F1 |
+| ------------- | ----------- | ---------- | ----------------------- | -------------------- | ---------------- | ---------- | ---------- | ------------- |
+| AE-64         | Autoencoder | `64x64`    | `0.346154`              | `0.504000`           | `0.410423`       | `0.809694` | `0.447970` | `0.473318`    |
+| AE-128        | Autoencoder | `128x128`  | `0.309973`              | `0.460000`           | `0.370370`       | `0.795673` | `0.393266` | `0.426724`    |
+| VAE-64-b0.01  | VAE         | `64x64`    | `0.280323`              | `0.416000`           | `0.334944`       | `0.766392` | `0.369030` | `0.416667`    |
+| VAE-64-b0.005 | VAE         | `64x64`    | `0.286104`              | `0.420000`           | `0.340357`       | `0.771391` | `0.372184` | `0.420253`    |
+| SVDD-64       | Deep SVDD   | `64x64`    | `0.304709`              | `0.440000`           | `0.360065`       | `0.787506` | `0.213108` | `0.366288`    |
+
+![Overall experiment comparison](artifacts/report_plots/overall_experiment_comparison.png)
+
+Current ranking:
+
+1. Autoencoder `64x64`
+2. Autoencoder `128x128`
+3. Deep SVDD `64x64`
+4. VAE `64x64`, `beta = 0.005`
+5. VAE `64x64`, `beta = 0.01`
+
+High-level interpretation:
+
+- the `64x64` autoencoder remains the strongest experiment overall
+- increasing the autoencoder resolution to `128x128` did not improve results
+- VAE beta tuning helped slightly, but the VAE remained below both autoencoder runs
+- Deep SVDD beat the tuned VAE on validation-threshold F1 and AUROC, but still did not beat the best autoencoder
+- Deep SVDD had especially weak AUPRC, which suggests poorer ranking quality under class imbalance
+- all tested approaches learn a real anomaly signal, but class separation is still only moderate
+
+## Evaluation Rule
+
+Main reported threshold:
+
+- use the threshold derived from validation-normal scores at the `95th` percentile
+
+Analysis-only threshold:
+
+- also report the best test-set threshold sweep as an operating-point study
+
+Reason:
+
+- the validation threshold is the fair deployment-style threshold
+- the best threshold sweep uses test labels and should not be treated as the main result
+
+## Experiment 1: Autoencoder `64x64`
+
+Purpose:
+
+- establish the first convolutional anomaly-detection baseline on the shared split
+
+Configuration:
+
+- config: [train_autoencoder.toml](configs/training/train_autoencoder.toml)
+- artifact dir: [artifacts/x64/autoencoder_baseline](artifacts/x64/autoencoder_baseline)
 - latent dimension: `128`
 - optimizer: Adam
 - learning rate: `0.001`
 - weight decay: `0.0001`
-- device: `auto` (`cuda` if available)
 - max epochs: `25`
 - early stopping patience: `5`
 - early stopping min delta: `0.00005`
-- checkpoint interval: every `5` epochs
 
-Training now supports:
+Training observations:
 
-- `best_model.pt`
-- `last_model.pt`
-- `latest_checkpoint.pt`
-- `checkpoint_epoch_5.pt`, `checkpoint_epoch_10.pt`, ...
-- resume training through `resume_from` in the config
-
-## Training Results
-
-Saved history:
-
-- [history.json](artifacts/x64/autoencoder_baseline/history.json)
-
-Observed loss trend from the saved history:
-
+- saved history: [history.json](artifacts/x64/autoencoder_baseline/history.json)
 - epoch 1: train `0.026390`, val `0.024768`
 - epoch 10: train `0.024169`, val `0.024185`
 - epoch 20: train `0.020241`, val `0.020260`
 - epoch 25: train `0.019691`, val `0.019755`
 
-Interpretation:
+Evaluation:
 
-- training remained stable through 25 epochs
-- validation loss kept improving
-- there was no obvious overfitting in this run
-
-Note:
-
-- [summary.json](artifacts/x64/autoencoder_baseline/summary.json) currently records `best_epoch = 24` and `best_val_loss = 0.019792`
-- however, [history.json](artifacts/x64/autoencoder_baseline/history.json) shows epoch 25 reached a slightly lower validation loss of `0.019755`
-- this indicates the saved summary is slightly stale relative to the saved history
-
-## Test Evaluation
-
-The notebook evaluates the best checkpoint on the test split using reconstruction MSE as the anomaly score.
-
-Validation-derived threshold:
-
-- threshold from validation normals (95th percentile): `0.031658`
-
-Metrics at the validation threshold:
-
+- validation threshold: `0.031658`
 - precision: `0.346154`
 - recall: `0.504000`
 - F1: `0.410423`
 - AUROC: `0.809694`
 - AUPRC: `0.447970`
+- confusion matrix: `[[4762, 238], [124, 126]]`
+- best test-sweep threshold: `0.035031`
+- best test-sweep F1: `0.473318`
 
-Confusion matrix at the validation threshold:
-
-|              | pred_normal | pred_anomaly |
-| ------------ | ----------- | ------------ |
-| true_normal  | 4762        | 238          |
-| true_anomaly | 124         | 126          |
+![AE-64 training and evaluation plots](artifacts/report_plots/ae64_training_and_evaluation.png)
 
 Interpretation:
 
-- the autoencoder learned a real anomaly signal
-- AUROC around `0.81` is a reasonable baseline
-- precision and recall are both moderate
-- the model catches about half of anomalies and misses the other half
+- training was stable and validation loss kept improving
+- the model learned a useful anomaly signal
+- this remains the strongest experiment so far
+- false positives and false negatives are still substantial, so the baseline is not yet strong enough to be the final project result by itself
 
-## 128x128 Follow-Up Experiment
+Note:
 
-A second experiment was run with the same overall split logic but higher image resolution.
+- [summary.json](artifacts/x64/autoencoder_baseline/summary.json) records `best_epoch = 24` and `best_val_loss = 0.019792`
+- [history.json](artifacts/x64/autoencoder_baseline/history.json) shows epoch 25 reached `0.019755`
+- the saved summary appears slightly stale relative to the final history
 
-Configuration changes:
+## Experiment 2: Autoencoder `128x128`
+
+Purpose:
+
+- test whether higher image resolution improves the same autoencoder baseline
+
+Configuration changes from Experiment 1:
 
 - metadata: `data/processed/x128/wm811k/metadata_50k_5pct.csv`
 - image size: `128 x 128`
@@ -157,116 +173,46 @@ Configuration changes:
 - max epochs: `50`
 - output dir: `artifacts/x128/autoencoder_baseline`
 
-Observed training outcome:
+Training observations:
 
 - early stopped at epoch `22`
 - saved best epoch: `17`
 - best saved validation loss: `0.020438`
-- validation threshold from normal scores: `0.032356`
 
-Metrics at the validation threshold:
+Evaluation:
 
+- validation threshold: `0.032356`
 - precision: `0.309973`
 - recall: `0.460000`
 - F1: `0.370370`
 - AUROC: `0.795673`
 - AUPRC: `0.393266`
-
-Confusion matrix at the validation threshold:
-
-|              | pred_normal | pred_anomaly |
-| ------------ | ----------- | ------------ |
-| true_normal  | 4744        | 256          |
-| true_anomaly | 135         | 115          |
-
-Best observed test-set F1 from threshold sweep:
-
-- threshold: `0.034747`
-- precision: `0.462617`
-- recall: `0.396000`
-- F1: `0.426724`
-- predicted anomalies: `213`
-
-Important note on the saved best epoch:
-
-- later epochs reached slightly lower validation losses than epoch `17`
-- however, those improvements were smaller than `early_stopping_min_delta = 0.00005`
-- so they were not counted as checkpoint-improving epochs
-
-## 64x64 vs 128x128 Comparison
-
-Comparison using the current runs:
-
-| setup | val-threshold precision | val-threshold recall | val-threshold F1 | AUROC | AUPRC | best sweep F1 |
-| ----- | ----------------------- | -------------------- | ---------------- | ----- | ----- | ------------- |
-| 64x64 | `0.346154` | `0.504000` | `0.410423` | `0.809694` | `0.447970` | `0.473318` |
-| 128x128 | `0.309973` | `0.460000` | `0.370370` | `0.795673` | `0.393266` | `0.426724` |
+- confusion matrix: `[[4744, 256], [135, 115]]`
+- best test-sweep threshold: `0.034747`
+- best test-sweep F1: `0.426724`
 
 Interpretation:
 
 - the `128x128` run was slower and more expensive
-- it did not improve anomaly detection in this architecture/configuration
-- the current `64x64` baseline remains the stronger result
+- it did not improve anomaly detection relative to the `64x64` autoencoder
+- the current autoencoder evidence favors `64x64`, not `128x128`
 
-## Threshold Sweep
+![Autoencoder resolution comparison](artifacts/report_plots/autoencoder_resolution_comparison.png)
 
-The notebook also sweeps thresholds on the test set to analyze operating points.
+## Experiment 3: VAE `64x64`, `beta = 0.01`
 
-Best observed test-set F1:
+Purpose:
 
-- threshold: `0.035031`
-- precision: `0.563536`
-- recall: `0.408000`
-- F1: `0.473318`
-- predicted anomalies: `180`
+- test whether a variational latent space improves over the reconstruction-only autoencoder baseline
 
-Interpretation:
+Configuration:
 
-- a slightly higher threshold than the validation cutoff improved F1
-- this threshold reduces false positives somewhat
-- recall falls to about `41%`, so many anomalies are still missed
-- the baseline remains only moderately effective
+- config: [train_vae.toml](configs/training/train_vae.toml)
+- image size: `64x64`
+- latent dimension: `128`
+- beta: `0.01`
 
-## Score Distribution Interpretation
-
-The histogram in the notebook shows:
-
-- normal wafers concentrated mostly around lower reconstruction error
-- anomaly wafers extending further to the right
-- substantial overlap between the two distributions
-
-This means:
-
-- the model does separate the classes somewhat
-- but the overlap is still large
-- reconstruction error alone is not yet giving strong anomaly discrimination
-
-## What Was Implemented
-
-Completed work:
-
-- WM-811K legacy pickle loading
-- explicit normal-only training setup
-- processed metadata generation with repo-relative paths
-- resolution-specific processed folders for `x64` and `x128`
-- 50k-normal subset generation
-- alternate metadata with anomaly-capped test split
-- convolutional autoencoder baseline
-- notebook-based end-to-end training
-- best checkpoint saving
-- resumable periodic checkpoints
-- validation-threshold metrics
-- threshold sweep analysis
-- higher-resolution `128x128` comparison experiment
-- convolutional VAE baseline
-- scriptable reconstruction-model evaluation
-- VAE beta-sweep automation
-
-## VAE Follow-Up Experiment
-
-A `64x64` VAE was trained on the same split as the strongest autoencoder baseline, then tuned with a small beta sweep.
-
-Initial VAE run with `beta = 0.01`:
+Evaluation:
 
 - validation threshold: `0.035629`
 - precision: `0.280323`
@@ -276,7 +222,45 @@ Initial VAE run with `beta = 0.01`:
 - AUPRC: `0.369030`
 - best test-sweep F1: `0.416667`
 
-Best VAE setting from the beta sweep:
+Interpretation:
+
+- the VAE learned a real anomaly signal
+- this first VAE run was clearly below the `64x64` autoencoder baseline
+- this motivated a small beta sweep rather than dropping the VAE immediately
+
+## Experiment 4: VAE `64x64` Beta Sweep
+
+Purpose:
+
+- tune KL regularization strength to see whether the VAE can close the gap to the autoencoder
+
+Sweep script:
+
+- [run_vae_beta_sweep.py](scripts/run_vae_beta_sweep.py)
+
+Default beta values:
+
+- `0.001`
+- `0.005`
+- `0.01`
+- `0.05`
+
+Outputs:
+
+- per-beta artifacts under `artifacts/x64/vae_beta_sweep/`
+- per-beta evaluation summaries under each run's `evaluation/` directory
+- aggregated summary at [beta_sweep_summary.json](artifacts/x64/vae_beta_sweep/beta_sweep_summary.json)
+
+Observed sweep ranking:
+
+1. `beta = 0.001` by validation-threshold F1
+2. `beta = 0.005` by AUROC, AUPRC, and best-sweep F1
+3. `beta = 0.01`
+4. `beta = 0.05`
+
+![VAE beta sweep metrics](artifacts/report_plots/vae_beta_sweep.png)
+
+Best VAE result from the sweep:
 
 - chosen beta: `0.005`
 - validation threshold: `0.034248`
@@ -289,89 +273,92 @@ Best VAE setting from the beta sweep:
 - best test-sweep threshold: `0.038787`
 - best test-sweep F1: `0.420253`
 
-Comparison against the strongest autoencoder baseline:
+Interpretation:
 
-| model | val-threshold precision | val-threshold recall | val-threshold F1 | AUROC | AUPRC | best sweep F1 |
-| ----- | ----------------------- | -------------------- | ---------------- | ----- | ----- | ------------- |
-| Autoencoder `64x64` | `0.346154` | `0.504000` | `0.410423` | `0.809694` | `0.447970` | `0.473318` |
-| VAE `beta = 0.01` | `0.280323` | `0.416000` | `0.334944` | `0.766392` | `0.369030` | `0.416667` |
-| VAE `beta = 0.005` | `0.286104` | `0.420000` | `0.340357` | `0.771391` | `0.372184` | `0.420253` |
+- reducing beta from `0.01` to `0.005` improved the VAE slightly
+- `beta = 0.001` gave the strongest validation-threshold F1 inside the saved sweep runs
+- `beta = 0.005` gave the stronger overall ranking metrics and threshold-sweep behavior
+- some KL regularization helps, but heavier regularization hurts in this setup
+- even the best VAE remained clearly below the `64x64` autoencoder
+
+## Experiment 5: Deep SVDD `64x64`
+
+Purpose:
+
+- compare a one-class distance-based model against the reconstruction-based baselines
+
+Implementation:
+
+- config: [train_svdd.toml](configs/training/train_svdd.toml)
+- notebook: [04_svdd_training.ipynb](notebooks/04_svdd_training.ipynb)
+- model: fixed-center Deep SVDD
+- encoder: three strided convolution blocks
+- latent dimension: `128`
+- anomaly score: squared distance to the learned SVDD center
+- center initialization: mean embedding over training-normal wafers with `center_eps` clipping
+
+Evaluation:
+
+- validation threshold: `0.000304`
+- precision: `0.304709`
+- recall: `0.440000`
+- F1: `0.360065`
+- AUROC: `0.787506`
+- AUPRC: `0.213108`
+- predicted anomalies: `361`
+- confusion matrix: `[[4749, 251], [140, 110]]`
+- best test-sweep threshold: `0.000302`
+- best test-sweep precision: `0.307902`
+- best test-sweep recall: `0.452000`
+- best test-sweep F1: `0.366288`
+
+![SVDD training and evaluation plots](artifacts/report_plots/svdd_training_and_evaluation.png)
 
 Interpretation:
 
-- the VAE learned a real anomaly signal
-- lowering `beta` from `0.01` to `0.005` improved the VAE slightly
-- even the best VAE setting remained clearly below the `64x64` autoencoder baseline
-- reconstruction-based anomaly detection is useful, but still only moderately separable on this task
+- Deep SVDD learned a usable anomaly signal on the shared split
+- it improved over the tuned VAE on validation-threshold precision, recall, F1, and AUROC
+- it still remained below the `64x64` autoencoder on validation-threshold F1, AUROC, AUPRC, and best sweep F1
+- the especially low AUPRC suggests weaker score ranking under class imbalance
+- this makes Deep SVDD a useful comparison result, but not the current best model
 
-## Threshold Selection Rule
+## Overall Interpretation
 
-For the main reported result:
+Across all completed experiments:
 
-- use the threshold derived from validation-normal scores
+- the `64x64` autoencoder is still the best-performing model
+- simply increasing autoencoder resolution did not help
+- the VAE underperformed the autoencoder even after beta tuning
+- Deep SVDD was a stronger alternative than the tuned VAE in some thresholded metrics, but not enough to replace the autoencoder baseline
+- all tested models show overlap between normal and anomaly score distributions, which explains the moderate F1 values and missed anomalies
+- the bottleneck looks more like limited class separation than threshold selection alone
 
-For analysis only:
+## What Was Implemented
 
-- report the best test-set threshold sweep as an operating-point study
+Completed work:
 
-Reason:
-
-- the validation threshold is the fair evaluation threshold
-- the best sweep threshold uses test labels and should not be treated as the deployment threshold
-
-## Current Baseline Conclusion
-
-The autoencoder is a valid first baseline, but it is not strong enough to be the final project result on its own.
-
-Current conclusion:
-
-- training is stable
-- anomaly scores carry useful information
-- AUROC is acceptable for a baseline
-- thresholded detection quality is still limited
-- the model misses a substantial fraction of defect wafers
-- increasing resolution to `128x128` did not improve results in the current model
-- VAE beta tuning improved results slightly, but still did not beat the `64x64` autoencoder baseline
+- WM-811K legacy pickle loading
+- explicit normal-only training setup
+- processed metadata generation with repo-relative paths
+- resolution-specific processed folders for `x64` and `x128`
+- `50k`-normal subset generation
+- anomaly-capped test split generation
+- convolutional autoencoder baseline
+- convolutional VAE baseline
+- Deep SVDD baseline
+- notebook-based end-to-end training for AE, VAE, and SVDD
+- scriptable reconstruction-model evaluation
+- VAE beta-sweep automation
+- best-checkpoint saving
+- resumable periodic checkpoints
+- validation-threshold metrics
+- threshold sweep analysis
 
 ## Recommended Next Steps
 
-Recommended follow-up experiments:
+Recommended follow-up work:
 
-- inspect false negatives visually
-- compare with Deep SVDD
+- inspect false negatives and false positives visually for the `64x64` autoencoder and Deep SVDD
+- compare where the autoencoder and Deep SVDD disagree on the same test wafers
 - try a stronger anomaly method such as PatchCore if time allows
-- report both validation-threshold metrics and threshold-sweep analysis, but keep the validation-derived threshold as the main result
-
-## VAE Beta Sweep
-
-The repo now includes a simple sweep script:
-
-- [run_vae_beta_sweep.py](scripts/run_vae_beta_sweep.py)
-
-Default beta values:
-
-- `0.001`
-- `0.005`
-- `0.01`
-- `0.05`
-
-Example command:
-
-```powershell
-python scripts/run_vae_beta_sweep.py
-```
-
-Outputs:
-
-- per-beta training artifacts under `artifacts/x64/vae_beta_sweep/`
-- per-beta evaluation summaries under each run's `evaluation/` folder
-- aggregated summary at `artifacts/x64/vae_beta_sweep/beta_sweep_summary.json`
-
-Observed sweep ranking:
-
-1. `beta = 0.005`
-2. `beta = 0.001`
-3. `beta = 0.01`
-4. `beta = 0.05`
-
-This indicates that a small amount of KL regularization helps, but heavier regularization degrades anomaly-detection performance in the current VAE setup.
+- keep the validation-derived threshold as the main reported result, and treat test-set threshold sweeps as analysis only
