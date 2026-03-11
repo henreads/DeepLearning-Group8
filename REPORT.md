@@ -144,6 +144,69 @@ Interpretation:
 - precision and recall are both moderate
 - the model catches about half of anomalies and misses the other half
 
+## 128x128 Follow-Up Experiment
+
+A second experiment was run with the same overall split logic but higher image resolution.
+
+Configuration changes:
+
+- metadata: `data/processed/x128/wm811k/metadata_50k_5pct.csv`
+- image size: `128 x 128`
+- batch size: `32`
+- max epochs: `50`
+- output dir: `artifacts/x128/autoencoder_baseline`
+
+Observed training outcome:
+
+- early stopped at epoch `22`
+- saved best epoch: `17`
+- best saved validation loss: `0.020438`
+- validation threshold from normal scores: `0.032356`
+
+Metrics at the validation threshold:
+
+- precision: `0.309973`
+- recall: `0.460000`
+- F1: `0.370370`
+- AUROC: `0.795673`
+- AUPRC: `0.393266`
+
+Confusion matrix at the validation threshold:
+
+|              | pred_normal | pred_anomaly |
+| ------------ | ----------- | ------------ |
+| true_normal  | 4744        | 256          |
+| true_anomaly | 135         | 115          |
+
+Best observed test-set F1 from threshold sweep:
+
+- threshold: `0.034747`
+- precision: `0.462617`
+- recall: `0.396000`
+- F1: `0.426724`
+- predicted anomalies: `213`
+
+Important note on the saved best epoch:
+
+- later epochs reached slightly lower validation losses than epoch `17`
+- however, those improvements were smaller than `early_stopping_min_delta = 0.00005`
+- so they were not counted as checkpoint-improving epochs
+
+## 64x64 vs 128x128 Comparison
+
+Comparison using the current runs:
+
+| setup | val-threshold precision | val-threshold recall | val-threshold F1 | AUROC | AUPRC | best sweep F1 |
+| ----- | ----------------------- | -------------------- | ---------------- | ----- | ----- | ------------- |
+| 64x64 | `0.346154` | `0.504000` | `0.410423` | `0.809694` | `0.447970` | `0.473318` |
+| 128x128 | `0.309973` | `0.460000` | `0.370370` | `0.795673` | `0.393266` | `0.426724` |
+
+Interpretation:
+
+- the `128x128` run was slower and more expensive
+- it did not improve anomaly detection in this architecture/configuration
+- the current `64x64` baseline remains the stronger result
+
 ## Threshold Sweep
 
 The notebook also sweeps thresholds on the test set to analyze operating points.
@@ -184,6 +247,7 @@ Completed work:
 - WM-811K legacy pickle loading
 - explicit normal-only training setup
 - processed metadata generation with repo-relative paths
+- resolution-specific processed folders for `x64` and `x128`
 - 50k-normal subset generation
 - alternate metadata with anomaly-capped test split
 - convolutional autoencoder baseline
@@ -192,6 +256,7 @@ Completed work:
 - resumable periodic checkpoints
 - validation-threshold metrics
 - threshold sweep analysis
+- higher-resolution `128x128` comparison experiment
 
 ## Current Baseline Conclusion
 
@@ -204,6 +269,7 @@ Current conclusion:
 - AUROC is acceptable for a baseline
 - thresholded detection quality is still limited
 - the model misses a substantial fraction of defect wafers
+- increasing resolution to `128x128` did not improve results in the current model
 
 ## Recommended Next Steps
 
