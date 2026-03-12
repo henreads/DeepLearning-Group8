@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 from pathlib import Path
 
 import numpy as np
@@ -16,6 +17,53 @@ from wafer_defect.data.legacy_pickle import read_legacy_pickle, unwrap_legacy_va
 
 LABEL_NORMAL = "none"
 LABEL_DEFECT = "pattern"
+
+
+def format_count_slug(count: int | None) -> str:
+    if count is None:
+        return "full"
+    if count >= 1000 and count % 1000 == 0:
+        return f"{count // 1000}k"
+    return str(count)
+
+
+def format_ratio_slug(ratio: float) -> str:
+    percent = ratio * 100.0
+    if math.isclose(percent, round(percent), rel_tol=0.0, abs_tol=1e-9):
+        return f"{int(round(percent))}pct"
+
+    text = f"{percent:.4f}".rstrip("0").rstrip(".")
+    return f"{text.replace('.', 'p')}pct"
+
+
+def build_variant_slug(args: argparse.Namespace, dev_cfg: dict, train_subset_cfg: dict) -> str:
+    if args.dev:
+        normal_count = int(dev_cfg["normal_count"])
+        defect_count = int(dev_cfg["defect_count"])
+        return f"dev_{format_count_slug(normal_count)}n_{format_count_slug(defect_count)}d"
+
+    normal_count = args.normal_limit
+    if normal_count is None and train_subset_cfg.get("normal_count"):
+        normal_count = int(train_subset_cfg["normal_count"])
+
+    count_slug = format_count_slug(normal_count)
+    if bool(train_subset_cfg.get("use_all_defects_for_test", True)):
+        return f"{count_slug}_all"
+
+    ratio = float(train_subset_cfg.get("test_defect_fraction_of_test_normals", 1.0))
+    return f"{count_slug}_{format_ratio_slug(ratio)}"
+
+
+def default_output_paths(
+    processed_root: Path,
+    args: argparse.Namespace,
+    dev_cfg: dict,
+    train_subset_cfg: dict,
+) -> tuple[Path, Path]:
+    variant_slug = build_variant_slug(args, dev_cfg, train_subset_cfg)
+    metadata_path = processed_root / f"metadata_{variant_slug}.csv"
+    arrays_dir = processed_root / f"arrays_{variant_slug}"
+    return metadata_path, arrays_dir
 
 
 def normalize_map(wafer_map: np.ndarray, image_size: int) -> np.ndarray:
@@ -87,15 +135,28 @@ def main() -> None:
 
     raw_pickle = Path(dataset_cfg["raw_pickle"])
     processed_root = Path(dataset_cfg["processed_root"])
-    arrays_dir = processed_root / "arrays"
-    default_metadata_path = dataset_cfg["dev_metadata_csv"] if args.dev else dataset_cfg["metadata_csv"]
-    metadata_path = Path(args.metadata_path or default_metadata_path)
+    default_metadata_path, default_arrays_dir = default_output_paths(
+        processed_root,
+        args,
+        dev_cfg,
+        train_subset_cfg,
+    )
+    if args.metadata_path:
+        metadata_path = Path(args.metadata_path)
+        arrays_stem = metadata_path.stem
+        if arrays_stem.startswith("metadata_"):
+            arrays_stem = arrays_stem[len("metadata_") :]
+        arrays_dir = metadata_path.parent / f"arrays_{arrays_stem}"
+    else:
+        metadata_path = default_metadata_path
+        arrays_dir = default_arrays_dir
 
     if not raw_pickle.exists():
         raise FileNotFoundError(f"Raw dataset file not found: {raw_pickle}")
 
     processed_root.mkdir(parents=True, exist_ok=True)
     arrays_dir.mkdir(parents=True, exist_ok=True)
+    metadata_path.parent.mkdir(parents=True, exist_ok=True)
 
     df = read_legacy_pickle(raw_pickle)
     df = df.copy()
@@ -147,6 +208,7 @@ def main() -> None:
 
     metadata = pd.DataFrame(records)
     metadata.to_csv(metadata_path, index=False)
+    print(f"Using arrays directory: {arrays_dir}")
     print(f"Saved {len(metadata)} rows to {metadata_path}")
 
 
