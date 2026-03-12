@@ -19,7 +19,10 @@ Relevant files:
 - [configs/training/train_autoencoder_batchnorm.toml](configs/training/train_autoencoder_batchnorm.toml)
 - [configs/training/train_autoencoder_batchnorm_dropout.toml](configs/training/train_autoencoder_batchnorm_dropout.toml)
 - [configs/training/train_autoencoder_residual.toml](configs/training/train_autoencoder_residual.toml)
+- [configs/training/train_resnet18_backbone.toml](configs/training/train_resnet18_backbone.toml)
 - [configs/training/train_patchcore.toml](configs/training/train_patchcore.toml)
+- [configs/training/train_patchcore_resnet18.toml](configs/training/train_patchcore_resnet18.toml)
+- [configs/training/train_patchcore_resnet50.toml](configs/training/train_patchcore_resnet50.toml)
 - [configs/training/train_vae.toml](configs/training/train_vae.toml)
 - [configs/training/train_svdd.toml](configs/training/train_svdd.toml)
 - [scripts/prepare_wm811k.py](scripts/prepare_wm811k.py)
@@ -32,6 +35,7 @@ Relevant files:
 - [scripts/run_vae_beta_sweep.py](scripts/run_vae_beta_sweep.py)
 - [src/wafer_defect/models/autoencoder.py](src/wafer_defect/models/autoencoder.py)
 - [src/wafer_defect/models/patchcore.py](src/wafer_defect/models/patchcore.py)
+- [src/wafer_defect/models/resnet.py](src/wafer_defect/models/resnet.py)
 - [src/wafer_defect/models/vae.py](src/wafer_defect/models/vae.py)
 - [src/wafer_defect/models/svdd.py](src/wafer_defect/models/svdd.py)
 - [src/wafer_defect/scoring.py](src/wafer_defect/scoring.py)
@@ -45,6 +49,9 @@ Relevant files:
 - [notebooks/06_autoencoder_batchnorm_dropout_training.ipynb](notebooks/06_autoencoder_batchnorm_dropout_training.ipynb)
 - [notebooks/07_patchcore_training.ipynb](notebooks/07_patchcore_training.ipynb)
 - [notebooks/08_autoencoder_residual_training.ipynb](notebooks/08_autoencoder_residual_training.ipynb)
+- [notebooks/09_resnet18_backbone_baseline.ipynb](notebooks/09_resnet18_backbone_baseline.ipynb)
+- [notebooks/10_patchcore_resnet18_training.ipynb](notebooks/10_patchcore_resnet18_training.ipynb)
+- [notebooks/11_patchcore_resnet50_training.ipynb](notebooks/11_patchcore_resnet50_training.ipynb)
 - [notebooks/03_vae_training.ipynb](notebooks/03_vae_training.ipynb)
 - [notebooks/04_svdd_training.ipynb](notebooks/04_svdd_training.ipynb)
 
@@ -90,17 +97,30 @@ Main comparison across completed experiments:
 | AE-64-topk    | Autoencoder | `topk_abs_mean` | `64x64`    | `0.390374`              | `0.584000`           | `0.467949`       | `0.839282` | `0.522171` | `0.509091`    |
 | AE-64-topk-43ep | Autoencoder | `topk_abs_mean` | `64x64`    | `0.381579`              | `0.580000`           | `0.460317`       | `0.834819` | `0.525162` | `0.520661`    |
 | AE-64-Res-topk | Residual Autoencoder | `topk_abs_mean` | `64x64`    | `0.356974`              | `0.604000`           | `0.448737`       | `0.804607` | `0.626014` | `0.678133`    |
+| PatchCore-Res50-mean-mb50k | PatchCore + ResNet50 | `mean` | `64x64`    | `0.339950`              | `0.548000`           | `0.419602`       | `0.821402` | `0.362657` | `0.439604`    |
 | AE-64-mse     | Autoencoder | `mse_mean` | `64x64`    | `0.346154`              | `0.504000`           | `0.410423`       | `0.809694` | `0.447970` | `0.473318`    |
+| PatchCore-Res50-mean-mb10k | PatchCore + ResNet50 | `mean` | `64x64`    | `0.323232`              | `0.512000`           | `0.396285`       | `0.804225` | `0.310237` | `0.405738`    |
 | AE-128-mse    | Autoencoder | `mse_mean` | `128x128`  | `0.309973`              | `0.460000`           | `0.370370`       | `0.795673` | `0.393266` | `0.426724`    |
 | SVDD-64       | Deep SVDD   | `latent_distance` | `64x64`    | `0.304709`              | `0.440000`           | `0.360065`       | `0.787506` | `0.213108` | `0.366288`    |
-| PatchCore-mean-mb50k | PatchCore | `mean` | `64x64`    | `0.283747`              | `0.412000`           | `0.336052`       | `0.850786` | `0.226325` | `0.389447`    |
+| PatchCore-AEBN-mean-mb50k | PatchCore + AE-BN Backbone | `mean` | `64x64`    | `0.283747`              | `0.412000`           | `0.336052`       | `0.850786` | `0.226325` | `0.389447`    |
 | VAE-64-b0.005 | VAE         | `vae_score` | `64x64`    | `0.286104`              | `0.420000`           | `0.340357`       | `0.771391` | `0.372184` | `0.420253`    |
 | VAE-64-b0.01  | VAE         | `vae_score` | `64x64`    | `0.280323`              | `0.416000`           | `0.334944`       | `0.766392` | `0.369030` | `0.416667`    |
-| PatchCore-topk-mb50k-r010 | PatchCore | `topk_mean` | `64x64`    | `0.166134`              | `0.208000`           | `0.184725`       | `0.808633` | `0.148827` | `0.304950`    |
-| PatchCore-topk-mb50k-r005 | PatchCore | `topk_mean` | `64x64`    | `0.112583`              | `0.136000`           | `0.123188`       | `0.777215` | `0.120862` | `0.241529`    |
-| PatchCore-topk-mb10k-r005 | PatchCore | `topk_mean` | `64x64`    | `0.053004`              | `0.060000`           | `0.056285`       | `0.659112` | `0.072701` | `0.157971`    |
-| PatchCore-max-mb50k | PatchCore | `max` | `64x64`    | `0.052632`              | `0.060000`           | `0.056075`       | `0.678692` | `0.080039` | `0.152152`    |
-| PatchCore-max-mb10k | PatchCore | `max` | `64x64`    | `0.029412`              | `0.036000`           | `0.032374`       | `0.587003` | `0.061002` | `0.120301`    |
+| PatchCore-Res18-mean-mb50k | PatchCore + ResNet18 | `mean` | `64x64`    | `0.345930`              | `0.476000`           | `0.400673`       | `0.842266` | `0.410729` | `0.445344`    |
+| PatchCore-Res18-mean-mb10k | PatchCore + ResNet18 | `mean` | `64x64`    | `0.345133`              | `0.468000`           | `0.397284`       | `0.831191` | `0.409682` | `0.425439`    |
+| ResNet18-center | Pretrained ResNet18 Backbone | `center_l2` | `64x64`    | `0.201705`              | `0.284000`           | `0.235880`       | `0.684746` | `0.194977` | `0.259740`    |
+| PatchCore-Res18-topk-mb50k-r010 | PatchCore + ResNet18 | `topk_mean` | `64x64`    | `0.296875`              | `0.380000`           | `0.333333`       | `0.803171` | `0.329613` | `0.361991`    |
+| PatchCore-Res18-topk-mb10k-r005 | PatchCore + ResNet18 | `topk_mean` | `64x64`    | `0.290520`              | `0.380000`           | `0.329289`       | `0.795090` | `0.323395` | `0.365000`    |
+| PatchCore-Res18-topk-mb50k-r005 | PatchCore + ResNet18 | `topk_mean` | `64x64`    | `0.291667`              | `0.364000`           | `0.323843`       | `0.795596` | `0.318155` | `0.345263`    |
+| PatchCore-Res18-max-mb50k | PatchCore + ResNet18 | `max` | `64x64`    | `0.281553`              | `0.348000`           | `0.311270`       | `0.786144` | `0.303307` | `0.331183`    |
+| PatchCore-Res50-topk-mb50k-r005 | PatchCore + ResNet50 | `topk_mean` | `64x64`    | `0.259053`              | `0.372000`           | `0.305419`       | `0.797955` | `0.279352` | `0.312618`    |
+| PatchCore-Res50-topk-mb50k-r010 | PatchCore + ResNet50 | `topk_mean` | `64x64`    | `0.256198`              | `0.372000`           | `0.303426`       | `0.800964` | `0.291924` | `0.317757`    |
+| PatchCore-Res50-max-mb50k | PatchCore + ResNet50 | `max` | `64x64`    | `0.233618`              | `0.328000`           | `0.272879`       | `0.780863` | `0.208679` | `0.282528`    |
+| PatchCore-Res50-topk-mb10k-r005 | PatchCore + ResNet50 | `topk_mean` | `64x64`    | `0.221932`              | `0.340000`           | `0.268562`       | `0.785025` | `0.217361` | `0.285319`    |
+| PatchCore-AEBN-topk-mb50k-r010 | PatchCore + AE-BN Backbone | `topk_mean` | `64x64`    | `0.166134`              | `0.208000`           | `0.184725`       | `0.808633` | `0.148827` | `0.304950`    |
+| PatchCore-AEBN-topk-mb50k-r005 | PatchCore + AE-BN Backbone | `topk_mean` | `64x64`    | `0.112583`              | `0.136000`           | `0.123188`       | `0.777215` | `0.120862` | `0.241529`    |
+| PatchCore-AEBN-topk-mb10k-r005 | PatchCore + AE-BN Backbone | `topk_mean` | `64x64`    | `0.053004`              | `0.060000`           | `0.056285`       | `0.659112` | `0.072701` | `0.157971`    |
+| PatchCore-AEBN-max-mb50k | PatchCore + AE-BN Backbone | `max` | `64x64`    | `0.052632`              | `0.060000`           | `0.056075`       | `0.678692` | `0.080039` | `0.152152`    |
+| PatchCore-AEBN-max-mb10k | PatchCore + AE-BN Backbone | `max` | `64x64`    | `0.029412`              | `0.036000`           | `0.032374`       | `0.587003` | `0.061002` | `0.120301`    |
 
 How to read these metrics:
 
@@ -142,17 +162,30 @@ This ranking is based mainly on `val-threshold F1`, with the other metrics used 
 8. Autoencoder `64x64` with `topk_abs_mean`, longer-epoch rerun
 9. Residual autoencoder `64x64` with `topk_abs_mean`
 10. Autoencoder + BatchNorm `64x64` with `topk_abs_mean`
-11. Autoencoder `64x64` with `mse_mean`
-12. Autoencoder `128x128` with `mse_mean`
-13. Deep SVDD `64x64`
-14. VAE `64x64`, `beta = 0.005`
-15. PatchCore `64x64`, `mean`, memory bank `50k`
-16. VAE `64x64`, `beta = 0.01`
-17. PatchCore `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.10`
-18. PatchCore `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.05`
-19. PatchCore `64x64`, `topk_mean`, memory bank `10k`, top-k ratio `0.05`
-20. PatchCore `64x64`, `max`, memory bank `50k`
-21. PatchCore `64x64`, `max`, memory bank `10k`
+11. PatchCore + ResNet50 `64x64`, `mean`, memory bank `50k`
+12. Autoencoder `64x64` with `mse_mean`
+13. PatchCore + ResNet18 `64x64`, `mean`, memory bank `50k`
+14. PatchCore + ResNet18 `64x64`, `mean`, memory bank `10k`
+15. PatchCore + ResNet50 `64x64`, `mean`, memory bank `10k`
+16. Autoencoder `128x128` with `mse_mean`
+17. Deep SVDD `64x64`
+18. VAE `64x64`, `beta = 0.005`
+19. PatchCore + AE-BN backbone `64x64`, `mean`, memory bank `50k`
+20. VAE `64x64`, `beta = 0.01`
+21. PatchCore + ResNet18 `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.10`
+22. PatchCore + ResNet18 `64x64`, `topk_mean`, memory bank `10k`, top-k ratio `0.05`
+23. PatchCore + ResNet18 `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.05`
+24. PatchCore + ResNet18 `64x64`, `max`, memory bank `50k`
+25. PatchCore + ResNet50 `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.05`
+26. PatchCore + ResNet50 `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.10`
+27. PatchCore + ResNet50 `64x64`, `max`, memory bank `50k`
+28. PatchCore + ResNet50 `64x64`, `topk_mean`, memory bank `10k`, top-k ratio `0.05`
+29. Pretrained ResNet18 backbone `64x64` with center-distance scoring
+30. PatchCore + AE-BN backbone `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.10`
+31. PatchCore + AE-BN backbone `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.05`
+32. PatchCore + AE-BN backbone `64x64`, `topk_mean`, memory bank `10k`, top-k ratio `0.05`
+33. PatchCore + AE-BN backbone `64x64`, `max`, memory bank `50k`
+34. PatchCore + AE-BN backbone `64x64`, `max`, memory bank `10k`
 
 High-level interpretation:
 
@@ -170,6 +203,10 @@ High-level interpretation:
 - PatchCore worked only when the wafer-level reduction became less brittle; `mean` reduction with a `50k` memory bank clearly beat the `max` variants
 - the best PatchCore variant reached competitive AUROC (`0.850786`), but its validation-threshold F1 (`0.336052`) still stayed below the best AE and below Deep SVDD
 - this suggests the current PatchCore setup has usable ranking quality but a weaker deployed operating point under the shared threshold rule
+- the frozen pretrained ResNet18 backbone with simple center-distance scoring was weak, which suggests the backbone alone is not enough without a stronger local-anomaly scoring rule
+- ResNet18 + PatchCore fixed that issue materially; the best ResNet18 PatchCore variant reached `F1 = 0.400673` and clearly outperformed the plain ResNet18 center-distance baseline
+- scaling that same PatchCore direction to a pretrained ResNet50 backbone helped further; the best ResNet50 PatchCore variant reached `F1 = 0.419602`
+- even so, the ResNet50 PatchCore sweep still did not beat the AE + BatchNorm + `max_abs` winner, so the AE family remains the best completed result overall
 - Deep SVDD had especially weak AUPRC, which suggests poorer ranking quality under class imbalance
 - local-error-focused scoring appears more effective than full-image averaging on wafer maps
 - all tested approaches learn a real anomaly signal, but class separation is still only moderate
@@ -786,7 +823,7 @@ Interpretation:
 - the especially low AUPRC suggests weaker score ranking under class imbalance
 - this makes Deep SVDD a useful comparison result, but not the current best model
 
-## Experiment 7: PatchCore Sweep `64x64`
+## Experiment 7: PatchCore Sweep with AE-BN Backbone `64x64`
 
 Purpose:
 
@@ -819,7 +856,7 @@ Sweep summary:
 | `max_mb50k` | `max` | `50000` | `0.10` | `0.056075` | `0.678692` | `0.080039` | `0.152152` |
 | `max_mb10k` | `max` | `10000` | `0.10` | `0.032374` | `0.587003` | `0.061002` | `0.120301` |
 
-Best PatchCore variant under the main validation-threshold rule:
+Best AE-BN PatchCore variant under the main validation-threshold rule:
 
 - variant: `mean_mb50k`
 - precision: `0.283747`
@@ -858,6 +895,205 @@ Interpretation:
 - PatchCore did not solve the hardest local defect types yet; `Scratch`, `Loc`, and parts of `Edge-Loc` remain weak
 - this makes the next improvement path clear: keep the PatchCore protocol, but replace the current frozen AE encoder with a stronger backbone
 
+## Experiment 8: Pretrained ResNet18 Backbone Baseline `64x64`
+
+Purpose:
+
+- test a non-autoencoder backbone baseline before combining the stronger backbone with PatchCore
+- check whether a frozen ImageNet-pretrained `ResNet18` embedding space is already useful with a very simple one-class scoring rule
+
+Implementation:
+
+- config: [train_resnet18_backbone.toml](configs/training/train_resnet18_backbone.toml)
+- notebook: [09_resnet18_backbone_baseline.ipynb](notebooks/09_resnet18_backbone_baseline.ipynb)
+- artifact dir: [artifacts/x64/resnet18_embedding_baseline](artifacts/x64/resnet18_embedding_baseline)
+- backbone: ImageNet-pretrained `ResNet18`
+- input adaptation: RGB stem averaged into a single-channel wafer input stem
+- backbone mode: frozen
+- input size inside the backbone: `224x224`
+- anomaly score: L2 distance from each wafer embedding to the train-normal feature center
+
+Evaluation:
+
+- validation threshold: `12.720178`
+- precision: `0.201705`
+- recall: `0.284000`
+- F1: `0.235880`
+- AUROC: `0.684746`
+- AUPRC: `0.194977`
+- predicted anomalies: `352`
+- confusion matrix: `[[4719, 281], [179, 71]]`
+- best test-sweep threshold: `14.406645`
+- best test-sweep precision: `0.370370`
+- best test-sweep recall: `0.200000`
+- best test-sweep F1: `0.259740`
+
+Failure analysis:
+
+- true positive: `71`, mean score `15.933155`
+- false negative: `179`, mean score `9.165589`
+- false positive: `281`, mean score `14.271239`
+- true negative: `4719`, mean score `8.471154`
+
+Defect-type recall:
+
+- `Edge-Ring`: `0.559524`
+- `Edge-Loc`: `0.150943`
+- `Center`: `0.080000`
+- `Loc`: `0.117647`
+- `Random`: `0.800000`
+- `Scratch`: `0.133333`
+- `Donut`: `0.142857`
+- `Near-full`: `0.500000`
+
+Interpretation:
+
+- the pretrained ResNet18 backbone worked technically, but the simple center-distance baseline was weak
+- this result is well below the best AE family run and also below the better PatchCore variants
+- the weakness appears to be the scoring rule, not only the backbone itself; global embedding distance is too crude for the local defect patterns in WM-811K
+- this result still supports the broader backbone direction, because it shows that a stronger backbone alone is not enough without a local anomaly method on top
+
+## Experiment 9: PatchCore Sweep with Pretrained ResNet18 `64x64`
+
+Purpose:
+
+- test whether PatchCore can extract a stronger local-anomaly signal from the pretrained `ResNet18` backbone than the plain center-distance baseline
+- compare several patch aggregation and memory-bank settings on the same shared `64x64` 5% test-defect split
+
+Implementation:
+
+- config: [train_patchcore_resnet18.toml](configs/training/train_patchcore_resnet18.toml)
+- notebook: [10_patchcore_resnet18_training.ipynb](notebooks/10_patchcore_resnet18_training.ipynb)
+- artifact dir: [artifacts/x64/patchcore_resnet18](artifacts/x64/patchcore_resnet18)
+- backbone: frozen ImageNet-pretrained `ResNet18`
+- input adaptation: single-channel wafer maps resized internally to `224x224`
+- compared variants:
+  - `mean`, memory bank `10k`
+  - `mean`, memory bank `50k`
+  - `topk_mean`, memory bank `10k`, top-k ratio `0.05`
+  - `topk_mean`, memory bank `50k`, top-k ratio `0.05`
+  - `topk_mean`, memory bank `50k`, top-k ratio `0.10`
+  - `max`, memory bank `50k`
+
+Sweep summary:
+
+| variant | reduction | memory bank | top-k ratio | val-threshold F1 | AUROC | AUPRC | best sweep F1 |
+| ------- | --------- | ----------- | ----------- | ---------------- | ----- | ----- | ------------- |
+| `mean_mb50k` | `mean` | `50000` | `0.10` | `0.400673` | `0.842266` | `0.410729` | `0.445344` |
+| `mean_mb10k` | `mean` | `10000` | `0.10` | `0.397284` | `0.831191` | `0.409682` | `0.425439` |
+| `topk_mb50k_r010` | `topk_mean` | `50000` | `0.10` | `0.333333` | `0.803171` | `0.329613` | `0.361991` |
+| `topk_mb10k_r005` | `topk_mean` | `10000` | `0.05` | `0.329289` | `0.795090` | `0.323395` | `0.365000` |
+| `topk_mb50k_r005` | `topk_mean` | `50000` | `0.05` | `0.323843` | `0.795596` | `0.318155` | `0.345263` |
+| `max_mb50k` | `max` | `50000` | `0.10` | `0.311270` | `0.786144` | `0.303307` | `0.331183` |
+
+Best ResNet18 PatchCore variant under the main validation-threshold rule:
+
+- variant: `mean_mb50k`
+- precision: `0.345930`
+- recall: `0.476000`
+- F1: `0.400673`
+- AUROC: `0.842266`
+- AUPRC: `0.410729`
+- best test-sweep threshold: `0.369899`
+- best test-sweep F1: `0.445344`
+
+Failure analysis for `mean_mb50k`:
+
+- true positive: `119`, mean score `0.412849`
+- false negative: `131`, mean score `0.337854`
+- false positive: `225`, mean score `0.378711`
+- true negative: `4775`, mean score `0.322284`
+
+Defect-type recall for `mean_mb50k`:
+
+- `Edge-Ring`: `0.523810`
+- `Center`: `0.480000`
+- `Edge-Loc`: `0.264151`
+- `Loc`: `0.411765`
+- `Scratch`: `0.600000`
+- `Donut`: `1.000000`
+- `Random`: `1.000000`
+- `Near-full`: `1.000000`
+
+Interpretation:
+
+- ResNet18 + PatchCore is a major improvement over the plain ResNet18 center-distance baseline
+- `mean` reduction was best again, and the larger `50k` memory bank gave a small but consistent gain over `10k`
+- the ResNet18 PatchCore path is much stronger than the older AE-backed PatchCore path on validation-threshold F1
+- especially important: the selected ResNet18 PatchCore variant improved on several local defect types, including `Loc` and `Scratch`
+- even with that gain, the best ResNet18 PatchCore run still did not beat the AE + BatchNorm + `max_abs` winner, so it is a strong challenger but not the new leader
+
+## Experiment 10: PatchCore Sweep with Pretrained ResNet50 `64x64`
+
+Purpose:
+
+- test whether a larger pretrained `ResNet50` backbone can improve the non-AE PatchCore branch beyond the `ResNet18` result
+- keep the same shared `64x64` 5% split and the same validation-threshold evaluation rule
+
+Implementation:
+
+- config: [train_patchcore_resnet50.toml](configs/training/train_patchcore_resnet50.toml)
+- notebook: [11_patchcore_resnet50_training.ipynb](notebooks/11_patchcore_resnet50_training.ipynb)
+- artifact dir: [artifacts/x64/patchcore_resnet50](artifacts/x64/patchcore_resnet50)
+- backbone: frozen ImageNet-pretrained `ResNet50`
+- input adaptation: single-channel wafer maps resized internally to `224x224`
+- feature dimension: `2048`
+- compared variants:
+  - `mean`, memory bank `10k`
+  - `mean`, memory bank `50k`
+  - `topk_mean`, memory bank `10k`, top-k ratio `0.05`
+  - `topk_mean`, memory bank `50k`, top-k ratio `0.05`
+  - `topk_mean`, memory bank `50k`, top-k ratio `0.10`
+  - `max`, memory bank `50k`
+
+Sweep summary:
+
+| variant | reduction | memory bank | top-k ratio | val-threshold F1 | AUROC | AUPRC | best sweep F1 |
+| ------- | --------- | ----------- | ----------- | ---------------- | ----- | ----- | ------------- |
+| `mean_mb50k` | `mean` | `50000` | `0.10` | `0.419602` | `0.821402` | `0.362657` | `0.439604` |
+| `mean_mb10k` | `mean` | `10000` | `0.10` | `0.396285` | `0.804225` | `0.310237` | `0.405738` |
+| `topk_mb50k_r005` | `topk_mean` | `50000` | `0.05` | `0.305419` | `0.797955` | `0.279352` | `0.312618` |
+| `topk_mb50k_r010` | `topk_mean` | `50000` | `0.10` | `0.303426` | `0.800964` | `0.291924` | `0.317757` |
+| `max_mb50k` | `max` | `50000` | `0.10` | `0.272879` | `0.780863` | `0.208679` | `0.282528` |
+| `topk_mb10k_r005` | `topk_mean` | `10000` | `0.05` | `0.268562` | `0.785025` | `0.217361` | `0.285319` |
+
+Best ResNet50 PatchCore variant under the main validation-threshold rule:
+
+- variant: `mean_mb50k`
+- precision: `0.339950`
+- recall: `0.548000`
+- F1: `0.419602`
+- AUROC: `0.821402`
+- AUPRC: `0.362657`
+- best test-sweep threshold: `0.565182`
+- best test-sweep F1: `0.439604`
+
+Failure analysis for `mean_mb50k`:
+
+- true positive: `137`, mean score `0.598213`
+- false negative: `113`, mean score `0.504366`
+- false positive: `266`, mean score `0.574844`
+- true negative: `4734`, mean score `0.488310`
+
+Defect-type recall for `mean_mb50k`:
+
+- `Edge-Ring`: `0.833333`
+- `Center`: `0.360000`
+- `Edge-Loc`: `0.320755`
+- `Loc`: `0.382353`
+- `Scratch`: `0.466667`
+- `Donut`: `0.857143`
+- `Random`: `0.800000`
+- `Near-full`: `1.000000`
+
+Interpretation:
+
+- ResNet50 + PatchCore improved the best non-AE validation-threshold F1 over the ResNet18 PatchCore branch
+- the improvement came mainly from higher recall at the selected validation threshold
+- `mean` reduction remained the clear winner, and `50k` memory bank again beat `10k`
+- the larger backbone did not improve every metric at once; `ResNet50` improved F1 over `ResNet18`, but `ResNet18` remained slightly stronger on AUROC and AUPRC
+- even with that improvement, the best ResNet50 PatchCore result still stayed below the AE + BatchNorm + `max_abs` winner
+
 ## Overall Interpretation
 
 Across all completed experiments:
@@ -873,6 +1109,10 @@ Across all completed experiments:
 - the residual autoencoder was a stronger architecture than the plain baseline in several metrics, but it still did not overtake the BatchNorm AE + `max_abs` result
 - PatchCore with the frozen BatchNorm AE encoder did produce a usable anomaly signal, but it still fell short of the best AE operating point
 - the best PatchCore result came from `mean` reduction with a `50k` memory bank, which suggests that more stable patch aggregation matters more than emphasizing a single worst patch
+- the frozen pretrained ResNet18 backbone baseline with center-distance scoring was weak, so simply switching backbones without a stronger local scoring rule is not enough
+- ResNet18 + PatchCore validated the non-AE backbone direction; it beat the earlier AE-backed PatchCore sweep and substantially improved over plain ResNet18 center-distance
+- ResNet50 + PatchCore pushed that non-AE branch a bit further; it became the best completed PatchCore result on validation-threshold F1
+- the ResNet50 gain was not uniform across all metrics, which suggests backbone scale alone is not the whole answer and score distribution calibration still matters
 - all tested models show overlap between normal and anomaly score distributions, which explains the moderate F1 values and missed anomalies
 - the score-ablation result shows that part of the bottleneck was the scoring rule, not only the model architecture
 - after fixing the score, the remaining bottleneck still looks more like limited class separation than threshold selection alone
@@ -897,6 +1137,9 @@ Completed work:
 - convolutional VAE baseline
 - Deep SVDD baseline
 - PatchCore baseline sweep with a frozen BatchNorm AE encoder
+- pretrained ResNet18 embedding-distance baseline
+- PatchCore sweep with a pretrained ResNet18 backbone
+- PatchCore sweep with a pretrained ResNet50 backbone
 - notebook-based end-to-end training for AE, VAE, and SVDD
 - notebook-based PatchCore sweep
 - scriptable reconstruction-model evaluation
@@ -913,6 +1156,9 @@ Recommended follow-up work:
 - avoid spending more time on longer-epoch reruns alone unless another change is paired with them
 - do not spend more time on dropout tuning for the current AE family unless another structural change is introduced
 - keep the current AE + BatchNorm + `max_abs` result as the benchmark to beat
-- move the next model-development effort into a stronger non-AE encoder backbone for PatchCore, such as a pretrained ResNet family model
+- if more non-AE work is justified, keep it on pretrained ResNet backbones with PatchCore-style local scoring rather than returning to plain global embedding-distance baselines
+- do not spend more time on larger backbone changes alone unless they are paired with PatchCore or another local-anomaly scoring method
 - keep the residual autoencoder as a logged comparison result, but stop using AE encoders as the main PatchCore improvement path
+- keep the completed ResNet50 + PatchCore branch as the best non-AE challenger
+- if more backbone work is justified, tune the ResNet50 PatchCore branch around `mean` reduction and memory-bank settings before jumping to another larger backbone
 - keep the validation-derived threshold as the main reported result, and treat test-set threshold sweeps as analysis only

@@ -178,6 +178,12 @@ After preparing the dataset, use the notebooks for the main experiments:
   Fit and evaluate a PatchCore-style local nearest-neighbor detector on the same `64x64` 5% dataset using the BatchNorm autoencoder checkpoint as the frozen feature backbone.
 - `notebooks/08_autoencoder_residual_training.ipynb`
   Train and evaluate a stronger residual autoencoder backbone on the same `64x64` 5% dataset and evaluation protocol.
+- `notebooks/09_resnet18_backbone_baseline.ipynb`
+  Evaluate a frozen pretrained ResNet18 backbone with simple center-distance scoring on the same `64x64` 5% dataset.
+- `notebooks/10_patchcore_resnet18_training.ipynb`
+  Fit and evaluate PatchCore on a frozen pretrained ResNet18 backbone using the same `64x64` 5% dataset and validation-threshold protocol.
+- `notebooks/11_patchcore_resnet50_training.ipynb`
+  Fit and evaluate PatchCore on a frozen pretrained ResNet50 backbone using the same `64x64` 5% dataset and validation-threshold protocol.
 
 Recommended run order for a fresh setup:
 
@@ -189,6 +195,9 @@ Recommended run order for a fresh setup:
 6. Run `notebooks/06_autoencoder_batchnorm_dropout_training.ipynb` if you want the BatchNorm + Dropout autoencoder comparison.
 7. Run `notebooks/07_patchcore_training.ipynb` if you want the PatchCore-style comparison.
 8. Run `notebooks/08_autoencoder_residual_training.ipynb` if you want the stronger residual autoencoder backbone comparison.
+9. Run `notebooks/09_resnet18_backbone_baseline.ipynb` if you want the plain pretrained ResNet18 backbone baseline.
+10. Run `notebooks/10_patchcore_resnet18_training.ipynb` if you want PatchCore with a pretrained ResNet18 backbone.
+11. Run `notebooks/11_patchcore_resnet50_training.ipynb` if you want PatchCore with a pretrained ResNet50 backbone.
 
 How to run them:
 

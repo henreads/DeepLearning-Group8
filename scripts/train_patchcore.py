@@ -48,23 +48,37 @@ def main() -> None:
     train_dataset = WaferMapDataset(config["data"]["metadata_csv"], split="train", image_size=image_size)
     model = PatchCoreModel(
         image_size=image_size,
+        backbone_type=str(config["model"].get("backbone_type", "conv")),
         use_batchnorm=bool(config["model"].get("use_batchnorm", True)),
+        pretrained=bool(config["model"].get("pretrained", True)),
+        freeze_backbone=bool(config["model"].get("freeze_backbone", True)),
+        backbone_input_size=int(config["model"].get("backbone_input_size", 224)),
+        normalize_imagenet=bool(config["model"].get("normalize_imagenet", True)),
         reduction=str(config["model"].get("reduction", "max")),
         topk_ratio=float(config["model"].get("topk_ratio", 0.1)),
         query_chunk_size=int(config["model"].get("query_chunk_size", 2048)),
         memory_chunk_size=int(config["model"].get("memory_chunk_size", 8192)),
     ).to(device)
 
+    backbone_type = str(config["model"].get("backbone_type", "conv"))
     backbone_checkpoint = str(config["model"].get("backbone_checkpoint", "")).strip()
-    if backbone_checkpoint:
+    if backbone_type == "conv" and backbone_checkpoint:
         checkpoint_path = Path(backbone_checkpoint)
         if not checkpoint_path.is_absolute():
             checkpoint_path = Path.cwd() / checkpoint_path
         backbone_config = model.load_backbone_from_autoencoder_checkpoint(checkpoint_path)
         print(f"Loaded PatchCore backbone from {checkpoint_path}")
+    elif backbone_type == "conv":
+        backbone_config = {}
+        print("No backbone checkpoint provided. Using randomly initialized conv PatchCore backbone.")
     else:
         backbone_config = {}
-        print("No backbone checkpoint provided. Using randomly initialized PatchCore backbone.")
+        backbone_label = str(config["model"].get("backbone_type", "resnet18"))
+        print(
+            f"Using {backbone_label} PatchCore backbone "
+            f"(pretrained={bool(config['model'].get('pretrained', True))}, "
+            f"freeze_backbone={bool(config['model'].get('freeze_backbone', True))})."
+        )
 
     memory_bank_size = int(config["model"].get("memory_bank_size", 50000))
     memory_subset = build_memory_subset(
@@ -95,6 +109,7 @@ def main() -> None:
         "memory_bank_size": int(model.memory_bank.shape[0]),
         "feature_dim": int(model.feature_dim),
         "patches_per_image": int(model.patches_per_image),
+        "backbone_type": backbone_type,
         "backbone_checkpoint": backbone_checkpoint,
         "backbone_config": backbone_config,
     }
@@ -106,6 +121,7 @@ def main() -> None:
         "feature_dim": int(model.feature_dim),
         "patches_per_image": int(model.patches_per_image),
         "memory_subset_images": len(memory_subset),
+        "backbone_type": backbone_type,
         "backbone_checkpoint": backbone_checkpoint,
         "reduction": model.reduction,
         "topk_ratio": float(model.topk_ratio),

@@ -61,7 +61,12 @@ def build_model(config: dict[str, Any], model_type: str, image_size: int) -> tor
     if model_type == "patchcore":
         return PatchCoreModel(
             image_size=image_size,
+            backbone_type=str(config.get("model", {}).get("backbone_type", "conv")),
             use_batchnorm=bool(config.get("model", {}).get("use_batchnorm", True)),
+            pretrained=bool(config.get("model", {}).get("pretrained", True)),
+            freeze_backbone=bool(config.get("model", {}).get("freeze_backbone", True)),
+            backbone_input_size=int(config.get("model", {}).get("backbone_input_size", 224)),
+            normalize_imagenet=bool(config.get("model", {}).get("normalize_imagenet", True)),
             reduction=str(config.get("model", {}).get("reduction", "max")),
             topk_ratio=float(config.get("model", {}).get("topk_ratio", 0.1)),
             query_chunk_size=int(config.get("model", {}).get("query_chunk_size", 2048)),

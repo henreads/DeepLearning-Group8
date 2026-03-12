@@ -9,12 +9,19 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
+from wafer_defect.models.resnet import ResNetFeatureExtractor
+
 
 class PatchCoreModel(nn.Module):
     def __init__(
         self,
         image_size: int = 64,
+        backbone_type: str = "conv",
         use_batchnorm: bool = True,
+        pretrained: bool = True,
+        freeze_backbone: bool = True,
+        backbone_input_size: int = 224,
+        normalize_imagenet: bool = True,
         reduction: str = "max",
         topk_ratio: float = 0.1,
         query_chunk_size: int = 2048,
@@ -27,26 +34,46 @@ class PatchCoreModel(nn.Module):
             raise ValueError(f"Unsupported reduction: {reduction}")
         if reduction == "topk_mean" and not 0.0 < topk_ratio <= 1.0:
             raise ValueError(f"topk_ratio must be in (0, 1], got {topk_ratio}")
+        if backbone_type not in {"conv", "resnet18", "resnet50"}:
+            raise ValueError(f"Unsupported backbone_type: {backbone_type}")
 
         self.image_size = image_size
+        self.backbone_type = backbone_type
         self.use_batchnorm = use_batchnorm
+        self.pretrained = pretrained
+        self.freeze_backbone = freeze_backbone
+        self.backbone_input_size = backbone_input_size
+        self.normalize_imagenet = normalize_imagenet
         self.reduction = reduction
         self.topk_ratio = topk_ratio
         self.query_chunk_size = query_chunk_size
         self.memory_chunk_size = memory_chunk_size
 
-        feature_layers: list[nn.Module] = []
-        channel_specs = [(1, 16), (16, 32), (32, 64)]
-        for in_channels, out_channels in channel_specs:
-            feature_layers.append(
-                nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=2, padding=1)
+        if backbone_type == "conv":
+            feature_layers: list[nn.Module] = []
+            channel_specs = [(1, 16), (16, 32), (32, 64)]
+            for in_channels, out_channels in channel_specs:
+                feature_layers.append(
+                    nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=2, padding=1)
+                )
+                if use_batchnorm:
+                    feature_layers.append(nn.BatchNorm2d(out_channels))
+                feature_layers.append(nn.ReLU())
+            self.features = nn.Sequential(*feature_layers)
+            self.feature_dim = 64
+            self.reduced_spatial = image_size // 8
+            self.backbone = None
+        else:
+            self.backbone = ResNetFeatureExtractor(
+                backbone_name=backbone_type,
+                pretrained=pretrained,
+                input_size=backbone_input_size,
+                freeze_backbone=freeze_backbone,
+                normalize_imagenet=normalize_imagenet,
             )
-            if use_batchnorm:
-                feature_layers.append(nn.BatchNorm2d(out_channels))
-            feature_layers.append(nn.ReLU())
-        self.features = nn.Sequential(*feature_layers)
-        self.feature_dim = 64
-        self.reduced_spatial = image_size // 8
+            self.features = None
+            self.feature_dim = self.backbone.embedding_dim
+            self.reduced_spatial = self.backbone.output_spatial
         self.register_buffer("memory_bank", torch.empty(0, self.feature_dim))
 
     @property
@@ -54,7 +81,13 @@ class PatchCoreModel(nn.Module):
         return self.reduced_spatial * self.reduced_spatial
 
     def feature_map(self, x: torch.Tensor) -> torch.Tensor:
-        return self.features(x)
+        if self.backbone_type == "conv":
+            if self.features is None:
+                raise ValueError("Conv PatchCore model does not have feature layers initialized.")
+            return self.features(x)
+        if self.backbone is None:
+            raise ValueError("ResNet PatchCore model does not have a backbone initialized.")
+        return self.backbone.forward_feature_map(x)
 
     def patch_embeddings(self, x: torch.Tensor) -> torch.Tensor:
         feature_map = self.feature_map(x)
@@ -104,6 +137,8 @@ class PatchCoreModel(nn.Module):
         return self.reduce_patch_distances(patch_distances)
 
     def load_backbone_from_autoencoder_checkpoint(self, checkpoint_path: str | Path) -> dict:
+        if self.backbone_type != "conv":
+            raise ValueError("Autoencoder checkpoints can only be loaded into the conv PatchCore backbone.")
         checkpoint = torch.load(Path(checkpoint_path), map_location="cpu")
         checkpoint_config = checkpoint.get("config", {})
         state_dict = checkpoint["model_state_dict"]
