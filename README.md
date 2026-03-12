@@ -174,6 +174,10 @@ After preparing the dataset, use the notebooks for the main experiments:
   Train and evaluate the BatchNorm autoencoder variant on the same `64x64` 5% dataset and evaluation protocol.
 - `notebooks/06_autoencoder_batchnorm_dropout_training.ipynb`
   Train and evaluate the BatchNorm + Dropout autoencoder variant on the same `64x64` 5% dataset and evaluation protocol.
+- `notebooks/07_patchcore_training.ipynb`
+  Fit and evaluate a PatchCore-style local nearest-neighbor detector on the same `64x64` 5% dataset using the BatchNorm autoencoder checkpoint as the frozen feature backbone.
+- `notebooks/08_autoencoder_residual_training.ipynb`
+  Train and evaluate a stronger residual autoencoder backbone on the same `64x64` 5% dataset and evaluation protocol.
 
 Recommended run order for a fresh setup:
 
@@ -183,6 +187,8 @@ Recommended run order for a fresh setup:
 4. Run `notebooks/04_svdd_training.ipynb` if you want the Deep SVDD comparison.
 5. Run `notebooks/05_autoencoder_batchnorm_training.ipynb` if you want the BatchNorm autoencoder comparison.
 6. Run `notebooks/06_autoencoder_batchnorm_dropout_training.ipynb` if you want the BatchNorm + Dropout autoencoder comparison.
+7. Run `notebooks/07_patchcore_training.ipynb` if you want the PatchCore-style comparison.
+8. Run `notebooks/08_autoencoder_residual_training.ipynb` if you want the stronger residual autoencoder backbone comparison.
 
 How to run them:
 

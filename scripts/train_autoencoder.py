@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 
 from wafer_defect.config import load_toml
 from wafer_defect.data.wm811k import WaferMapDataset
-from wafer_defect.models.autoencoder import ConvAutoencoder
+from wafer_defect.models.autoencoder import build_autoencoder_from_config
 from wafer_defect.training.autoencoder import run_autoencoder_epoch
 
 
@@ -59,12 +59,7 @@ def main() -> None:
         num_workers=int(config["data"]["num_workers"]),
     )
 
-    model = ConvAutoencoder(
-        latent_dim=int(config["model"]["latent_dim"]),
-        image_size=image_size,
-        use_batchnorm=bool(config["model"].get("use_batchnorm", False)),
-        dropout_prob=float(config["model"].get("dropout_prob", 0.0)),
-    ).to(device)
+    model = build_autoencoder_from_config(config, image_size=image_size).to(device)
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=float(config["training"]["learning_rate"]),

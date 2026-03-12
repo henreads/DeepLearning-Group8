@@ -18,26 +18,33 @@ Relevant files:
 - [configs/training/train_autoencoder.toml](configs/training/train_autoencoder.toml)
 - [configs/training/train_autoencoder_batchnorm.toml](configs/training/train_autoencoder_batchnorm.toml)
 - [configs/training/train_autoencoder_batchnorm_dropout.toml](configs/training/train_autoencoder_batchnorm_dropout.toml)
+- [configs/training/train_autoencoder_residual.toml](configs/training/train_autoencoder_residual.toml)
+- [configs/training/train_patchcore.toml](configs/training/train_patchcore.toml)
 - [configs/training/train_vae.toml](configs/training/train_vae.toml)
 - [configs/training/train_svdd.toml](configs/training/train_svdd.toml)
 - [scripts/prepare_wm811k.py](scripts/prepare_wm811k.py)
 - [scripts/train_autoencoder.py](scripts/train_autoencoder.py)
 - [scripts/evaluate_autoencoder_scores.py](scripts/evaluate_autoencoder_scores.py)
+- [scripts/train_patchcore.py](scripts/train_patchcore.py)
 - [scripts/train_vae.py](scripts/train_vae.py)
 - [scripts/train_svdd.py](scripts/train_svdd.py)
 - [scripts/evaluate_reconstruction_model.py](scripts/evaluate_reconstruction_model.py)
 - [scripts/run_vae_beta_sweep.py](scripts/run_vae_beta_sweep.py)
 - [src/wafer_defect/models/autoencoder.py](src/wafer_defect/models/autoencoder.py)
+- [src/wafer_defect/models/patchcore.py](src/wafer_defect/models/patchcore.py)
 - [src/wafer_defect/models/vae.py](src/wafer_defect/models/vae.py)
 - [src/wafer_defect/models/svdd.py](src/wafer_defect/models/svdd.py)
 - [src/wafer_defect/scoring.py](src/wafer_defect/scoring.py)
 - [src/wafer_defect/evaluation.py](src/wafer_defect/evaluation.py)
 - [src/wafer_defect/training/autoencoder.py](src/wafer_defect/training/autoencoder.py)
+- [src/wafer_defect/training/patchcore.py](src/wafer_defect/training/patchcore.py)
 - [src/wafer_defect/training/vae.py](src/wafer_defect/training/vae.py)
 - [src/wafer_defect/training/svdd.py](src/wafer_defect/training/svdd.py)
 - [notebooks/02_autoencoder_training.ipynb](notebooks/02_autoencoder_training.ipynb)
 - [notebooks/05_autoencoder_batchnorm_training.ipynb](notebooks/05_autoencoder_batchnorm_training.ipynb)
 - [notebooks/06_autoencoder_batchnorm_dropout_training.ipynb](notebooks/06_autoencoder_batchnorm_dropout_training.ipynb)
+- [notebooks/07_patchcore_training.ipynb](notebooks/07_patchcore_training.ipynb)
+- [notebooks/08_autoencoder_residual_training.ipynb](notebooks/08_autoencoder_residual_training.ipynb)
 - [notebooks/03_vae_training.ipynb](notebooks/03_vae_training.ipynb)
 - [notebooks/04_svdd_training.ipynb](notebooks/04_svdd_training.ipynb)
 
@@ -79,13 +86,21 @@ Main comparison across completed experiments:
 | AE-64-BN-DO0.05 | Autoencoder + BatchNorm + Dropout `0.05` | `max_abs` | `64x64`    | `0.377828`              | `0.668000`           | `0.482659`       | `0.835035` | `0.551700` | `0.609959`    |
 | AE-64-BN-DO0.10 | Autoencoder + BatchNorm + Dropout `0.10` | `max_abs` | `64x64`    | `0.385343`              | `0.652000`           | `0.484398`       | `0.844670` | `0.570245` | `0.634615`    |
 | AE-64-BN-DO0.20 | Autoencoder + BatchNorm + Dropout `0.20` | `max_abs` | `64x64`    | `0.370115`              | `0.644000`           | `0.470073`       | `0.841431` | `0.574973` | `0.633929`    |
+| AE-64-Res-max  | Residual Autoencoder | `max_abs` | `64x64`    | `0.374419`              | `0.644000`           | `0.473529`       | `0.843360` | `0.588907` | `0.625592`    |
 | AE-64-topk    | Autoencoder | `topk_abs_mean` | `64x64`    | `0.390374`              | `0.584000`           | `0.467949`       | `0.839282` | `0.522171` | `0.509091`    |
 | AE-64-topk-43ep | Autoencoder | `topk_abs_mean` | `64x64`    | `0.381579`              | `0.580000`           | `0.460317`       | `0.834819` | `0.525162` | `0.520661`    |
+| AE-64-Res-topk | Residual Autoencoder | `topk_abs_mean` | `64x64`    | `0.356974`              | `0.604000`           | `0.448737`       | `0.804607` | `0.626014` | `0.678133`    |
 | AE-64-mse     | Autoencoder | `mse_mean` | `64x64`    | `0.346154`              | `0.504000`           | `0.410423`       | `0.809694` | `0.447970` | `0.473318`    |
 | AE-128-mse    | Autoencoder | `mse_mean` | `128x128`  | `0.309973`              | `0.460000`           | `0.370370`       | `0.795673` | `0.393266` | `0.426724`    |
-| VAE-64-b0.01  | VAE         | `vae_score` | `64x64`    | `0.280323`              | `0.416000`           | `0.334944`       | `0.766392` | `0.369030` | `0.416667`    |
-| VAE-64-b0.005 | VAE         | `vae_score` | `64x64`    | `0.286104`              | `0.420000`           | `0.340357`       | `0.771391` | `0.372184` | `0.420253`    |
 | SVDD-64       | Deep SVDD   | `latent_distance` | `64x64`    | `0.304709`              | `0.440000`           | `0.360065`       | `0.787506` | `0.213108` | `0.366288`    |
+| PatchCore-mean-mb50k | PatchCore | `mean` | `64x64`    | `0.283747`              | `0.412000`           | `0.336052`       | `0.850786` | `0.226325` | `0.389447`    |
+| VAE-64-b0.005 | VAE         | `vae_score` | `64x64`    | `0.286104`              | `0.420000`           | `0.340357`       | `0.771391` | `0.372184` | `0.420253`    |
+| VAE-64-b0.01  | VAE         | `vae_score` | `64x64`    | `0.280323`              | `0.416000`           | `0.334944`       | `0.766392` | `0.369030` | `0.416667`    |
+| PatchCore-topk-mb50k-r010 | PatchCore | `topk_mean` | `64x64`    | `0.166134`              | `0.208000`           | `0.184725`       | `0.808633` | `0.148827` | `0.304950`    |
+| PatchCore-topk-mb50k-r005 | PatchCore | `topk_mean` | `64x64`    | `0.112583`              | `0.136000`           | `0.123188`       | `0.777215` | `0.120862` | `0.241529`    |
+| PatchCore-topk-mb10k-r005 | PatchCore | `topk_mean` | `64x64`    | `0.053004`              | `0.060000`           | `0.056285`       | `0.659112` | `0.072701` | `0.157971`    |
+| PatchCore-max-mb50k | PatchCore | `max` | `64x64`    | `0.052632`              | `0.060000`           | `0.056075`       | `0.678692` | `0.080039` | `0.152152`    |
+| PatchCore-max-mb10k | PatchCore | `max` | `64x64`    | `0.029412`              | `0.036000`           | `0.032374`       | `0.587003` | `0.061002` | `0.120301`    |
 
 How to read these metrics:
 
@@ -122,14 +137,22 @@ This ranking is based mainly on `val-threshold F1`, with the other metrics used 
 3. Autoencoder + BatchNorm + Dropout `0.10` `64x64` with `max_abs`
 4. Autoencoder + BatchNorm + Dropout `0.05` `64x64` with `max_abs`
 5. Autoencoder + BatchNorm + Dropout `0.20` `64x64` with `max_abs`
-6. Autoencoder `64x64` with `topk_abs_mean`
-7. Autoencoder `64x64` with `topk_abs_mean`, longer-epoch rerun
-8. Autoencoder + BatchNorm `64x64` with `topk_abs_mean`
-9. Autoencoder `64x64` with `mse_mean`
-10. Autoencoder `128x128` with `mse_mean`
-11. Deep SVDD `64x64`
-12. VAE `64x64`, `beta = 0.005`
-13. VAE `64x64`, `beta = 0.01`
+6. Residual autoencoder `64x64` with `max_abs`
+7. Autoencoder `64x64` with `topk_abs_mean`
+8. Autoencoder `64x64` with `topk_abs_mean`, longer-epoch rerun
+9. Residual autoencoder `64x64` with `topk_abs_mean`
+10. Autoencoder + BatchNorm `64x64` with `topk_abs_mean`
+11. Autoencoder `64x64` with `mse_mean`
+12. Autoencoder `128x128` with `mse_mean`
+13. Deep SVDD `64x64`
+14. VAE `64x64`, `beta = 0.005`
+15. PatchCore `64x64`, `mean`, memory bank `50k`
+16. VAE `64x64`, `beta = 0.01`
+17. PatchCore `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.10`
+18. PatchCore `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.05`
+19. PatchCore `64x64`, `topk_mean`, memory bank `10k`, top-k ratio `0.05`
+20. PatchCore `64x64`, `max`, memory bank `50k`
+21. PatchCore `64x64`, `max`, memory bank `10k`
 
 High-level interpretation:
 
@@ -140,9 +163,13 @@ High-level interpretation:
 - retraining that same autoencoder longer produced only marginal changes, which suggests epoch count alone is not the main bottleneck
 - the new evidence suggests architecture and scoring interact strongly; the best score for one checkpoint is not necessarily the best score for another
 - the dropout sweep produced several meaningful AE variants, but none beat the no-dropout BatchNorm model
+- the residual autoencoder was a meaningful architecture upgrade over the plain `topk_abs_mean` AE path, but it still did not beat the best BatchNorm AE when both were scored with their best thresholded rule
 - increasing the autoencoder resolution to `128x128` did not improve results
 - VAE beta tuning helped slightly, but the VAE remained below both autoencoder runs
 - Deep SVDD beat the tuned VAE on validation-threshold F1 and AUROC, but still did not beat the best autoencoder
+- PatchCore worked only when the wafer-level reduction became less brittle; `mean` reduction with a `50k` memory bank clearly beat the `max` variants
+- the best PatchCore variant reached competitive AUROC (`0.850786`), but its validation-threshold F1 (`0.336052`) still stayed below the best AE and below Deep SVDD
+- this suggests the current PatchCore setup has usable ranking quality but a weaker deployed operating point under the shared threshold rule
 - Deep SVDD had especially weak AUPRC, which suggests poorer ranking quality under class imbalance
 - local-error-focused scoring appears more effective than full-image averaging on wafer maps
 - all tested approaches learn a real anomaly signal, but class separation is still only moderate
@@ -371,6 +398,100 @@ Interpretation:
 - the selected no-dropout run behaved similarly to the BatchNorm notebook, which suggests the dropout sweep mostly confirmed that latent dropout is not a useful lever here
 - even after score ablation, the best dropout-sweep result `max_abs` with F1 `0.487062` remained below the earlier BatchNorm-only best result `0.501502`
 - this is still a useful negative result because it narrows the AE search space: BatchNorm is promising, but dropout is not
+
+### Variant: Residual Autoencoder `64x64`
+
+Purpose:
+
+- test whether a stronger residual encoder-decoder architecture improves the `64x64` autoencoder family on the shared `5%` test-defect split
+- keep the same training and evaluation protocol so the architecture change is isolated from the rest of the pipeline
+
+Configuration:
+
+- config: [train_autoencoder_residual.toml](configs/training/train_autoencoder_residual.toml)
+- notebook: [08_autoencoder_residual_training.ipynb](notebooks/08_autoencoder_residual_training.ipynb)
+- artifact dir: [artifacts/x64/autoencoder_residual](artifacts/x64/autoencoder_residual)
+- architecture: residual autoencoder with residual down/up blocks
+- latent dimension: `128`
+- BatchNorm: enabled
+- optimizer: Adam
+- learning rate: `0.001`
+- weight decay: `0.0001`
+- max epochs: `50`
+- early stopping patience: `5`
+- early stopping min delta: `0.00005`
+
+Training observations:
+
+- early stopped at epoch `20`
+- best epoch: `15`
+- best validation loss: `0.014504`
+- epoch 1: train `0.018846`, val `0.016567`
+- epoch 10: train `0.014621`, val `0.014580`
+- epoch 15: train `0.014508`, val `0.014504`
+- epoch 20: train `0.014442`, val `0.014488`
+
+Evaluation with the notebook default score (`topk_abs_mean`):
+
+- validation threshold: `0.537005`
+- precision: `0.356974`
+- recall: `0.604000`
+- F1: `0.448737`
+- AUROC: `0.804607`
+- AUPRC: `0.626014`
+- confusion matrix: `[[4728, 272], [99, 151]]`
+- best test-sweep threshold: `0.637794`
+- best test-sweep precision: `0.878981`
+- best test-sweep recall: `0.552000`
+- best test-sweep F1: `0.678133`
+
+Score ablation on the residual checkpoint:
+
+| score name | val-threshold F1 | AUROC | AUPRC | best sweep F1 |
+| ---------- | ---------------- | ----- | ----- | ------------- |
+| `max_abs` | `0.473529` | `0.843360` | `0.588907` | `0.625592` |
+| `topk_abs_mean` | `0.448737` | `0.804607` | `0.626014` | `0.678133` |
+| `mse_mean` | `0.392220` | `0.806132` | `0.426133` | `0.463415` |
+| `foreground_mse` | `0.322581` | `0.778402` | `0.353748` | `0.410758` |
+| `mae_mean` | `0.269360` | `0.734534` | `0.263283` | `0.315789` |
+| `pooled_mae_mean` | `0.260000` | `0.728333` | `0.255770` | `0.308824` |
+| `foreground_mae` | `0.245791` | `0.710838` | `0.230483` | `0.270784` |
+
+Best residual score under the main validation-threshold rule:
+
+- score: `max_abs`
+- validation-threshold precision: `0.374419`
+- validation-threshold recall: `0.644000`
+- validation-threshold F1: `0.473529`
+- AUROC: `0.843360`
+- AUPRC: `0.588907`
+- best threshold-sweep F1: `0.625592`
+
+Failure-mode analysis under `topk_abs_mean`:
+
+- true positive: `151`, mean score `0.847068`
+- false negative: `99`, mean score `0.480705`
+- false positive: `272`, mean score `0.576203`
+- true negative: `4728`, mean score `0.477503`
+
+Defect-type recall under `topk_abs_mean`:
+
+- `Edge-Ring`: `0.857143`
+- `Center`: `0.720000`
+- `Edge-Loc`: `0.433962`
+- `Loc`: `0.235294`
+- `Scratch`: `0.133333`
+- `Donut`: `0.571429`
+- `Random`: `0.800000`
+- `Near-full`: `1.000000`
+
+Interpretation:
+
+- the residual architecture is a real improvement over the weaker plain-AE scoring path, especially for `topk_abs_mean`
+- under score ablation, `max_abs` again became the strongest thresholded score for the checkpoint
+- the best residual result (`F1 = 0.473529`) is competitive with several AE-family variants, but it still does not beat the BatchNorm AE + `max_abs` winner (`F1 = 0.501502`)
+- the residual model still struggles with `Loc` and `Scratch`, so it does not remove the main local-defect weakness
+- this makes it a useful stronger backbone candidate, but not the new best end-to-end detector
 
 ### Variant: Autoencoder `128x128`
 
@@ -665,6 +786,78 @@ Interpretation:
 - the especially low AUPRC suggests weaker score ranking under class imbalance
 - this makes Deep SVDD a useful comparison result, but not the current best model
 
+## Experiment 7: PatchCore Sweep `64x64`
+
+Purpose:
+
+- test a local nearest-neighbor anomaly method on the same shared `64x64` 5% test-defect split
+- check whether a patch-based method can recover the smaller local defects that remain hard for the autoencoder family
+
+Implementation:
+
+- config: [train_patchcore.toml](configs/training/train_patchcore.toml)
+- notebook: [07_patchcore_training.ipynb](notebooks/07_patchcore_training.ipynb)
+- artifact dir: [artifacts/x64/patchcore_ae_bn](artifacts/x64/patchcore_ae_bn)
+- backbone checkpoint: [best_model.pt](artifacts/x64/autoencoder_batchnorm/best_model.pt)
+- backbone source: frozen BatchNorm autoencoder encoder
+- compared variants:
+  - `max`, memory bank `10k`
+  - `max`, memory bank `50k`
+  - `topk_mean`, memory bank `10k`, top-k ratio `0.05`
+  - `topk_mean`, memory bank `50k`, top-k ratio `0.05`
+  - `topk_mean`, memory bank `50k`, top-k ratio `0.10`
+  - `mean`, memory bank `50k`
+
+Sweep summary:
+
+| variant | reduction | memory bank | top-k ratio | val-threshold F1 | AUROC | AUPRC | best sweep F1 |
+| ------- | --------- | ----------- | ----------- | ---------------- | ----- | ----- | ------------- |
+| `mean_mb50k` | `mean` | `50000` | `0.10` | `0.336052` | `0.850786` | `0.226325` | `0.389447` |
+| `topk_mb50k_r010` | `topk_mean` | `50000` | `0.10` | `0.184725` | `0.808633` | `0.148827` | `0.304950` |
+| `topk_mb50k_r005` | `topk_mean` | `50000` | `0.05` | `0.123188` | `0.777215` | `0.120862` | `0.241529` |
+| `topk_mb10k_r005` | `topk_mean` | `10000` | `0.05` | `0.056285` | `0.659112` | `0.072701` | `0.157971` |
+| `max_mb50k` | `max` | `50000` | `0.10` | `0.056075` | `0.678692` | `0.080039` | `0.152152` |
+| `max_mb10k` | `max` | `10000` | `0.10` | `0.032374` | `0.587003` | `0.061002` | `0.120301` |
+
+Best PatchCore variant under the main validation-threshold rule:
+
+- variant: `mean_mb50k`
+- precision: `0.283747`
+- recall: `0.412000`
+- F1: `0.336052`
+- AUROC: `0.850786`
+- AUPRC: `0.226325`
+- best test-sweep threshold: `0.146545`
+- best test-sweep F1: `0.389447`
+
+Failure analysis for `mean_mb50k`:
+
+- true positive: `103`, mean score `0.185981`
+- false negative: `147`, mean score `0.132794`
+- false positive: `260`, mean score `0.191426`
+- true negative: `4740`, mean score `0.105194`
+
+Defect-type recall for `mean_mb50k`:
+
+- `Center`: `0.680000`
+- `Edge-Ring`: `0.369048`
+- `Edge-Loc`: `0.358491`
+- `Loc`: `0.235294`
+- `Scratch`: `0.133333`
+- `Donut`: `0.428571`
+- `Random`: `0.800000`
+- `Near-full`: `1.000000`
+
+Interpretation:
+
+- PatchCore only became competitive when the wafer-level score moved away from the brittle `max` reduction
+- the larger `50k` memory bank helped substantially; both `10k` variants were clearly weaker
+- `mean_mb50k` produced the best PatchCore result by every main metric in the sweep
+- the best PatchCore AUROC (`0.850786`) is strong and shows that the score ranking is useful overall
+- the validation-threshold F1 stayed moderate, which means the operating point under the shared threshold rule is still weaker than the best AE family run
+- PatchCore did not solve the hardest local defect types yet; `Scratch`, `Loc`, and parts of `Edge-Loc` remain weak
+- this makes the next improvement path clear: keep the PatchCore protocol, but replace the current frozen AE encoder with a stronger backbone
+
 ## Overall Interpretation
 
 Across all completed experiments:
@@ -677,11 +870,14 @@ Across all completed experiments:
 - simply increasing autoencoder resolution did not help
 - the VAE underperformed the autoencoder even after beta tuning
 - Deep SVDD was a stronger alternative than the tuned VAE in some thresholded metrics, but not enough to replace the autoencoder baseline
+- the residual autoencoder was a stronger architecture than the plain baseline in several metrics, but it still did not overtake the BatchNorm AE + `max_abs` result
+- PatchCore with the frozen BatchNorm AE encoder did produce a usable anomaly signal, but it still fell short of the best AE operating point
+- the best PatchCore result came from `mean` reduction with a `50k` memory bank, which suggests that more stable patch aggregation matters more than emphasizing a single worst patch
 - all tested models show overlap between normal and anomaly score distributions, which explains the moderate F1 values and missed anomalies
 - the score-ablation result shows that part of the bottleneck was the scoring rule, not only the model architecture
 - after fixing the score, the remaining bottleneck still looks more like limited class separation than threshold selection alone
 - the AE failure analysis shows that the remaining weakness is concentrated in smaller local defects rather than large global defect patterns
-- this makes the next decision clearer: either tune the AE specifically for local defects, or move to a method that is naturally stronger on local anomaly structure
+- this makes the next decision clearer: keep the current AE winner as the benchmark, and move the next effort into a stronger encoder backbone for local-anomaly methods
 
 ## What Was Implemented
 
@@ -696,10 +892,13 @@ Completed work:
 - convolutional autoencoder baseline
 - BatchNorm autoencoder variant
 - BatchNorm + dropout sweep
+- residual autoencoder variant
 - autoencoder score-ablation evaluation
 - convolutional VAE baseline
 - Deep SVDD baseline
+- PatchCore baseline sweep with a frozen BatchNorm AE encoder
 - notebook-based end-to-end training for AE, VAE, and SVDD
+- notebook-based PatchCore sweep
 - scriptable reconstruction-model evaluation
 - VAE beta-sweep automation
 - best-checkpoint saving
@@ -711,10 +910,9 @@ Completed work:
 
 Recommended follow-up work:
 
-- compare the `topk_abs_mean` and `mse_mean` rankings on the same wafers
 - avoid spending more time on longer-epoch reruns alone unless another change is paired with them
 - do not spend more time on dropout tuning for the current AE family unless another structural change is introduced
-- run one focused AE follow-up aimed at local defects, such as smaller latent size, denoising training, or `L1` reconstruction loss
-- compare where the autoencoder and Deep SVDD disagree on the same test wafers
-- move to a stronger local-anomaly method such as PatchCore if the next focused AE run does not improve `Loc`, `Edge-Loc`, and `Scratch` recall
+- keep the current AE + BatchNorm + `max_abs` result as the benchmark to beat
+- move the next model-development effort into a stronger non-AE encoder backbone for PatchCore, such as a pretrained ResNet family model
+- keep the residual autoencoder as a logged comparison result, but stop using AE encoders as the main PatchCore improvement path
 - keep the validation-derived threshold as the main reported result, and treat test-set threshold sweeps as analysis only
