@@ -16,6 +16,8 @@ Relevant files:
 
 - [configs/data/data.toml](configs/data/data.toml)
 - [configs/training/train_autoencoder.toml](configs/training/train_autoencoder.toml)
+- [configs/training/train_autoencoder_batchnorm.toml](configs/training/train_autoencoder_batchnorm.toml)
+- [configs/training/train_autoencoder_batchnorm_dropout.toml](configs/training/train_autoencoder_batchnorm_dropout.toml)
 - [configs/training/train_vae.toml](configs/training/train_vae.toml)
 - [configs/training/train_svdd.toml](configs/training/train_svdd.toml)
 - [scripts/prepare_wm811k.py](scripts/prepare_wm811k.py)
@@ -34,6 +36,8 @@ Relevant files:
 - [src/wafer_defect/training/vae.py](src/wafer_defect/training/vae.py)
 - [src/wafer_defect/training/svdd.py](src/wafer_defect/training/svdd.py)
 - [notebooks/02_autoencoder_training.ipynb](notebooks/02_autoencoder_training.ipynb)
+- [notebooks/05_autoencoder_batchnorm_training.ipynb](notebooks/05_autoencoder_batchnorm_training.ipynb)
+- [notebooks/06_autoencoder_batchnorm_dropout_training.ipynb](notebooks/06_autoencoder_batchnorm_dropout_training.ipynb)
 - [notebooks/03_vae_training.ipynb](notebooks/03_vae_training.ipynb)
 - [notebooks/04_svdd_training.ipynb](notebooks/04_svdd_training.ipynb)
 
@@ -69,6 +73,12 @@ Main comparison across completed experiments:
 
 | experiment    | model       | score | image size | val-threshold precision | val-threshold recall | val-threshold F1 | AUROC      | AUPRC      | best sweep F1 |
 | ------------- | ----------- | ----- | ---------- | ----------------------- | -------------------- | ---------------- | ---------- | ---------- | ------------- |
+| AE-64-BN-max  | Autoencoder + BatchNorm | `max_abs` | `64x64`    | `0.401442`              | `0.668000`           | `0.501502`       | `0.834023` | `0.568039` | `0.629808`    |
+| AE-64-BN-topk | Autoencoder + BatchNorm | `topk_abs_mean` | `64x64`    | `0.346247`              | `0.572000`           | `0.431373`       | `0.790020` | `0.603447` | `0.655172`    |
+| AE-64-BN-DO0.00 | Autoencoder + BatchNorm + Dropout `0.00` | `max_abs` | `64x64`    | `0.393120`              | `0.640000`           | `0.487062`       | `0.850790` | `0.616946` | `0.656642`    |
+| AE-64-BN-DO0.05 | Autoencoder + BatchNorm + Dropout `0.05` | `max_abs` | `64x64`    | `0.377828`              | `0.668000`           | `0.482659`       | `0.835035` | `0.551700` | `0.609959`    |
+| AE-64-BN-DO0.10 | Autoencoder + BatchNorm + Dropout `0.10` | `max_abs` | `64x64`    | `0.385343`              | `0.652000`           | `0.484398`       | `0.844670` | `0.570245` | `0.634615`    |
+| AE-64-BN-DO0.20 | Autoencoder + BatchNorm + Dropout `0.20` | `max_abs` | `64x64`    | `0.370115`              | `0.644000`           | `0.470073`       | `0.841431` | `0.574973` | `0.633929`    |
 | AE-64-topk    | Autoencoder | `topk_abs_mean` | `64x64`    | `0.390374`              | `0.584000`           | `0.467949`       | `0.839282` | `0.522171` | `0.509091`    |
 | AE-64-topk-43ep | Autoencoder | `topk_abs_mean` | `64x64`    | `0.381579`              | `0.580000`           | `0.460317`       | `0.834819` | `0.525162` | `0.520661`    |
 | AE-64-mse     | Autoencoder | `mse_mean` | `64x64`    | `0.346154`              | `0.504000`           | `0.410423`       | `0.809694` | `0.447970` | `0.473318`    |
@@ -77,23 +87,59 @@ Main comparison across completed experiments:
 | VAE-64-b0.005 | VAE         | `vae_score` | `64x64`    | `0.286104`              | `0.420000`           | `0.340357`       | `0.771391` | `0.372184` | `0.420253`    |
 | SVDD-64       | Deep SVDD   | `latent_distance` | `64x64`    | `0.304709`              | `0.440000`           | `0.360065`       | `0.787506` | `0.213108` | `0.366288`    |
 
+How to read these metrics:
+
+- `val-threshold precision`: of the wafers predicted as anomalies, how many were actually anomalous
+- `val-threshold recall`: of the true anomalous wafers, how many the model successfully detected
+- `val-threshold F1`: the main thresholded summary metric used in this report; it balances precision and recall at the deployed validation-derived threshold
+- `AUROC`: ranking quality across all possible thresholds; useful to see whether anomalous wafers generally receive higher scores than normal wafers
+- `AUPRC`: ranking quality under class imbalance; often more informative than AUROC when anomalies are rare
+- `best sweep F1`: best possible F1 if the threshold were chosen using test labels; useful for analysis, but not the main reported result
+
+Metric priority for this project:
+
+1. `val-threshold F1`
+2. `val-threshold precision` and `val-threshold recall`
+3. `AUPRC`
+4. `AUROC`
+5. `best sweep F1`
+
+Why this order:
+
+- the project needs a real anomaly decision rule, so thresholded metrics matter most
+- the threshold is chosen from validation normals, which makes the thresholded result the fairest deployment-style comparison
+- `AUPRC` and `AUROC` are still useful, but they summarize score ranking rather than one actual operating point
+- `best sweep F1` uses test labels, so it is an optimistic diagnostic metric and should not drive the main conclusion
+
 ![Overall experiment comparison](artifacts/report_plots/overall_experiment_comparison.png)
 
 Current ranking:
 
-1. Autoencoder `64x64` with `topk_abs_mean`
-2. Autoencoder `64x64` with `topk_abs_mean`, longer-epoch rerun
-3. Autoencoder `64x64` with `mse_mean`
-4. Autoencoder `128x128` with `mse_mean`
-5. Deep SVDD `64x64`
-6. VAE `64x64`, `beta = 0.005`
-7. VAE `64x64`, `beta = 0.01`
+This ranking is based mainly on `val-threshold F1`, with the other metrics used as supporting evidence.
+
+1. Autoencoder + BatchNorm `64x64` with `max_abs`
+2. Autoencoder + BatchNorm + Dropout `0.00` `64x64` with `max_abs`
+3. Autoencoder + BatchNorm + Dropout `0.10` `64x64` with `max_abs`
+4. Autoencoder + BatchNorm + Dropout `0.05` `64x64` with `max_abs`
+5. Autoencoder + BatchNorm + Dropout `0.20` `64x64` with `max_abs`
+6. Autoencoder `64x64` with `topk_abs_mean`
+7. Autoencoder `64x64` with `topk_abs_mean`, longer-epoch rerun
+8. Autoencoder + BatchNorm `64x64` with `topk_abs_mean`
+9. Autoencoder `64x64` with `mse_mean`
+10. Autoencoder `128x128` with `mse_mean`
+11. Deep SVDD `64x64`
+12. VAE `64x64`, `beta = 0.005`
+13. VAE `64x64`, `beta = 0.01`
 
 High-level interpretation:
 
-- the strongest result is now the `64x64` autoencoder with `topk_abs_mean` scoring
+- adding BatchNorm changed the scoring behavior of the autoencoder substantially
+- BatchNorm with the old `topk_abs_mean` score was weaker than the baseline autoencoder on F1 and AUROC, even though it improved AUPRC
+- once the BatchNorm checkpoint was rescored, `max_abs` became the strongest validation-threshold result in the report so far
 - the same `64x64` autoencoder improved materially when the scoring rule changed, even without retraining
 - retraining that same autoencoder longer produced only marginal changes, which suggests epoch count alone is not the main bottleneck
+- the new evidence suggests architecture and scoring interact strongly; the best score for one checkpoint is not necessarily the best score for another
+- the dropout sweep produced several meaningful AE variants, but none beat the no-dropout BatchNorm model
 - increasing the autoencoder resolution to `128x128` did not improve results
 - VAE beta tuning helped slightly, but the VAE remained below both autoencoder runs
 - Deep SVDD beat the tuned VAE on validation-threshold F1 and AUROC, but still did not beat the best autoencoder
@@ -116,7 +162,9 @@ Reason:
 - the validation threshold is the fair deployment-style threshold
 - the best threshold sweep uses test labels and should not be treated as the main result
 
-## Experiment 1: Autoencoder `64x64`
+## Autoencoder Experiment Family
+
+### Baseline: Autoencoder `64x64`
 
 Purpose:
 
@@ -164,12 +212,167 @@ Interpretation:
 - later score ablation showed that the same checkpoint can perform substantially better with a different anomaly score
 - false positives and false negatives are still substantial, so the baseline is not yet strong enough to be the final project result by itself
 
+### Variant: Autoencoder `64x64` with BatchNorm
+
+Purpose:
+
+- test whether inserting BatchNorm into the same `64x64` autoencoder improves anomaly detection on the shared `5%` test-defect split
+- keep the same dataset, optimizer family, threshold rule, and evaluation notebook flow as the baseline
+
+Configuration:
+
+- config: [train_autoencoder_batchnorm.toml](configs/training/train_autoencoder_batchnorm.toml)
+- notebook: [05_autoencoder_batchnorm_training.ipynb](notebooks/05_autoencoder_batchnorm_training.ipynb)
+- artifact dir: [artifacts/x64/autoencoder_batchnorm](artifacts/x64/autoencoder_batchnorm)
+- metadata: `data/processed/x64/wm811k/metadata_50k_5pct.csv`
+- latent dimension: `128`
+- BatchNorm: enabled in encoder and decoder
+- optimizer: Adam
+- learning rate: `0.001`
+- weight decay: `0.0001`
+- max epochs: `50`
+- early stopping patience: `5`
+- early stopping min delta: `0.00005`
+
+Training observations:
+
+- early stopped at epoch `13`
+- best epoch: `8`
+- best validation loss: `0.014935`
+- epoch 1: train `0.020315`, val `0.016544`
+- epoch 8: train `0.014960`, val `0.014935`
+- epoch 13: train `0.014813`, val `0.014998`
+
+Evaluation with the same main score as the baseline notebook (`topk_abs_mean`):
+
+- validation threshold: `0.532667`
+- precision: `0.346247`
+- recall: `0.572000`
+- F1: `0.431373`
+- AUROC: `0.790020`
+- AUPRC: `0.603447`
+- confusion matrix: `[[4730, 270], [107, 143]]`
+- best test-sweep threshold: `0.600826`
+- best test-sweep precision: `0.852564`
+- best test-sweep recall: `0.532000`
+- best test-sweep F1: `0.655172`
+
+Score ablation on the BatchNorm checkpoint:
+
+| score name | val-threshold F1 | AUROC | AUPRC | best sweep F1 |
+| ---------- | ---------------- | ----- | ----- | ------------- |
+| `max_abs` | `0.501502` | `0.834023` | `0.568039` | `0.629808` |
+| `topk_abs_mean` | `0.431373` | `0.790020` | `0.603447` | `0.655172` |
+| `mse_mean` | `0.326733` | `0.779451` | `0.345216` | `0.385000` |
+| `foreground_mse` | `0.278317` | `0.738702` | `0.278022` | `0.329114` |
+| `mae_mean` | `0.259567` | `0.728685` | `0.284041` | `0.330969` |
+| `pooled_mae_mean` | `0.257095` | `0.722959` | `0.278594` | `0.323760` |
+| `foreground_mae` | `0.242017` | `0.700971` | `0.244630` | `0.296512` |
+
+Best BatchNorm score under the main validation-threshold rule:
+
+- score: `max_abs`
+- validation-threshold precision: `0.401442`
+- validation-threshold recall: `0.668000`
+- validation-threshold F1: `0.501502`
+- AUROC: `0.834023`
+- AUPRC: `0.568039`
+- best threshold-sweep F1: `0.629808`
+
+Failure-mode analysis from the BatchNorm notebook under `topk_abs_mean`:
+
+- true positive: `143`, mean score `0.740248`
+- false negative: `107`, mean score `0.478619`
+- false positive: `270`, mean score `0.562314`
+- true negative: `4730`, mean score `0.475181`
+
+Defect-type recall under `topk_abs_mean`:
+
+- `Edge-Ring`: `0.833333`
+- `Center`: `0.700000`
+- `Edge-Loc`: `0.396226`
+- `Loc`: `0.176471`
+- `Scratch`: `0.200000`
+- `Donut`: `0.428571`
+- `Random`: `0.600000`
+- `Near-full`: `1.000000`
+
+Interpretation:
+
+- BatchNorm did not help when paired with the old baseline score `topk_abs_mean`; validation-threshold F1 fell from `0.460317` in the longer baseline rerun to `0.431373`
+- the BatchNorm checkpoint still learned a useful anomaly signal, shown by its high AUPRC (`0.603447`) and very strong best-sweep behavior
+- the score ablation is the key result: BatchNorm changed the error distribution enough that `max_abs`, which was weak on the baseline model, became the best fair-threshold score for this checkpoint
+- under the shared validation-threshold rule, `max_abs` on the BatchNorm checkpoint is the strongest completed result in the report so far by F1, recall, and AUPRC
+- AUROC for BatchNorm + `max_abs` is essentially tied with the stronger baseline autoencoder runs, so the gain is mainly better thresholded operating behavior rather than dramatically better ranking
+- the remaining weak classes are still `Loc`, `Scratch`, and parts of `Edge-Loc`, so BatchNorm alone does not solve the hardest defect patterns
+
 Note:
 
 - the current [summary.json](artifacts/x64/autoencoder_baseline/summary.json) and [history.json](artifacts/x64/autoencoder_baseline/history.json) now correspond to the later longer-epoch rerun, not this original `25`-epoch baseline
 - the original `25`-epoch baseline metrics above are kept for comparison because they were the first completed AE result on the shared split
 
-## Experiment 2: Autoencoder `128x128`
+### Variant: Autoencoder `64x64` with BatchNorm + Dropout Sweep
+
+Purpose:
+
+- test whether light dropout improves the BatchNorm autoencoder on the same shared `64x64` 5% test-defect split
+- keep the same data, optimizer family, threshold rule, and evaluation flow while sweeping only the dropout rate
+
+Configuration:
+
+- config: [train_autoencoder_batchnorm_dropout.toml](configs/training/train_autoencoder_batchnorm_dropout.toml)
+- notebook: [06_autoencoder_batchnorm_dropout_training.ipynb](notebooks/06_autoencoder_batchnorm_dropout_training.ipynb)
+- artifact root: [artifacts/x64/autoencoder_batchnorm_dropout](artifacts/x64/autoencoder_batchnorm_dropout)
+- metadata: `data/processed/x64/wm811k/metadata_50k_5pct.csv`
+- latent dimension: `128`
+- BatchNorm: enabled
+- dropout sweep: `0.00`, `0.05`, `0.10`, `0.20`
+- selection rule: lowest validation loss
+
+Sweep summary:
+
+| dropout | best epoch | best val loss | epochs ran |
+| ------- | ---------- | ------------- | ---------- |
+| `0.00` | `11` | `0.014824` | `16` |
+| `0.10` | `25` | `0.014978` | `30` |
+| `0.05` | `16` | `0.015063` | `21` |
+| `0.20` | `20` | `0.015660` | `25` |
+
+Best score-ablation result for each dropout setting:
+
+| dropout | best score | precision | recall | F1 | AUROC | AUPRC | best sweep F1 |
+| ------- | ---------- | --------- | ------ | -- | ----- | ----- | ------------- |
+| `0.00` | `max_abs` | `0.393120` | `0.640000` | `0.487062` | `0.850790` | `0.616946` | `0.656642` |
+| `0.05` | `max_abs` | `0.377828` | `0.668000` | `0.482659` | `0.835035` | `0.551700` | `0.609959` |
+| `0.10` | `max_abs` | `0.385343` | `0.652000` | `0.484398` | `0.844670` | `0.570245` | `0.634615` |
+| `0.20` | `max_abs` | `0.370115` | `0.644000` | `0.470073` | `0.841431` | `0.574973` | `0.633929` |
+
+Selected run:
+
+- selected dropout: `0.00`
+- selected output dir: `artifacts/x64/autoencoder_batchnorm_dropout/dropout_0p00`
+
+Score ablation on the selected `0.00` run:
+
+| score name | val-threshold F1 | AUROC | AUPRC | best sweep F1 |
+| ---------- | ---------------- | ----- | ----- | ------------- |
+| `max_abs` | `0.487062` | `0.850790` | `0.616946` | `0.656642` |
+| `topk_abs_mean` | `0.435703` | `0.799805` | `0.602296` | `0.668380` |
+| `mse_mean` | `0.336601` | `0.784481` | `0.343180` | `0.394432` |
+| `foreground_mse` | `0.272131` | `0.734939` | `0.263042` | `0.302083` |
+| `mae_mean` | `0.256494` | `0.727365` | `0.262883` | `0.318408` |
+| `pooled_mae_mean` | `0.251634` | `0.721275` | `0.256669` | `0.310502` |
+| `foreground_mae` | `0.236887` | `0.694310` | `0.228523` | `0.276029` |
+
+Interpretation:
+
+- dropout did not help this autoencoder family; the best sweep result was `0.00`, not a positive dropout value
+- `0.05` and `0.10` stayed close but still underperformed the no-dropout run, while `0.20` was clearly too strong
+- the selected no-dropout run behaved similarly to the BatchNorm notebook, which suggests the dropout sweep mostly confirmed that latent dropout is not a useful lever here
+- even after score ablation, the best dropout-sweep result `max_abs` with F1 `0.487062` remained below the earlier BatchNorm-only best result `0.501502`
+- this is still a useful negative result because it narrows the AE search space: BatchNorm is promising, but dropout is not
+
+### Variant: Autoencoder `128x128`
 
 Purpose:
 
@@ -209,7 +412,7 @@ Interpretation:
 
 ![Autoencoder resolution comparison](artifacts/report_plots/autoencoder_resolution_comparison.png)
 
-## Experiment 3: Autoencoder `64x64` Score Ablation
+### Score Ablation: Autoencoder `64x64`
 
 Purpose:
 
@@ -466,9 +669,11 @@ Interpretation:
 
 Across all completed experiments:
 
-- the best current result is the `64x64` autoencoder scored with `topk_abs_mean`
+- the best current result is the `64x64` BatchNorm autoencoder scored with `max_abs`
 - the original `64x64` autoencoder checkpoint improved substantially just by changing the scoring rule
 - retraining that autoencoder longer did not materially change the outcome, so epoch count alone is unlikely to be the key lever
+- adding BatchNorm changed the best score choice for the autoencoder from `topk_abs_mean` to `max_abs`
+- the dropout sweep did not help; the best run selected `dropout = 0.00`, so latent dropout is not a promising next AE lever in this setup
 - simply increasing autoencoder resolution did not help
 - the VAE underperformed the autoencoder even after beta tuning
 - Deep SVDD was a stronger alternative than the tuned VAE in some thresholded metrics, but not enough to replace the autoencoder baseline
@@ -489,6 +694,8 @@ Completed work:
 - `50k`-normal subset generation
 - anomaly-capped test split generation
 - convolutional autoencoder baseline
+- BatchNorm autoencoder variant
+- BatchNorm + dropout sweep
 - autoencoder score-ablation evaluation
 - convolutional VAE baseline
 - Deep SVDD baseline
@@ -506,6 +713,7 @@ Recommended follow-up work:
 
 - compare the `topk_abs_mean` and `mse_mean` rankings on the same wafers
 - avoid spending more time on longer-epoch reruns alone unless another change is paired with them
+- do not spend more time on dropout tuning for the current AE family unless another structural change is introduced
 - run one focused AE follow-up aimed at local defects, such as smaller latent size, denoising training, or `L1` reconstruction loss
 - compare where the autoencoder and Deep SVDD disagree on the same test wafers
 - move to a stronger local-anomaly method such as PatchCore if the next focused AE run does not improve `Loc`, `Edge-Loc`, and `Scratch` recall

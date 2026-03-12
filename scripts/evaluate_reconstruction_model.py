@@ -52,7 +52,12 @@ def build_model(config: dict[str, Any], model_type: str, image_size: int) -> tor
     latent_dim = int(config["model"]["latent_dim"])
 
     if model_type == "autoencoder":
-        return ConvAutoencoder(latent_dim=latent_dim, image_size=image_size)
+        return ConvAutoencoder(
+            latent_dim=latent_dim,
+            image_size=image_size,
+            use_batchnorm=bool(config.get("model", {}).get("use_batchnorm", False)),
+            dropout_prob=float(config.get("model", {}).get("dropout_prob", 0.0)),
+        )
     if model_type == "vae":
         return ConvVariationalAutoencoder(latent_dim=latent_dim, image_size=image_size)
     if model_type == "svdd":

@@ -62,6 +62,8 @@ def main() -> None:
     model = ConvAutoencoder(
         latent_dim=int(config["model"]["latent_dim"]),
         image_size=image_size,
+        use_batchnorm=bool(config["model"].get("use_batchnorm", False)),
+        dropout_prob=float(config["model"].get("dropout_prob", 0.0)),
     ).to(device)
     optimizer = torch.optim.Adam(
         model.parameters(),

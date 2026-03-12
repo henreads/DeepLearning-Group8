@@ -170,6 +170,10 @@ After preparing the dataset, use the notebooks for the main experiments:
   Train and evaluate the convolutional VAE.
 - `notebooks/04_svdd_training.ipynb`
   Train and evaluate the Deep SVDD experiment.
+- `notebooks/05_autoencoder_batchnorm_training.ipynb`
+  Train and evaluate the BatchNorm autoencoder variant on the same `64x64` 5% dataset and evaluation protocol.
+- `notebooks/06_autoencoder_batchnorm_dropout_training.ipynb`
+  Train and evaluate the BatchNorm + Dropout autoencoder variant on the same `64x64` 5% dataset and evaluation protocol.
 
 Recommended run order for a fresh setup:
 
@@ -177,6 +181,8 @@ Recommended run order for a fresh setup:
 2. Run `notebooks/02_autoencoder_training.ipynb` for the baseline autoencoder.
 3. Run `notebooks/03_vae_training.ipynb` if you want the VAE comparison.
 4. Run `notebooks/04_svdd_training.ipynb` if you want the Deep SVDD comparison.
+5. Run `notebooks/05_autoencoder_batchnorm_training.ipynb` if you want the BatchNorm autoencoder comparison.
+6. Run `notebooks/06_autoencoder_batchnorm_dropout_training.ipynb` if you want the BatchNorm + Dropout autoencoder comparison.
 
 How to run them:
 
