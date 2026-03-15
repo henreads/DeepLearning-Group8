@@ -16,8 +16,8 @@ The initial codebase is organized around a simple baseline workflow:
 
 1. Place the raw WM-811K pickle under `data/raw/`
 2. Build processed arrays plus metadata CSV files
-3. Train a PyTorch autoencoder baseline on normal wafers
-4. Train a convolutional VAE on the same split for comparison
+3. Open the notebooks as the main workflow for training and analysis
+4. Use helper scripts only for data preparation or optional automation
 5. Save weights, evaluation outputs, and training history for reproducibility
 
 ## Repository Layout
@@ -25,12 +25,28 @@ The initial codebase is organized around a simple baseline workflow:
 ```text
 configs/data/          Dataset preparation settings
 configs/training/      Model training settings
-scripts/               Entry points for dataset prep and training
+scripts/               Notebook support scripts plus optional helpers
 src/wafer_defect/      Package code
 data/raw/              Local raw dataset files (ignored by git)
 data/processed/        Local processed outputs (ignored by git)
 artifacts/             Saved model outputs (ignored by git if desired later)
 ```
+
+The notebooks are the primary way to run experiments in this repo.
+Top-level scripts are kept small on purpose:
+
+- `scripts/prepare_wm811k.py` prepares the dataset used by the notebooks
+- `scripts/evaluate_reconstruction_model.py` runs shared evaluation from saved checkpoints
+- `scripts/evaluate_autoencoder_scores.py` runs the autoencoder score-ablation evaluation used by several notebooks
+- `scripts/train_vae.py` stays at the top level because it is called directly from the VAE notebook
+- `scripts/train_ts_distillation.py` stays at the top level because notebook `12` calls it directly
+
+Optional ad hoc inspection helpers live under:
+
+- `scripts/dev/`
+
+Older standalone experiment-runner scripts were removed during cleanup.
+The experiment logic now lives primarily inside the notebooks plus reusable code under `src/wafer_defect/`.
 
 ## Setup
 
@@ -163,7 +179,7 @@ The default config locations are now:
 After preparing the dataset, use the notebooks for the main experiments:
 
 - `notebooks/01_data_exploration.ipynb`
-  Explore the processed metadata, class balance, and sample wafer maps.
+  Explore the processed metadata, class balance, and sample wafer maps. If you switch dataset variants, update the metadata path in the first code cell.
 - `notebooks/02_autoencoder_training.ipynb`
   Train and evaluate the baseline autoencoder.
 - `notebooks/03_vae_training.ipynb`

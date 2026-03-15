@@ -15,6 +15,7 @@ from torch.utils.data import DataLoader
 from wafer_defect.data.wm811k import WaferMapDataset
 from wafer_defect.evaluation.reconstruction_metrics import summarize_threshold_metrics, sweep_threshold_metrics
 from wafer_defect.models.autoencoder import build_autoencoder_from_config
+from wafer_defect.models.ts_distillation import build_ts_distillation_from_config
 from wafer_defect.models.patchcore import PatchCoreModel
 from wafer_defect.models.svdd import ConvDeepSVDD
 from wafer_defect.models.vae import ConvVariationalAutoencoder, VAEOutput
@@ -31,7 +32,9 @@ def infer_model_type(config: dict[str, Any], override: str) -> str:
     if override:
         return override.lower()
     model_type = str(config.get("model", {}).get("type", "autoencoder")).lower()
-    if model_type not in {"autoencoder", "vae", "svdd", "patchcore"}:
+    if model_type == "efficientad":
+        return "ts_distillation"
+    if model_type not in {"autoencoder", "vae", "svdd", "patchcore", "ts_distillation"}:
         raise ValueError(f"Unsupported model type: {model_type}")
     return model_type
 
@@ -72,6 +75,8 @@ def build_model(config: dict[str, Any], model_type: str, image_size: int) -> tor
             query_chunk_size=int(config.get("model", {}).get("query_chunk_size", 2048)),
             memory_chunk_size=int(config.get("model", {}).get("memory_chunk_size", 8192)),
         )
+    if model_type == "ts_distillation":
+        return build_ts_distillation_from_config(config, image_size=image_size)
     raise ValueError(f"Unsupported model type: {model_type}")
 
 
@@ -104,6 +109,8 @@ def collect_scores(
                     beta=beta,
                 )
             elif model_type == "patchcore":
+                scores = model(inputs)
+            elif model_type == "ts_distillation":
                 scores = model(inputs)
             else:
                 embeddings = model(inputs)
