@@ -54,11 +54,15 @@ class ResNetFeatureExtractor(nn.Module):
             backbone.relu,
             backbone.maxpool,
         )
+        self.layer1 = backbone.layer1
+        self.layer2 = backbone.layer2
+        self.layer3 = backbone.layer3
+        self.layer4 = backbone.layer4
         self.layers = nn.Sequential(
-            backbone.layer1,
-            backbone.layer2,
-            backbone.layer3,
-            backbone.layer4,
+            self.layer1,
+            self.layer2,
+            self.layer3,
+            self.layer4,
         )
         self.avgpool = backbone.avgpool
         self.embedding_dim = backbone.fc.in_features
@@ -90,6 +94,24 @@ class ResNetFeatureExtractor(nn.Module):
         x = self.preprocess(x)
         x = self.stem(x)
         return self.layers(x)
+
+    def forward_intermediate_feature_map(self, x: torch.Tensor, layer_name: str = "layer4") -> torch.Tensor:
+        layer_name = layer_name.lower()
+        if layer_name not in {"layer1", "layer2", "layer3", "layer4"}:
+            raise ValueError(f"Unsupported ResNet feature layer: {layer_name}")
+
+        x = self.preprocess(x)
+        x = self.stem(x)
+        x = self.layer1(x)
+        if layer_name == "layer1":
+            return x
+        x = self.layer2(x)
+        if layer_name == "layer2":
+            return x
+        x = self.layer3(x)
+        if layer_name == "layer3":
+            return x
+        return self.layer4(x)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.forward_features(x)

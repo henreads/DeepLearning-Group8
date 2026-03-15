@@ -4,11 +4,18 @@
 
 This report summarizes the anomaly-detection experiments run so far for the WM-811K / LSWMD wafer map project.
 
+The current repo workflow is notebook-first. Older standalone experiment-runner scripts were removed during cleanup, so the main entry points are now the notebooks, configs, and reusable package code under `src/wafer_defect/`.
+
 Shared goal across experiments:
 
 - train only on normal wafers (`failureType == none`)
 - treat labeled defect wafers as anomalies at test time
 - compare anomaly-scoring approaches under one consistent split and evaluation protocol
+
+Note:
+
+- this report still includes historical `128x128` baseline results where they were part of the experiment record
+- the current specialized notebooks only expose config options that still match valid intended variants
 
 ## Shared Setup
 
@@ -23,24 +30,25 @@ Relevant files:
 - [configs/training/train_patchcore.toml](configs/training/train_patchcore.toml)
 - [configs/training/train_patchcore_resnet18.toml](configs/training/train_patchcore_resnet18.toml)
 - [configs/training/train_patchcore_resnet50.toml](configs/training/train_patchcore_resnet50.toml)
+- [configs/training/train_ts_resnet18.toml](configs/training/train_ts_resnet18.toml)
+- [configs/training/train_ts_resnet50.toml](configs/training/train_ts_resnet50.toml)
 - [configs/training/train_vae.toml](configs/training/train_vae.toml)
 - [configs/training/train_svdd.toml](configs/training/train_svdd.toml)
 - [scripts/prepare_wm811k.py](scripts/prepare_wm811k.py)
-- [scripts/train_autoencoder.py](scripts/train_autoencoder.py)
 - [scripts/evaluate_autoencoder_scores.py](scripts/evaluate_autoencoder_scores.py)
-- [scripts/train_patchcore.py](scripts/train_patchcore.py)
+- [scripts/train_ts_distillation.py](scripts/train_ts_distillation.py)
 - [scripts/train_vae.py](scripts/train_vae.py)
-- [scripts/train_svdd.py](scripts/train_svdd.py)
 - [scripts/evaluate_reconstruction_model.py](scripts/evaluate_reconstruction_model.py)
-- [scripts/run_vae_beta_sweep.py](scripts/run_vae_beta_sweep.py)
 - [src/wafer_defect/models/autoencoder.py](src/wafer_defect/models/autoencoder.py)
+- [src/wafer_defect/models/ts_distillation.py](src/wafer_defect/models/ts_distillation.py)
 - [src/wafer_defect/models/patchcore.py](src/wafer_defect/models/patchcore.py)
 - [src/wafer_defect/models/resnet.py](src/wafer_defect/models/resnet.py)
 - [src/wafer_defect/models/vae.py](src/wafer_defect/models/vae.py)
 - [src/wafer_defect/models/svdd.py](src/wafer_defect/models/svdd.py)
 - [src/wafer_defect/scoring.py](src/wafer_defect/scoring.py)
-- [src/wafer_defect/evaluation.py](src/wafer_defect/evaluation.py)
+- [src/wafer_defect/evaluation/reconstruction_metrics.py](src/wafer_defect/evaluation/reconstruction_metrics.py)
 - [src/wafer_defect/training/autoencoder.py](src/wafer_defect/training/autoencoder.py)
+- [src/wafer_defect/training/ts_distillation.py](src/wafer_defect/training/ts_distillation.py)
 - [src/wafer_defect/training/patchcore.py](src/wafer_defect/training/patchcore.py)
 - [src/wafer_defect/training/vae.py](src/wafer_defect/training/vae.py)
 - [src/wafer_defect/training/svdd.py](src/wafer_defect/training/svdd.py)
@@ -52,6 +60,7 @@ Relevant files:
 - [notebooks/09_resnet18_backbone_baseline.ipynb](notebooks/09_resnet18_backbone_baseline.ipynb)
 - [notebooks/10_patchcore_resnet18_training.ipynb](notebooks/10_patchcore_resnet18_training.ipynb)
 - [notebooks/11_patchcore_resnet50_training.ipynb](notebooks/11_patchcore_resnet50_training.ipynb)
+- [notebooks/12_ts_distillation_training.ipynb](notebooks/12_ts_distillation_training.ipynb)
 - [notebooks/03_vae_training.ipynb](notebooks/03_vae_training.ipynb)
 - [notebooks/04_svdd_training.ipynb](notebooks/04_svdd_training.ipynb)
 
@@ -81,12 +90,19 @@ Split rule:
 - defects are added only to the test split
 - test anomalies are capped at `5%` of the number of test-normal wafers
 
+## Experiment Progression
+
+The experiment sequence was intentionally staged rather than random. We started with the simplest reconstruction baseline in `Experiment 1` to establish a shared `64x64` protocol, a fair validation-threshold rule, and a first realistic failure pattern. Once that baseline showed that the model could detect broad defects but still struggled on smaller local patterns, the next steps stayed close to the same family first: `Experiment 2` tested whether BatchNorm changed feature stability, `Experiment 3` checked whether dropout improved generalization, and the residual / resolution variants tested whether the bottleneck was architecture depth or image scale. In parallel, `Experiments 4` and `5` asked whether a probabilistic reconstruction model could beat the plain autoencoder, while `Experiment 6` tested a one-class distance model to see whether reconstruction itself was the main advantage.
+
+After those early branches, the results pointed to a clearer hypothesis: the main weakness was not learning anomalies at all, but missing smaller local defects and having weak local scoring. That is why `Experiment 7` moved to PatchCore on top of the best AE-family encoder, and why `Experiments 8`, `9`, and `10` shifted from reconstruction backbones to pretrained ResNet backbones with stronger local anomaly scoring. The weak plain ResNet18 center-distance baseline showed that backbone quality alone was not enough, while the PatchCore follow-ups showed that local patch aggregation mattered much more than global embedding distance. That progression led directly to `Experiments 11` and `12`, the teacher-distillation-resnet family: once stronger frozen backbones and local discrepancy maps looked promising, the next logical step was a teacher-student model that could preserve spatial anomaly information better than the older global or purely reconstruction-based scoring rules. In short, each step was chosen to isolate one question at a time: first whether reconstruction worked, then whether that family could be strengthened, then whether local scoring mattered more than reconstruction, and finally whether a stronger teacher-student local detector could combine the best parts of both directions.
+
 ## Overall Comparison
 
 Main comparison across completed experiments:
 
 | experiment    | model       | score | image size | val-threshold precision | val-threshold recall | val-threshold F1 | AUROC      | AUPRC      | best sweep F1 |
 | ------------- | ----------- | ----- | ---------- | ----------------------- | -------------------- | ---------------- | ---------- | ---------- | ------------- |
+| TS-Res50-mixed-topk20 | Teacher-Student Distillation + ResNet50 Teacher Backbone | `topk_mean` | `64x64`    | `0.418052`              | `0.704000`           | `0.524590`       | `0.909189` | `0.599169` | `0.606299`    |
 | AE-64-BN-max  | Autoencoder + BatchNorm | `max_abs` | `64x64`    | `0.401442`              | `0.668000`           | `0.501502`       | `0.834023` | `0.568039` | `0.629808`    |
 | AE-64-BN-topk | Autoencoder + BatchNorm | `topk_abs_mean` | `64x64`    | `0.346247`              | `0.572000`           | `0.431373`       | `0.790020` | `0.603447` | `0.655172`    |
 | AE-64-BN-DO0.00 | Autoencoder + BatchNorm + Dropout `0.00` | `max_abs` | `64x64`    | `0.393120`              | `0.640000`           | `0.487062`       | `0.850790` | `0.616946` | `0.656642`    |
@@ -116,6 +132,7 @@ Main comparison across completed experiments:
 | PatchCore-Res50-topk-mb50k-r010 | PatchCore + ResNet50 | `topk_mean` | `64x64`    | `0.256198`              | `0.372000`           | `0.303426`       | `0.800964` | `0.291924` | `0.317757`    |
 | PatchCore-Res50-max-mb50k | PatchCore + ResNet50 | `max` | `64x64`    | `0.233618`              | `0.328000`           | `0.272879`       | `0.780863` | `0.208679` | `0.282528`    |
 | PatchCore-Res50-topk-mb10k-r005 | PatchCore + ResNet50 | `topk_mean` | `64x64`    | `0.221932`              | `0.340000`           | `0.268562`       | `0.785025` | `0.217361` | `0.285319`    |
+| TS-Res18-student-topk20 | Teacher-Student Distillation + ResNet18 Teacher Backbone | `topk_mean` | `64x64`    | `0.402500`              | `0.644000`           | `0.495385`       | `0.894076` | `0.519445` | `0.520548`    |
 | PatchCore-AEBN-topk-mb50k-r010 | PatchCore + AE-BN Backbone | `topk_mean` | `64x64`    | `0.166134`              | `0.208000`           | `0.184725`       | `0.808633` | `0.148827` | `0.304950`    |
 | PatchCore-AEBN-topk-mb50k-r005 | PatchCore + AE-BN Backbone | `topk_mean` | `64x64`    | `0.112583`              | `0.136000`           | `0.123188`       | `0.777215` | `0.120862` | `0.241529`    |
 | PatchCore-AEBN-topk-mb10k-r005 | PatchCore + AE-BN Backbone | `topk_mean` | `64x64`    | `0.053004`              | `0.060000`           | `0.056285`       | `0.659112` | `0.072701` | `0.157971`    |
@@ -146,46 +163,50 @@ Why this order:
 - `AUPRC` and `AUROC` are still useful, but they summarize score ranking rather than one actual operating point
 - `best sweep F1` uses test labels, so it is an optimistic diagnostic metric and should not drive the main conclusion
 
+The overview plot below is split into two views to stay readable as the experiment list grows: the left panel shows the top runs by deployment-style F1, while the right panel shows all completed runs in AUPRC-vs-F1 space with point size scaled by AUROC.
+
 ![Overall experiment comparison](artifacts/report_plots/overall_experiment_comparison.png)
 
 Current ranking:
 
 This ranking is based mainly on `val-threshold F1`, with the other metrics used as supporting evidence.
 
-1. Autoencoder + BatchNorm `64x64` with `max_abs`
-2. Autoencoder + BatchNorm + Dropout `0.00` `64x64` with `max_abs`
-3. Autoencoder + BatchNorm + Dropout `0.10` `64x64` with `max_abs`
-4. Autoencoder + BatchNorm + Dropout `0.05` `64x64` with `max_abs`
-5. Autoencoder + BatchNorm + Dropout `0.20` `64x64` with `max_abs`
-6. Residual autoencoder `64x64` with `max_abs`
-7. Autoencoder `64x64` with `topk_abs_mean`
-8. Autoencoder `64x64` with `topk_abs_mean`, longer-epoch rerun
-9. Residual autoencoder `64x64` with `topk_abs_mean`
-10. Autoencoder + BatchNorm `64x64` with `topk_abs_mean`
-11. PatchCore + ResNet50 `64x64`, `mean`, memory bank `50k`
-12. Autoencoder `64x64` with `mse_mean`
-13. PatchCore + ResNet18 `64x64`, `mean`, memory bank `50k`
-14. PatchCore + ResNet18 `64x64`, `mean`, memory bank `10k`
-15. PatchCore + ResNet50 `64x64`, `mean`, memory bank `10k`
-16. Autoencoder `128x128` with `mse_mean`
-17. Deep SVDD `64x64`
-18. VAE `64x64`, `beta = 0.005`
-19. PatchCore + AE-BN backbone `64x64`, `mean`, memory bank `50k`
-20. VAE `64x64`, `beta = 0.01`
-21. PatchCore + ResNet18 `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.10`
-22. PatchCore + ResNet18 `64x64`, `topk_mean`, memory bank `10k`, top-k ratio `0.05`
-23. PatchCore + ResNet18 `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.05`
-24. PatchCore + ResNet18 `64x64`, `max`, memory bank `50k`
-25. PatchCore + ResNet50 `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.05`
-26. PatchCore + ResNet50 `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.10`
-27. PatchCore + ResNet50 `64x64`, `max`, memory bank `50k`
-28. PatchCore + ResNet50 `64x64`, `topk_mean`, memory bank `10k`, top-k ratio `0.05`
-29. Pretrained ResNet18 backbone `64x64` with center-distance scoring
-30. PatchCore + AE-BN backbone `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.10`
-31. PatchCore + AE-BN backbone `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.05`
-32. PatchCore + AE-BN backbone `64x64`, `topk_mean`, memory bank `10k`, top-k ratio `0.05`
-33. PatchCore + AE-BN backbone `64x64`, `max`, memory bank `50k`
-34. PatchCore + AE-BN backbone `64x64`, `max`, memory bank `10k`
+1. Teacher-student distillation + ResNet50 teacher `64x64` with mixed student+autoencoder `topk_mean`, top-k ratio `0.20`
+2. Autoencoder + BatchNorm `64x64` with `max_abs`
+3. Teacher-student distillation + ResNet18 teacher `64x64` with student-only `topk_mean`, top-k ratio `0.20`
+4. Autoencoder + BatchNorm + Dropout `0.00` `64x64` with `max_abs`
+5. Autoencoder + BatchNorm + Dropout `0.10` `64x64` with `max_abs`
+6. Autoencoder + BatchNorm + Dropout `0.05` `64x64` with `max_abs`
+7. Residual autoencoder `64x64` with `max_abs`
+8. Autoencoder + BatchNorm + Dropout `0.20` `64x64` with `max_abs`
+9. Autoencoder `64x64` with `topk_abs_mean`
+10. Autoencoder `64x64` with `topk_abs_mean`, longer-epoch rerun
+11. Residual autoencoder `64x64` with `topk_abs_mean`
+12. Autoencoder + BatchNorm `64x64` with `topk_abs_mean`
+13. PatchCore + ResNet50 `64x64`, `mean`, memory bank `50k`
+14. Autoencoder `64x64` with `mse_mean`
+15. PatchCore + ResNet18 `64x64`, `mean`, memory bank `50k`
+16. PatchCore + ResNet18 `64x64`, `mean`, memory bank `10k`
+17. PatchCore + ResNet50 `64x64`, `mean`, memory bank `10k`
+18. Autoencoder `128x128` with `mse_mean`
+19. Deep SVDD `64x64`
+19. VAE `64x64`, `beta = 0.005`
+20. PatchCore + AE-BN backbone `64x64`, `mean`, memory bank `50k`
+21. VAE `64x64`, `beta = 0.01`
+22. PatchCore + ResNet18 `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.10`
+23. PatchCore + ResNet18 `64x64`, `topk_mean`, memory bank `10k`, top-k ratio `0.05`
+24. PatchCore + ResNet18 `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.05`
+25. PatchCore + ResNet18 `64x64`, `max`, memory bank `50k`
+26. PatchCore + ResNet50 `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.05`
+27. PatchCore + ResNet50 `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.10`
+28. PatchCore + ResNet50 `64x64`, `max`, memory bank `50k`
+29. PatchCore + ResNet50 `64x64`, `topk_mean`, memory bank `10k`, top-k ratio `0.05`
+30. Pretrained ResNet18 backbone `64x64` with center-distance scoring
+31. PatchCore + AE-BN backbone `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.10`
+32. PatchCore + AE-BN backbone `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.05`
+33. PatchCore + AE-BN backbone `64x64`, `topk_mean`, memory bank `10k`, top-k ratio `0.05`
+34. PatchCore + AE-BN backbone `64x64`, `max`, memory bank `50k`
+35. PatchCore + AE-BN backbone `64x64`, `max`, memory bank `10k`
 
 High-level interpretation:
 
@@ -206,7 +227,11 @@ High-level interpretation:
 - the frozen pretrained ResNet18 backbone with simple center-distance scoring was weak, which suggests the backbone alone is not enough without a stronger local-anomaly scoring rule
 - ResNet18 + PatchCore fixed that issue materially; the best ResNet18 PatchCore variant reached `F1 = 0.400673` and clearly outperformed the plain ResNet18 center-distance baseline
 - scaling that same PatchCore direction to a pretrained ResNet50 backbone helped further; the best ResNet50 PatchCore variant reached `F1 = 0.419602`
-- even so, the ResNet50 PatchCore sweep still did not beat the AE + BatchNorm + `max_abs` winner, so the AE family remains the best completed result overall
+- even so, the ResNet50 PatchCore sweep still did not beat the stronger AE-family variants until teacher-student distillation score selection was added
+- the original combined teacher-student score looked weak, but a post-training score sweep showed that the main bottleneck was scoring rather than the checkpoint itself
+- once the teacher-student checkpoint was rescored with a student-only `topk_mean` rule and a wider top-k ratio, it became a genuinely competitive validation-threshold result rather than a failed branch
+- this is the strongest evidence so far that architecture and anomaly scoring interact very strongly in this project; a weak default score can hide a strong checkpoint
+- the selected teacher-student variant also produced the strongest AUROC in the report (`0.894076` in the current rerun), which suggests better separation than the original combined score exposed
 - Deep SVDD had especially weak AUPRC, which suggests poorer ranking quality under class imbalance
 - local-error-focused scoring appears more effective than full-image averaging on wafer maps
 - all tested approaches learn a real anomaly signal, but class separation is still only moderate
@@ -228,7 +253,19 @@ Reason:
 
 ## Autoencoder Experiment Family
 
-### Baseline: Autoencoder `64x64`
+This family covers the core autoencoder line of experiments and follow-up variants. The numbered experiments in this family are:
+
+- `Experiment 1`: baseline autoencoder `64x64`
+- `Experiment 2`: autoencoder `64x64` with BatchNorm
+- `Experiment 3`: autoencoder `64x64` with BatchNorm + dropout sweep
+
+Additional family analysis and architectural variants are kept in the same section because they build directly on the same reconstruction baseline.
+
+The autoencoder family figure below is split into two views so the growing number of AE variants stays readable: the left panel ranks all AE-family runs by deployment-style F1, while the right panel shows the precision-recall tradeoff within the family, with point size scaled by AUPRC.
+
+![Autoencoder family comparison](artifacts/report_plots/autoencoder_family_comparison.png)
+
+### Experiment 1: Baseline Autoencoder `64x64`
 
 Purpose:
 
@@ -276,7 +313,7 @@ Interpretation:
 - later score ablation showed that the same checkpoint can perform substantially better with a different anomaly score
 - false positives and false negatives are still substantial, so the baseline is not yet strong enough to be the final project result by itself
 
-### Variant: Autoencoder `64x64` with BatchNorm
+### Experiment 2: Autoencoder `64x64` with BatchNorm
 
 Purpose:
 
@@ -375,7 +412,7 @@ Note:
 - the current [summary.json](artifacts/x64/autoencoder_baseline/summary.json) and [history.json](artifacts/x64/autoencoder_baseline/history.json) now correspond to the later longer-epoch rerun, not this original `25`-epoch baseline
 - the original `25`-epoch baseline metrics above are kept for comparison because they were the first completed AE result on the shared split
 
-### Variant: Autoencoder `64x64` with BatchNorm + Dropout Sweep
+### Experiment 3: Autoencoder `64x64` with BatchNorm + Dropout Sweep
 
 Purpose:
 
@@ -700,6 +737,10 @@ Failure-analysis interpretation:
 - this suggests that the current AE pipeline captures coarse structural deviations well, but still struggles on smaller localized defects
 - that failure pattern makes one more focused AE tuning pass reasonable, but it also supports moving to a stronger local-anomaly method if the next AE change does not improve `Loc` / `Scratch` recall
 
+## VAE Experiment Family
+
+This family covers the first VAE run and the follow-up beta sweep while keeping the original experiment numbering.
+
 ## Experiment 4: VAE `64x64`, `beta = 0.01`
 
 Purpose:
@@ -737,7 +778,6 @@ Purpose:
 
 Sweep script:
 
-- [run_vae_beta_sweep.py](scripts/run_vae_beta_sweep.py)
 
 Default beta values:
 
@@ -895,6 +935,10 @@ Interpretation:
 - PatchCore did not solve the hardest local defect types yet; `Scratch`, `Loc`, and parts of `Edge-Loc` remain weak
 - this makes the next improvement path clear: keep the PatchCore protocol, but replace the current frozen AE encoder with a stronger backbone
 
+## Pretrained-ResNet Experiment Family
+
+This family groups the pretrained ResNet backbone baseline and the follow-up PatchCore variants while keeping the original experiment numbering and notebook references.
+
 ## Experiment 8: Pretrained ResNet18 Backbone Baseline `64x64`
 
 Purpose:
@@ -952,6 +996,10 @@ Interpretation:
 - this result is well below the best AE family run and also below the better PatchCore variants
 - the weakness appears to be the scoring rule, not only the backbone itself; global embedding distance is too crude for the local defect patterns in WM-811K
 - this result still supports the broader backbone direction, because it shows that a stronger backbone alone is not enough without a local anomaly method on top
+
+The compact baseline figure below keeps the earlier non-leading baselines readable in one place: the left panel ranks the VAE, SVDD, and simple backbone runs by deployment-style F1, while the right panel shows their precision-recall tradeoff with point size scaled by AUROC.
+
+![Compact baseline comparison](artifacts/report_plots/compact_baseline_comparison.png)
 
 ## Experiment 9: PatchCore Sweep with Pretrained ResNet18 `64x64`
 
@@ -1094,11 +1142,184 @@ Interpretation:
 - the larger backbone did not improve every metric at once; `ResNet50` improved F1 over `ResNet18`, but `ResNet18` remained slightly stronger on AUROC and AUPRC
 - even with that improvement, the best ResNet50 PatchCore result still stayed below the AE + BatchNorm + `max_abs` winner
 
+The PatchCore family figure below summarizes that whole branch: the left panel compares the best PatchCore result from each backbone or source, while the right panel shows all PatchCore variants colored by backbone/source and marked by wafer-level reduction.
+
+![PatchCore family comparison](artifacts/report_plots/patchcore_family_comparison.png)
+
+## Experiment Family: Teacher-Distillation-ResNet `64x64`
+
+This is one family of experiments built around the same teacher-student distillation design:
+
+- frozen pretrained ResNet teacher backbone
+- lightweight student CNN trained on normal wafers
+- auxiliary feature autoencoder branch
+- shared `64x64` wafer split and the same validation-threshold evaluation rule
+
+Within this family, two backbone variants were tested:
+
+- `Teacher-Distillation-ResNet18`
+- `Teacher-Distillation-ResNet50`
+
+The teacher-distillation family figure below compares the two backbone variants directly: the left panel shows their deployed F1, AUPRC, and AUROC side by side, while the right panel shows the precision-recall operating point reached by each selected score rule.
+
+![Teacher-distillation family comparison](artifacts/report_plots/ts_family_comparison.png)
+
+### Experiment 11: Teacher-Distillation-ResNet18
+
+Purpose:
+
+- test whether a teacher-student distillation model can improve sensitivity to smaller local defects on the shared split
+- keep the same shared `64x64` 5% test-defect setup and the same validation-threshold evaluation rule
+
+Implementation:
+
+- config: [train_ts_resnet18.toml](configs/training/train_ts_resnet18.toml)
+- notebook: [12_ts_distillation_training.ipynb](notebooks/12_ts_distillation_training.ipynb)
+- training script: [train_ts_distillation.py](scripts/train_ts_distillation.py)
+- artifact dir: [artifacts/x64/efficientad_resnet18](artifacts/x64/efficientad_resnet18)
+- model: teacher-student distillation detector with a frozen teacher backbone, a lightweight student CNN, and an auxiliary feature autoencoder
+- teacher backbone: frozen ImageNet-pretrained `ResNet18`
+- teacher feature layer: `layer2`
+- input adaptation: single-channel wafer maps resized internally to `224x224` through the shared ResNet preprocessing path
+- student branch: lightweight convolutional student network trained to match teacher feature maps on normal wafers
+- auxiliary branch: feature autoencoder trained to reconstruct teacher feature maps
+- reported anomaly map: normalized student-teacher discrepancy only
+- auxiliary branch status in the selected score: kept for training, but not used in the primary reported wafer-level score
+- wafer-level score: `topk_mean`
+- selected top-k ratio: `0.20`
+- selected score came from a post-training score sweep over branch weights and wafer-level reductions in notebook `12`
+
+Training observations:
+
+- training was stable across the full `30` epochs
+- epoch 1: train `0.050254`, val `0.033348`
+- epoch 10: train `0.024442`, val `0.024482`
+- epoch 20: train `0.023601`, val `0.023673`
+- best epoch 27: train `0.023342`, val `0.023353`
+- epoch 30: train `0.023275`, val `0.023421`
+- early stopping did not trigger before the configured max epoch count
+- post-training error-map scales: student `0.011238`, feature autoencoder `0.012071`
+
+Evaluation:
+
+- validation threshold: `2.342451`
+- precision: `0.402500`
+- recall: `0.644000`
+- F1: `0.495385`
+- AUROC: `0.894076`
+- AUPRC: `0.519445`
+- predicted anomalies: `400`
+- confusion matrix: `[[4761, 239], [89, 161]]`
+- best test-sweep threshold: `2.459717`
+- best test-sweep precision: `0.509579`
+- best test-sweep recall: `0.532000`
+- best test-sweep F1: `0.520548`
+
+Failure analysis:
+
+- true positive: `161`, mean score not recomputed in this rerun summary
+- false negative: `89`, mean score not recomputed in this rerun summary
+- false positive: `239`, mean score not recomputed in this rerun summary
+- true negative: `4761`, mean score not recomputed in this rerun summary
+
+Defect-type recall:
+
+- defect-type recall was not recomputed in the current notebook output and should be regenerated before making per-class claims for this rerun
+
+Interpretation:
+
+- the current rerun confirms that the teacher-student branch is stable and genuinely competitive, but it no longer leads the full report on validation-threshold F1
+- the selected student-only `topk_mean` score remains the right deployed score; the score sweep in the current notebook matched the default result rather than improving it further
+- even in this `TS-Res18` rerun, teacher-student distillation still showed a stronger ranking signal than the AE baseline; that direction was later strengthened further by the `TS-Res50` variation
+- compared with the BatchNorm autoencoder, the teacher-student model now looks like a higher-recall, lower-precision alternative with a stronger ranking signal but less clean threshold separation
+- the optional teacher-layer ablation sweep was added to notebook `12`; the first run exposed a feature-map resolution mismatch for non-`layer2` variants, and that model-side alignment issue has since been patched, but those ablation results are not yet included here
+
+### Experiment 12: Teacher-Distillation-ResNet50
+
+Purpose:
+
+- test whether scaling the teacher backbone from `ResNet18` to `ResNet50` improves local anomaly ranking and thresholded detection
+- evaluate the imported Kaggle-trained checkpoint locally under the same shared protocol and the same post-training score sweep logic used for the `ResNet18` teacher run
+
+Implementation:
+
+- Kaggle training notebook: [kaggle_ts_resnet50_all_in_one.ipynb](notebooks/kaggle_ts_resnet50_all_in_one.ipynb)
+- local import-analysis notebook: [13_ts_resnet50_kaggle_import_analysis.ipynb](notebooks/13_ts_resnet50_kaggle_import_analysis.ipynb)
+- local import config: [train_ts_resnet50_kaggle.toml](configs/training/train_ts_resnet50_kaggle.toml)
+- artifact dir: [artifacts/x64/ts_resnet50](artifacts/x64/ts_resnet50)
+- model: teacher-student distillation detector with a frozen `ResNet50` teacher, a lightweight student CNN, and an auxiliary feature autoencoder
+- teacher backbone: frozen ImageNet-pretrained `ResNet50`
+- teacher feature layer: `layer2`
+- input adaptation: single-channel wafer maps resized internally to `224x224`
+- student branch width: `512`
+- feature-autoencoder hidden width: `128`
+- imported Kaggle default score: student-only wafer-level `topk_mean`, top-k ratio `0.20`
+- selected local score after import analysis: mixed student+autoencoder score with weights `2.0 : 1.0`, wafer-level `topk_mean`, top-k ratio `0.20`
+
+Training observations:
+
+- Kaggle training was stable through all `30` epochs
+- best epoch: `29`
+- best validation loss: `0.370080`
+- epoch 26: train `0.370199`, val `0.370970`
+- epoch 27: train `0.369908`, val `0.371948`
+- epoch 28: train `0.369559`, val `0.371207`
+- epoch 29: train `0.369285`, val `0.370080`
+- epoch 30: train `0.368939`, val `0.370501`
+- post-training error-map scales: student `0.177813`, feature autoencoder `0.191531`
+
+Imported Kaggle evaluation:
+
+- validation threshold: `2.255374`
+- precision: `0.382353`
+- recall: `0.676000`
+- F1: `0.488439`
+- AUROC: `0.912691`
+- AUPRC: `0.581770`
+- predicted anomalies: `442`
+- confusion matrix: `[[4727, 273], [81, 169]]`
+- best test-sweep threshold: `2.403453`
+- best test-sweep precision: `0.538462`
+- best test-sweep recall: `0.588000`
+- best test-sweep F1: `0.562141`
+
+Local import-analysis findings:
+
+- the imported checkpoint remapped cleanly into the repo model format and reproduced the Kaggle result almost exactly
+- local re-evaluation kept the same thresholded operating point: precision `0.382353`, recall `0.676000`, F1 `0.488439`
+- local AUROC and AUPRC matched closely: AUROC `0.912730`, AUPRC `0.581275`
+
+Local score-sweep result:
+
+- best selected variant: `s2_a1_topk_mean_r0.20`
+- student weight: `2.0`
+- autoencoder weight: `1.0`
+- reduction: `topk_mean`
+- top-k ratio: `0.20`
+- validation threshold: `7.020788`
+- precision: `0.418052`
+- recall: `0.704000`
+- F1: `0.524590`
+- AUROC: `0.909189`
+- AUPRC: `0.599169`
+- predicted anomalies: `421`
+- best test-sweep F1: `0.606299`
+
+Interpretation:
+
+- `TS-ResNet50` is the second tested variation inside the same teacher-distillation-resnet family, not a separate method family
+- the imported Kaggle default score already set the strongest AUROC in the project and a stronger AUPRC than the `ResNet18` teacher run
+- unlike `TS-Res18`, the `ResNet50` teacher checkpoint benefited from bringing the feature-autoencoder branch back into the deployed score
+- after local score selection, `TS-ResNet50` became the best completed result in the report on validation-threshold F1
+- it also remains one of the strongest ranking models in the report, with AUROC still above `0.90`
+- the main gain over `TS-Res18` came from better recall and better class-imbalance ranking quality, not from a cleaner threshold alone
+- this result suggests that teacher scale and score composition interact strongly: the larger teacher backbone made the auxiliary branch useful again rather than harmful
+
 ## Overall Interpretation
 
 Across all completed experiments:
 
-- the best current result is the `64x64` BatchNorm autoencoder scored with `max_abs`
+- the best current result on the main deployment-style F1 metric is now the teacher-student `TS-Res50` variation with mixed student+autoencoder `topk_mean` scoring
 - the original `64x64` autoencoder checkpoint improved substantially just by changing the scoring rule
 - retraining that autoencoder longer did not materially change the outcome, so epoch count alone is unlikely to be the key lever
 - adding BatchNorm changed the best score choice for the autoencoder from `topk_abs_mean` to `max_abs`
@@ -1113,11 +1334,14 @@ Across all completed experiments:
 - ResNet18 + PatchCore validated the non-AE backbone direction; it beat the earlier AE-backed PatchCore sweep and substantially improved over plain ResNet18 center-distance
 - ResNet50 + PatchCore pushed that non-AE branch a bit further; it became the best completed PatchCore result on validation-threshold F1
 - the ResNet50 gain was not uniform across all metrics, which suggests backbone scale alone is not the whole answer and score distribution calibration still matters
+- the teacher-student distillation branch improved materially once its scoring rule was fixed, and the new `TS-Res50` variation pushed that branch into the top overall spot on validation-threshold F1
+- teacher-student distillation now provides both the best deployed F1 result and the strongest ranking quality among the tested non-reconstruction models
+- the best BatchNorm autoencoder remains a strong comparison point because it is still simpler, still very competitive on thresholded F1, and still trails the new `TS-Res50` result by only a modest margin
 - all tested models show overlap between normal and anomaly score distributions, which explains the moderate F1 values and missed anomalies
 - the score-ablation result shows that part of the bottleneck was the scoring rule, not only the model architecture
 - after fixing the score, the remaining bottleneck still looks more like limited class separation than threshold selection alone
 - the AE failure analysis shows that the remaining weakness is concentrated in smaller local defects rather than large global defect patterns
-- this makes the next decision clearer: keep the current AE winner as the benchmark, and move the next effort into a stronger encoder backbone for local-anomaly methods
+- this makes the next decision clearer: keep `TS-Res50` as the new benchmark, keep the BatchNorm autoencoder as the strongest reconstruction baseline, and use further layer-, score-, and backbone-level tuning to test whether the teacher-student branch can widen its lead without sacrificing ranking quality under imbalance
 
 ## What Was Implemented
 
@@ -1140,8 +1364,12 @@ Completed work:
 - pretrained ResNet18 embedding-distance baseline
 - PatchCore sweep with a pretrained ResNet18 backbone
 - PatchCore sweep with a pretrained ResNet50 backbone
+- teacher-student distillation baseline with a pretrained ResNet18 teacher
+- teacher-student distillation variation with an imported pretrained ResNet50 teacher run and local score-sweep analysis
+- teacher-student score sweep, selected-score confirmation, and layer-sweep support
 - notebook-based end-to-end training for AE, VAE, and SVDD
 - notebook-based PatchCore sweep
+- notebook-based teacher-student distillation training
 - scriptable reconstruction-model evaluation
 - VAE beta-sweep automation
 - best-checkpoint saving
@@ -1155,10 +1383,12 @@ Recommended follow-up work:
 
 - avoid spending more time on longer-epoch reruns alone unless another change is paired with them
 - do not spend more time on dropout tuning for the current AE family unless another structural change is introduced
-- keep the current AE + BatchNorm + `max_abs` result as the benchmark to beat
+- keep `TS-Res50` as the benchmark to beat
+- keep the current AE + BatchNorm + `max_abs` result as the strongest reconstruction baseline and a useful AUPRC sanity check
 - if more non-AE work is justified, keep it on pretrained ResNet backbones with PatchCore-style local scoring rather than returning to plain global embedding-distance baselines
 - do not spend more time on larger backbone changes alone unless they are paired with PatchCore or another local-anomaly scoring method
 - keep the residual autoencoder as a logged comparison result, but stop using AE encoders as the main PatchCore improvement path
-- keep the completed ResNet50 + PatchCore branch as the best non-AE challenger
+- keep the completed ResNet50 + PatchCore branch as the strongest non-teacher-student local-anomaly challenger
+- if more teacher-student distillation work is justified, tune it from the new `TS-Res50` selected-score baseline: teacher layer choice, student capacity, branch weighting, and wafer-level reduction are higher-priority than longer training alone
 - if more backbone work is justified, tune the ResNet50 PatchCore branch around `mean` reduction and memory-bank settings before jumping to another larger backbone
 - keep the validation-derived threshold as the main reported result, and treat test-set threshold sweeps as analysis only
