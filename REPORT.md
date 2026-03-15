@@ -104,26 +104,26 @@ Main comparison across completed experiments:
 | ------------- | ----------- | ----- | ---------- | ----------------------- | -------------------- | ---------------- | ---------- | ---------- | ------------- |
 | TS-Res50-mixed-topk20 | Teacher-Student Distillation + ResNet50 Teacher Backbone | `topk_mean` | `64x64`    | `0.418052`              | `0.704000`           | `0.524590`       | `0.909189` | `0.599169` | `0.606299`    |
 | AE-64-BN-max  | Autoencoder + BatchNorm | `max_abs` | `64x64`    | `0.401442`              | `0.668000`           | `0.501502`       | `0.834023` | `0.568039` | `0.629808`    |
-| AE-64-BN-topk | Autoencoder + BatchNorm | `topk_abs_mean` | `64x64`    | `0.346247`              | `0.572000`           | `0.431373`       | `0.790020` | `0.603447` | `0.655172`    |
+| TS-Res18-student-topk20 | Teacher-Student Distillation + ResNet18 Teacher Backbone | `topk_mean` | `64x64`    | `0.402500`              | `0.644000`           | `0.495385`       | `0.894076` | `0.519445` | `0.520548`    |
 | AE-64-BN-DO0.00 | Autoencoder + BatchNorm + Dropout `0.00` | `max_abs` | `64x64`    | `0.393120`              | `0.640000`           | `0.487062`       | `0.850790` | `0.616946` | `0.656642`    |
-| AE-64-BN-DO0.05 | Autoencoder + BatchNorm + Dropout `0.05` | `max_abs` | `64x64`    | `0.377828`              | `0.668000`           | `0.482659`       | `0.835035` | `0.551700` | `0.609959`    |
 | AE-64-BN-DO0.10 | Autoencoder + BatchNorm + Dropout `0.10` | `max_abs` | `64x64`    | `0.385343`              | `0.652000`           | `0.484398`       | `0.844670` | `0.570245` | `0.634615`    |
-| AE-64-BN-DO0.20 | Autoencoder + BatchNorm + Dropout `0.20` | `max_abs` | `64x64`    | `0.370115`              | `0.644000`           | `0.470073`       | `0.841431` | `0.574973` | `0.633929`    |
+| AE-64-BN-DO0.05 | Autoencoder + BatchNorm + Dropout `0.05` | `max_abs` | `64x64`    | `0.377828`              | `0.668000`           | `0.482659`       | `0.835035` | `0.551700` | `0.609959`    |
 | AE-64-Res-max  | Residual Autoencoder | `max_abs` | `64x64`    | `0.374419`              | `0.644000`           | `0.473529`       | `0.843360` | `0.588907` | `0.625592`    |
+| AE-64-BN-DO0.20 | Autoencoder + BatchNorm + Dropout `0.20` | `max_abs` | `64x64`    | `0.370115`              | `0.644000`           | `0.470073`       | `0.841431` | `0.574973` | `0.633929`    |
 | AE-64-topk    | Autoencoder | `topk_abs_mean` | `64x64`    | `0.390374`              | `0.584000`           | `0.467949`       | `0.839282` | `0.522171` | `0.509091`    |
 | AE-64-topk-43ep | Autoencoder | `topk_abs_mean` | `64x64`    | `0.381579`              | `0.580000`           | `0.460317`       | `0.834819` | `0.525162` | `0.520661`    |
 | AE-64-Res-topk | Residual Autoencoder | `topk_abs_mean` | `64x64`    | `0.356974`              | `0.604000`           | `0.448737`       | `0.804607` | `0.626014` | `0.678133`    |
+| AE-64-BN-topk | Autoencoder + BatchNorm | `topk_abs_mean` | `64x64`    | `0.346247`              | `0.572000`           | `0.431373`       | `0.790020` | `0.603447` | `0.655172`    |
 | PatchCore-Res50-mean-mb50k | PatchCore + ResNet50 | `mean` | `64x64`    | `0.339950`              | `0.548000`           | `0.419602`       | `0.821402` | `0.362657` | `0.439604`    |
 | AE-64-mse     | Autoencoder | `mse_mean` | `64x64`    | `0.346154`              | `0.504000`           | `0.410423`       | `0.809694` | `0.447970` | `0.473318`    |
+| PatchCore-Res18-mean-mb50k | PatchCore + ResNet18 | `mean` | `64x64`    | `0.345930`              | `0.476000`           | `0.400673`       | `0.842266` | `0.410729` | `0.445344`    |
+| PatchCore-Res18-mean-mb10k | PatchCore + ResNet18 | `mean` | `64x64`    | `0.345133`              | `0.468000`           | `0.397284`       | `0.831191` | `0.409682` | `0.425439`    |
 | PatchCore-Res50-mean-mb10k | PatchCore + ResNet50 | `mean` | `64x64`    | `0.323232`              | `0.512000`           | `0.396285`       | `0.804225` | `0.310237` | `0.405738`    |
 | AE-128-mse    | Autoencoder | `mse_mean` | `128x128`  | `0.309973`              | `0.460000`           | `0.370370`       | `0.795673` | `0.393266` | `0.426724`    |
 | SVDD-64       | Deep SVDD   | `latent_distance` | `64x64`    | `0.304709`              | `0.440000`           | `0.360065`       | `0.787506` | `0.213108` | `0.366288`    |
-| PatchCore-AEBN-mean-mb50k | PatchCore + AE-BN Backbone | `mean` | `64x64`    | `0.283747`              | `0.412000`           | `0.336052`       | `0.850786` | `0.226325` | `0.389447`    |
 | VAE-64-b0.005 | VAE         | `vae_score` | `64x64`    | `0.286104`              | `0.420000`           | `0.340357`       | `0.771391` | `0.372184` | `0.420253`    |
+| PatchCore-AEBN-mean-mb50k | PatchCore + AE-BN Backbone | `mean` | `64x64`    | `0.283747`              | `0.412000`           | `0.336052`       | `0.850786` | `0.226325` | `0.389447`    |
 | VAE-64-b0.01  | VAE         | `vae_score` | `64x64`    | `0.280323`              | `0.416000`           | `0.334944`       | `0.766392` | `0.369030` | `0.416667`    |
-| PatchCore-Res18-mean-mb50k | PatchCore + ResNet18 | `mean` | `64x64`    | `0.345930`              | `0.476000`           | `0.400673`       | `0.842266` | `0.410729` | `0.445344`    |
-| PatchCore-Res18-mean-mb10k | PatchCore + ResNet18 | `mean` | `64x64`    | `0.345133`              | `0.468000`           | `0.397284`       | `0.831191` | `0.409682` | `0.425439`    |
-| ResNet18-center | Pretrained ResNet18 Backbone | `center_l2` | `64x64`    | `0.201705`              | `0.284000`           | `0.235880`       | `0.684746` | `0.194977` | `0.259740`    |
 | PatchCore-Res18-topk-mb50k-r010 | PatchCore + ResNet18 | `topk_mean` | `64x64`    | `0.296875`              | `0.380000`           | `0.333333`       | `0.803171` | `0.329613` | `0.361991`    |
 | PatchCore-Res18-topk-mb10k-r005 | PatchCore + ResNet18 | `topk_mean` | `64x64`    | `0.290520`              | `0.380000`           | `0.329289`       | `0.795090` | `0.323395` | `0.365000`    |
 | PatchCore-Res18-topk-mb50k-r005 | PatchCore + ResNet18 | `topk_mean` | `64x64`    | `0.291667`              | `0.364000`           | `0.323843`       | `0.795596` | `0.318155` | `0.345263`    |
@@ -132,7 +132,7 @@ Main comparison across completed experiments:
 | PatchCore-Res50-topk-mb50k-r010 | PatchCore + ResNet50 | `topk_mean` | `64x64`    | `0.256198`              | `0.372000`           | `0.303426`       | `0.800964` | `0.291924` | `0.317757`    |
 | PatchCore-Res50-max-mb50k | PatchCore + ResNet50 | `max` | `64x64`    | `0.233618`              | `0.328000`           | `0.272879`       | `0.780863` | `0.208679` | `0.282528`    |
 | PatchCore-Res50-topk-mb10k-r005 | PatchCore + ResNet50 | `topk_mean` | `64x64`    | `0.221932`              | `0.340000`           | `0.268562`       | `0.785025` | `0.217361` | `0.285319`    |
-| TS-Res18-student-topk20 | Teacher-Student Distillation + ResNet18 Teacher Backbone | `topk_mean` | `64x64`    | `0.402500`              | `0.644000`           | `0.495385`       | `0.894076` | `0.519445` | `0.520548`    |
+| ResNet18-center | Pretrained ResNet18 Backbone | `center_l2` | `64x64`    | `0.201705`              | `0.284000`           | `0.235880`       | `0.684746` | `0.194977` | `0.259740`    |
 | PatchCore-AEBN-topk-mb50k-r010 | PatchCore + AE-BN Backbone | `topk_mean` | `64x64`    | `0.166134`              | `0.208000`           | `0.184725`       | `0.808633` | `0.148827` | `0.304950`    |
 | PatchCore-AEBN-topk-mb50k-r005 | PatchCore + AE-BN Backbone | `topk_mean` | `64x64`    | `0.112583`              | `0.136000`           | `0.123188`       | `0.777215` | `0.120862` | `0.241529`    |
 | PatchCore-AEBN-topk-mb10k-r005 | PatchCore + AE-BN Backbone | `topk_mean` | `64x64`    | `0.053004`              | `0.060000`           | `0.056285`       | `0.659112` | `0.072701` | `0.157971`    |
@@ -190,23 +190,23 @@ This ranking is based mainly on `val-threshold F1`, with the other metrics used 
 17. PatchCore + ResNet50 `64x64`, `mean`, memory bank `10k`
 18. Autoencoder `128x128` with `mse_mean`
 19. Deep SVDD `64x64`
-19. VAE `64x64`, `beta = 0.005`
-20. PatchCore + AE-BN backbone `64x64`, `mean`, memory bank `50k`
-21. VAE `64x64`, `beta = 0.01`
-22. PatchCore + ResNet18 `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.10`
-23. PatchCore + ResNet18 `64x64`, `topk_mean`, memory bank `10k`, top-k ratio `0.05`
-24. PatchCore + ResNet18 `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.05`
-25. PatchCore + ResNet18 `64x64`, `max`, memory bank `50k`
-26. PatchCore + ResNet50 `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.05`
-27. PatchCore + ResNet50 `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.10`
-28. PatchCore + ResNet50 `64x64`, `max`, memory bank `50k`
-29. PatchCore + ResNet50 `64x64`, `topk_mean`, memory bank `10k`, top-k ratio `0.05`
-30. Pretrained ResNet18 backbone `64x64` with center-distance scoring
-31. PatchCore + AE-BN backbone `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.10`
-32. PatchCore + AE-BN backbone `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.05`
-33. PatchCore + AE-BN backbone `64x64`, `topk_mean`, memory bank `10k`, top-k ratio `0.05`
-34. PatchCore + AE-BN backbone `64x64`, `max`, memory bank `50k`
-35. PatchCore + AE-BN backbone `64x64`, `max`, memory bank `10k`
+20. VAE `64x64`, `beta = 0.005`
+21. PatchCore + AE-BN backbone `64x64`, `mean`, memory bank `50k`
+22. VAE `64x64`, `beta = 0.01`
+23. PatchCore + ResNet18 `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.10`
+24. PatchCore + ResNet18 `64x64`, `topk_mean`, memory bank `10k`, top-k ratio `0.05`
+25. PatchCore + ResNet18 `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.05`
+26. PatchCore + ResNet18 `64x64`, `max`, memory bank `50k`
+27. PatchCore + ResNet50 `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.05`
+28. PatchCore + ResNet50 `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.10`
+29. PatchCore + ResNet50 `64x64`, `max`, memory bank `50k`
+30. PatchCore + ResNet50 `64x64`, `topk_mean`, memory bank `10k`, top-k ratio `0.05`
+31. Pretrained ResNet18 backbone `64x64` with center-distance scoring
+32. PatchCore + AE-BN backbone `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.10`
+33. PatchCore + AE-BN backbone `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.05`
+34. PatchCore + AE-BN backbone `64x64`, `topk_mean`, memory bank `10k`, top-k ratio `0.05`
+35. PatchCore + AE-BN backbone `64x64`, `max`, memory bank `50k`
+36. PatchCore + AE-BN backbone `64x64`, `max`, memory bank `10k`
 
 High-level interpretation:
 
@@ -231,7 +231,7 @@ High-level interpretation:
 - the original combined teacher-student score looked weak, but a post-training score sweep showed that the main bottleneck was scoring rather than the checkpoint itself
 - once the teacher-student checkpoint was rescored with a student-only `topk_mean` rule and a wider top-k ratio, it became a genuinely competitive validation-threshold result rather than a failed branch
 - this is the strongest evidence so far that architecture and anomaly scoring interact very strongly in this project; a weak default score can hide a strong checkpoint
-- the selected teacher-student variant also produced the strongest AUROC in the report (`0.894076` in the current rerun), which suggests better separation than the original combined score exposed
+- the teacher-student family later produced the strongest AUROC in the report; the imported `TS-Res50` default reached `0.912691`, and the selected deployed `TS-Res50` score still remained above `0.90`
 - Deep SVDD had especially weak AUPRC, which suggests poorer ranking quality under class imbalance
 - local-error-focused scoring appears more effective than full-image averaging on wafer maps
 - all tested approaches learn a real anomaly signal, but class separation is still only moderate
@@ -1176,7 +1176,7 @@ Implementation:
 - config: [train_ts_resnet18.toml](configs/training/train_ts_resnet18.toml)
 - notebook: [12_ts_distillation_training.ipynb](notebooks/12_ts_distillation_training.ipynb)
 - training script: [train_ts_distillation.py](scripts/train_ts_distillation.py)
-- artifact dir: [artifacts/x64/efficientad_resnet18](artifacts/x64/efficientad_resnet18)
+- artifact dir: [artifacts/x64/ts_resnet18](artifacts/x64/ts_resnet18)
 - model: teacher-student distillation detector with a frozen teacher backbone, a lightweight student CNN, and an auxiliary feature autoencoder
 - teacher backbone: frozen ImageNet-pretrained `ResNet18`
 - teacher feature layer: `layer2`
@@ -1232,7 +1232,8 @@ Interpretation:
 - the selected student-only `topk_mean` score remains the right deployed score; the score sweep in the current notebook matched the default result rather than improving it further
 - even in this `TS-Res18` rerun, teacher-student distillation still showed a stronger ranking signal than the AE baseline; that direction was later strengthened further by the `TS-Res50` variation
 - compared with the BatchNorm autoencoder, the teacher-student model now looks like a higher-recall, lower-precision alternative with a stronger ranking signal but less clean threshold separation
-- the optional teacher-layer ablation sweep was added to notebook `12`; the first run exposed a feature-map resolution mismatch for non-`layer2` variants, and that model-side alignment issue has since been patched, but those ablation results are not yet included here
+- the optional teacher-layer ablation sweep in notebook `12` now supports non-`layer2` variants after the feature-map alignment fix
+- the completed focused ablation results did not beat the main `30`-epoch base run: all `layer1` variants were clearly weaker, while `layer2` with top-k ratios `0.15`, `0.20`, and `0.25` stayed close to the default result without improving on it
 
 ### Experiment 12: Teacher-Distillation-ResNet50
 

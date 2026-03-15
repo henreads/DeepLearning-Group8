@@ -1,5 +1,5 @@
 [run]
-output_dir = "artifacts/x64/efficientad_resnet18"
+output_dir = "artifacts/x64/ts_resnet18"
 seed = 42
 
 [data]
