@@ -1,4 +1,5 @@
 """Training helpers for teacher-student distillation anomaly detection."""
+#src/wafer_defect/training/ts_distillation.py
 
 from __future__ import annotations
 

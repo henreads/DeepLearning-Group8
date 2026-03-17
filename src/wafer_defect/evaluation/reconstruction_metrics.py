@@ -1,4 +1,5 @@
 """Metric helpers for reconstruction-based anomaly detection evaluation."""
+# src/wafer_defect/evaluation/reconstruction_metrics.py
 
 from __future__ import annotations
 
