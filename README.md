@@ -16,8 +16,8 @@ The initial codebase is organized around a simple baseline workflow:
 
 1. Place the raw WM-811K pickle under `data/raw/`
 2. Build processed arrays plus metadata CSV files
-3. Train a PyTorch autoencoder baseline on normal wafers
-4. Train a convolutional VAE on the same split for comparison
+3. Open the notebooks as the main workflow for training and analysis
+4. Use helper scripts only for data preparation or optional automation
 5. Save weights, evaluation outputs, and training history for reproducibility
 
 ## Repository Layout
@@ -25,12 +25,28 @@ The initial codebase is organized around a simple baseline workflow:
 ```text
 configs/data/          Dataset preparation settings
 configs/training/      Model training settings
-scripts/               Entry points for dataset prep and training
+scripts/               Notebook support scripts plus optional helpers
 src/wafer_defect/      Package code
 data/raw/              Local raw dataset files (ignored by git)
 data/processed/        Local processed outputs (ignored by git)
 artifacts/             Saved model outputs (ignored by git if desired later)
 ```
+
+The notebooks are the primary way to run experiments in this repo.
+Top-level scripts are kept small on purpose:
+
+- `scripts/prepare_wm811k.py` prepares the dataset used by the notebooks
+- `scripts/evaluate_reconstruction_model.py` runs shared evaluation from saved checkpoints
+- `scripts/evaluate_autoencoder_scores.py` runs the autoencoder score-ablation evaluation used by several notebooks
+- `scripts/train_vae.py` stays at the top level because it is called directly from the VAE notebook
+- `scripts/train_ts_distillation.py` stays at the top level because notebook `12` calls it directly
+
+Optional ad hoc inspection helpers live under:
+
+- `scripts/dev/`
+
+Older standalone experiment-runner scripts were removed during cleanup.
+The experiment logic now lives primarily inside the notebooks plus reusable code under `src/wafer_defect/`.
 
 ## Setup
 
@@ -163,13 +179,27 @@ The default config locations are now:
 After preparing the dataset, use the notebooks for the main experiments:
 
 - `notebooks/01_data_exploration.ipynb`
-  Explore the processed metadata, class balance, and sample wafer maps.
+  Explore the processed metadata, class balance, and sample wafer maps. If you switch dataset variants, update the metadata path in the first code cell.
 - `notebooks/02_autoencoder_training.ipynb`
   Train and evaluate the baseline autoencoder.
 - `notebooks/03_vae_training.ipynb`
   Train and evaluate the convolutional VAE.
 - `notebooks/04_svdd_training.ipynb`
   Train and evaluate the Deep SVDD experiment.
+- `notebooks/05_autoencoder_batchnorm_training.ipynb`
+  Train and evaluate the BatchNorm autoencoder variant on the same `64x64` 5% dataset and evaluation protocol.
+- `notebooks/06_autoencoder_batchnorm_dropout_training.ipynb`
+  Train and evaluate the BatchNorm + Dropout autoencoder variant on the same `64x64` 5% dataset and evaluation protocol.
+- `notebooks/07_patchcore_training.ipynb`
+  Fit and evaluate a PatchCore-style local nearest-neighbor detector on the same `64x64` 5% dataset using the BatchNorm autoencoder checkpoint as the frozen feature backbone.
+- `notebooks/08_autoencoder_residual_training.ipynb`
+  Train and evaluate a stronger residual autoencoder backbone on the same `64x64` 5% dataset and evaluation protocol.
+- `notebooks/09_resnet18_backbone_baseline.ipynb`
+  Evaluate a frozen pretrained ResNet18 backbone with simple center-distance scoring on the same `64x64` 5% dataset.
+- `notebooks/10_patchcore_resnet18_training.ipynb`
+  Fit and evaluate PatchCore on a frozen pretrained ResNet18 backbone using the same `64x64` 5% dataset and validation-threshold protocol.
+- `notebooks/11_patchcore_resnet50_training.ipynb`
+  Fit and evaluate PatchCore on a frozen pretrained ResNet50 backbone using the same `64x64` 5% dataset and validation-threshold protocol.
 
 Recommended run order for a fresh setup:
 
@@ -177,6 +207,13 @@ Recommended run order for a fresh setup:
 2. Run `notebooks/02_autoencoder_training.ipynb` for the baseline autoencoder.
 3. Run `notebooks/03_vae_training.ipynb` if you want the VAE comparison.
 4. Run `notebooks/04_svdd_training.ipynb` if you want the Deep SVDD comparison.
+5. Run `notebooks/05_autoencoder_batchnorm_training.ipynb` if you want the BatchNorm autoencoder comparison.
+6. Run `notebooks/06_autoencoder_batchnorm_dropout_training.ipynb` if you want the BatchNorm + Dropout autoencoder comparison.
+7. Run `notebooks/07_patchcore_training.ipynb` if you want the PatchCore-style comparison.
+8. Run `notebooks/08_autoencoder_residual_training.ipynb` if you want the stronger residual autoencoder backbone comparison.
+9. Run `notebooks/09_resnet18_backbone_baseline.ipynb` if you want the plain pretrained ResNet18 backbone baseline.
+10. Run `notebooks/10_patchcore_resnet18_training.ipynb` if you want PatchCore with a pretrained ResNet18 backbone.
+11. Run `notebooks/11_patchcore_resnet50_training.ipynb` if you want PatchCore with a pretrained ResNet50 backbone.
 
 How to run them:
 

@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 from wafer_defect.config import load_toml
 from wafer_defect.data.wm811k import WaferMapDataset
 from wafer_defect.evaluation import summarize_threshold_metrics, sweep_threshold_metrics
-from wafer_defect.models.autoencoder import ConvAutoencoder
+from wafer_defect.models.autoencoder import build_autoencoder_from_config
 from wafer_defect.scoring import (
     absolute_error_map,
     masked_spatial_mean,
@@ -145,10 +145,7 @@ def main() -> None:
     device = resolve_device(args.device or config["training"].get("device", "auto"))
     batch_size = args.batch_size or int(config["data"].get("batch_size", 64))
 
-    model = ConvAutoencoder(
-        latent_dim=int(config["model"]["latent_dim"]),
-        image_size=image_size,
-    )
+    model = build_autoencoder_from_config(config, image_size=image_size)
     model.load_state_dict(checkpoint["model_state_dict"])
     model.to(device)
 

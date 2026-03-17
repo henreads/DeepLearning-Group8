@@ -1,10 +1,12 @@
 data/raw/
 data/processed/
 artifacts/
+.torch-cache/
 __pycache__/
 *.pyc
+*.egg-info/
+.ipynb_checkpoints/
 .venv/
 venv/
 .env
 .DS_Store
-

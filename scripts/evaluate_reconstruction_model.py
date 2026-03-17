@@ -14,7 +14,9 @@ from torch.utils.data import DataLoader
 
 from wafer_defect.data.wm811k import WaferMapDataset
 from wafer_defect.evaluation.reconstruction_metrics import summarize_threshold_metrics, sweep_threshold_metrics
-from wafer_defect.models.autoencoder import ConvAutoencoder
+from wafer_defect.models.autoencoder import build_autoencoder_from_config
+from wafer_defect.models.ts_distillation import build_ts_distillation_from_config
+from wafer_defect.models.patchcore import PatchCoreModel
 from wafer_defect.models.svdd import ConvDeepSVDD
 from wafer_defect.models.vae import ConvVariationalAutoencoder, VAEOutput
 from wafer_defect.scoring import reconstruction_mse, svdd_distance, vae_anomaly_score
@@ -30,7 +32,9 @@ def infer_model_type(config: dict[str, Any], override: str) -> str:
     if override:
         return override.lower()
     model_type = str(config.get("model", {}).get("type", "autoencoder")).lower()
-    if model_type not in {"autoencoder", "vae", "svdd"}:
+    if model_type == "efficientad":
+        return "ts_distillation"
+    if model_type not in {"autoencoder", "vae", "svdd", "patchcore", "ts_distillation"}:
         raise ValueError(f"Unsupported model type: {model_type}")
     return model_type
 
@@ -49,14 +53,30 @@ def infer_image_size(config: dict[str, Any], checkpoint_path: Path) -> int:
 
 
 def build_model(config: dict[str, Any], model_type: str, image_size: int) -> torch.nn.Module:
-    latent_dim = int(config["model"]["latent_dim"])
-
     if model_type == "autoencoder":
-        return ConvAutoencoder(latent_dim=latent_dim, image_size=image_size)
+        return build_autoencoder_from_config(config, image_size=image_size)
     if model_type == "vae":
+        latent_dim = int(config["model"]["latent_dim"])
         return ConvVariationalAutoencoder(latent_dim=latent_dim, image_size=image_size)
     if model_type == "svdd":
+        latent_dim = int(config["model"]["latent_dim"])
         return ConvDeepSVDD(latent_dim=latent_dim, image_size=image_size)
+    if model_type == "patchcore":
+        return PatchCoreModel(
+            image_size=image_size,
+            backbone_type=str(config.get("model", {}).get("backbone_type", "conv")),
+            use_batchnorm=bool(config.get("model", {}).get("use_batchnorm", True)),
+            pretrained=bool(config.get("model", {}).get("pretrained", True)),
+            freeze_backbone=bool(config.get("model", {}).get("freeze_backbone", True)),
+            backbone_input_size=int(config.get("model", {}).get("backbone_input_size", 224)),
+            normalize_imagenet=bool(config.get("model", {}).get("normalize_imagenet", True)),
+            reduction=str(config.get("model", {}).get("reduction", "max")),
+            topk_ratio=float(config.get("model", {}).get("topk_ratio", 0.1)),
+            query_chunk_size=int(config.get("model", {}).get("query_chunk_size", 2048)),
+            memory_chunk_size=int(config.get("model", {}).get("memory_chunk_size", 8192)),
+        )
+    if model_type == "ts_distillation":
+        return build_ts_distillation_from_config(config, image_size=image_size)
     raise ValueError(f"Unsupported model type: {model_type}")
 
 
@@ -88,6 +108,10 @@ def collect_scores(
                     outputs.logvar,
                     beta=beta,
                 )
+            elif model_type == "patchcore":
+                scores = model(inputs)
+            elif model_type == "ts_distillation":
+                scores = model(inputs)
             else:
                 embeddings = model(inputs)
                 scores = svdd_distance(embeddings, model.center)
@@ -128,7 +152,11 @@ def main() -> None:
     image_size = infer_image_size(config, checkpoint_path)
 
     model = build_model(config, model_type, image_size=image_size)
-    model.load_state_dict(checkpoint["model_state_dict"])
+    if model_type == "patchcore" and "memory_bank" in checkpoint["model_state_dict"]:
+        model.set_memory_bank(checkpoint["model_state_dict"]["memory_bank"])
+        model.load_state_dict(checkpoint["model_state_dict"], strict=False)
+    else:
+        model.load_state_dict(checkpoint["model_state_dict"])
     model.to(device)
 
     val_dataset = WaferMapDataset(config["data"]["metadata_csv"], split="val", image_size=image_size)

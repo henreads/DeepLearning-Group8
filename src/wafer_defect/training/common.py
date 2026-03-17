@@ -10,3 +10,5 @@ class EpochMetrics:
     loss: float
     reconstruction_loss: float
     kl_loss: float = 0.0
+    distillation_loss: float = 0.0
+    auxiliary_loss: float = 0.0
