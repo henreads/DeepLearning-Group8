@@ -20,6 +20,7 @@ from wafer_defect.models.patchcore import PatchCoreModel
 from wafer_defect.models.svdd import ConvDeepSVDD
 from wafer_defect.models.vae import ConvVariationalAutoencoder, VAEOutput
 from wafer_defect.scoring import reconstruction_mse, svdd_distance, vae_anomaly_score
+from wafer_defect.models.resnet import ResNetFeatureExtractor
 
 
 def resolve_device(device_name: str) -> torch.device:
@@ -34,7 +35,15 @@ def infer_model_type(config: dict[str, Any], override: str) -> str:
     model_type = str(config.get("model", {}).get("type", "autoencoder")).lower()
     if model_type == "efficientad":
         return "ts_distillation"
-    if model_type not in {"autoencoder", "vae", "svdd", "patchcore", "ts_distillation"}:
+    if model_type not in {
+        "autoencoder",
+        "vae",
+        "svdd",
+        "patchcore",
+        "ts_distillation",
+        "resnet18_backbone",
+        "wideresnet50_backbone",
+    }:
         raise ValueError(f"Unsupported model type: {model_type}")
     return model_type
 
@@ -77,6 +86,24 @@ def build_model(config: dict[str, Any], model_type: str, image_size: int) -> tor
         )
     if model_type == "ts_distillation":
         return build_ts_distillation_from_config(config, image_size=image_size)
+    
+    if model_type == "resnet18_backbone":
+        return ResNetFeatureExtractor(
+            backbone_name="resnet18",
+            pretrained=bool(config.get("model", {}).get("pretrained", True)),
+            input_size=int(config.get("model", {}).get("input_size", 224)),
+            freeze_backbone=bool(config.get("model", {}).get("freeze_backbone", True)),
+            normalize_imagenet=bool(config.get("model", {}).get("normalize_imagenet", True)),
+        )
+
+    if model_type == "wideresnet50_backbone":
+        return ResNetFeatureExtractor(
+            backbone_name="wide_resnet50_2",
+            pretrained=bool(config.get("model", {}).get("pretrained", True)),
+            input_size=int(config.get("model", {}).get("input_size", 224)),
+            freeze_backbone=bool(config.get("model", {}).get("freeze_backbone", True)),
+            normalize_imagenet=bool(config.get("model", {}).get("normalize_imagenet", True)),
+        )
     raise ValueError(f"Unsupported model type: {model_type}")
 
 
@@ -118,6 +145,28 @@ def collect_scores(
 
             for score, label in zip(scores.cpu().tolist(), labels.tolist()):
                 rows.append({"score": float(score), "is_anomaly": int(label)})
+
+    return pd.DataFrame(rows)
+
+
+def collect_embeddings(
+    model: torch.nn.Module,
+    dataloader: DataLoader,
+    device: torch.device,
+) -> pd.DataFrame:
+    rows: list[dict[str, Any]] = []
+    model.eval()
+
+    with torch.inference_mode():
+        for inputs, labels in dataloader:
+            inputs = inputs.to(device)
+            embeddings = model(inputs)
+
+            for embedding, label in zip(embeddings.cpu(), labels.tolist()):
+                rows.append({
+                    "embedding": embedding.numpy(),
+                    "is_anomaly": int(label),
+                })
 
     return pd.DataFrame(rows)
 
@@ -164,13 +213,43 @@ def main() -> None:
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=int(config["data"].get("num_workers", 0)))
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=int(config["data"].get("num_workers", 0)))
 
-    val_scores_df = collect_scores(model, val_loader, device, model_type, beta=beta)
-    val_normal_scores = val_scores_df.loc[val_scores_df["is_anomaly"] == 0, "score"]
-    if val_normal_scores.empty:
-        raise ValueError("Validation split does not contain normal scores to derive a threshold.")
-    threshold = float(val_normal_scores.quantile(args.threshold_quantile))
+    if model_type in {"resnet18_backbone", "wideresnet50_backbone"}:
+        val_embeddings_df = collect_embeddings(model, val_loader, device)
+        val_normal_embeddings = val_embeddings_df.loc[val_embeddings_df["is_anomaly"] == 0, "embedding"]
+        if val_normal_embeddings.empty:
+            raise ValueError("Validation split does not contain normal embeddings to derive a threshold.")
 
-    test_scores_df = collect_scores(model, test_loader, device, model_type, beta=beta)
+        val_normal_matrix = torch.tensor(val_normal_embeddings.tolist(), dtype=torch.float32)
+        center = val_normal_matrix.mean(dim=0)
+
+        val_scores = torch.norm(val_normal_matrix - center.unsqueeze(0), dim=1).numpy()
+        threshold = float(pd.Series(val_scores).quantile(args.threshold_quantile))
+
+        val_scores_df = pd.DataFrame({
+            "score": [
+                float(torch.norm(torch.tensor(emb, dtype=torch.float32) - center, p=2).item())
+                for emb in val_embeddings_df["embedding"]
+            ],
+            "is_anomaly": val_embeddings_df["is_anomaly"].astype(int),
+        })
+
+        test_embeddings_df = collect_embeddings(model, test_loader, device)
+        test_scores_df = pd.DataFrame({
+            "score": [
+                float(torch.norm(torch.tensor(emb, dtype=torch.float32) - center, p=2).item())
+                for emb in test_embeddings_df["embedding"]
+            ],
+            "is_anomaly": test_embeddings_df["is_anomaly"].astype(int),
+        })
+    else:
+        val_scores_df = collect_scores(model, val_loader, device, model_type, beta=beta)
+        val_normal_scores = val_scores_df.loc[val_scores_df["is_anomaly"] == 0, "score"]
+        if val_normal_scores.empty:
+            raise ValueError("Validation split does not contain normal scores to derive a threshold.")
+        threshold = float(val_normal_scores.quantile(args.threshold_quantile))
+
+        test_scores_df = collect_scores(model, test_loader, device, model_type, beta=beta)
+
     labels = test_scores_df["is_anomaly"].to_numpy()
     scores = test_scores_df["score"].to_numpy()
 

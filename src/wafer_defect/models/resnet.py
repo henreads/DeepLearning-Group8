@@ -5,7 +5,14 @@ from __future__ import annotations
 import torch
 import torch.nn.functional as F
 from torch import nn
-from torchvision.models import ResNet18_Weights, ResNet50_Weights, resnet18, resnet50
+from torchvision.models import (
+    ResNet18_Weights,
+    ResNet50_Weights,
+    Wide_ResNet50_2_Weights,
+    resnet18,
+    resnet50,
+    wide_resnet50_2,
+)
 
 
 def _build_resnet_backbone(backbone_name: str, pretrained: bool) -> nn.Module:
@@ -16,6 +23,9 @@ def _build_resnet_backbone(backbone_name: str, pretrained: bool) -> nn.Module:
     if backbone_name == "resnet50":
         weights = ResNet50_Weights.DEFAULT if pretrained else None
         return resnet50(weights=weights)
+    if backbone_name in {"wideresnet50", "wide_resnet50_2", "wideresnet50_2"}:
+        weights = Wide_ResNet50_2_Weights.DEFAULT if pretrained else None
+        return wide_resnet50_2(weights=weights)
     raise ValueError(f"Unsupported ResNet backbone: {backbone_name}")
 
 
