@@ -7,7 +7,7 @@
 
 - Henry Lee Jun, 1004219
 - Chia Tang, 1007200
-- Genson Low, 1005931
+- Genson Low, 1006931
 
 ## Project Goal
 
@@ -200,6 +200,26 @@ After preparing the dataset, use the notebooks for the main experiments:
   Fit and evaluate PatchCore on a frozen pretrained ResNet18 backbone using the same `64x64` 5% dataset and validation-threshold protocol.
 - `notebooks/11_patchcore_resnet50_training.ipynb`
   Fit and evaluate PatchCore on a frozen pretrained ResNet50 backbone using the same `64x64` 5% dataset and validation-threshold protocol.
+- `notebooks/12_ts_distillation_training.ipynb`
+  Train and evaluate the teacher-student distillation detector, including optional shared evaluation and ablation cells.
+- `notebooks/13_ts_resnet50_kaggle_import_analysis.ipynb`
+  Inspect the Kaggle-imported teacher-student ResNet50 results and compare imported artifacts before final reporting.
+- `notebooks/14_multiclass_classifier_training.ipynb`
+  Prepare the `50k` labeled multiclass subset and train/evaluate the classifier without generating unlabeled predictions automatically.
+  The current training config runs for up to `80` epochs with learning-rate decay and early stopping, saves the best checkpoint by validation balanced accuracy, and marks only high-confidence unlabeled predictions as safe pseudo-label candidates.
+- `notebooks/14_multiclass_classifier_methodology.md`
+  Summarize the research-aligned rationale behind the current multiclass classifier design and pseudo-labeling workflow.
+- `notebooks/16_multiclass_classifier_final_labeling.ipynb`
+  Generate unlabeled pseudo-labels only after you have selected the final classifier checkpoint you want to trust.
+- `notebooks/17_multiclass_classifier_ensemble_workflow.ipynb`
+  Evaluate and use an ensemble of multiple multiclass classifier checkpoints trained with different random seeds.
+- `scripts/ensemble_multiclass_classifier.py`
+  Evaluate either a simple averaged ensemble or a validation-fitted stacking ensemble from multiple classifier checkpoints.
+  The stacking mode saves a reusable `stacking_combiner.json` file for later inference.
+- `scripts/predict_unlabeled_multiclass_ensemble.py`
+  Run unlabeled inference with the same checkpoint set, optionally using `--combiner-json` to apply a saved stacking combiner.
+- `notebooks/15_multiclass_classifier_showcase.ipynb`
+  Present the multiclass classifier results, plots, and example predictions after notebook `14` has produced the artifacts.
 
 Recommended run order for a fresh setup:
 

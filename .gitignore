@@ -1,6 +1,7 @@
 data/raw/
 data/processed/
 artifacts/
+kaggle_upload/
 .torch-cache/
 __pycache__/
 *.pyc

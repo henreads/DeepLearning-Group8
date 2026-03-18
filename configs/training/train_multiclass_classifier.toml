@@ -1,0 +1,21 @@
+[training]
+metadata_csv = "data/processed/x64/wm811k_multiclass/metadata_labeled.csv"
+output_dir = "artifacts/multiclass_classifier"
+epochs = 20
+batch_size = 128
+learning_rate = 0.001
+weight_decay = 0.0001
+num_workers = 4
+use_weighted_sampler = true
+random_seed = 42
+label_smoothing = 0.05
+mixup_alpha = 0.2
+grad_clip_norm = 1.0
+
+[model]
+variant = "enhanced"
+base_channels = 32
+hidden_dim = 512
+dropout = 0.10
+block_dropout = 0.05
+se_reduction = 8

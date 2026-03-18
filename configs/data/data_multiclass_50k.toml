@@ -1,0 +1,25 @@
+[dataset]
+name = "wm811k_multiclass_50k"
+raw_pickle = "data/raw/LSWMD.pkl"
+processed_root = "data/processed/x64/wm811k_multiclass_50k"
+labeled_metadata_csv = "data/processed/x64/wm811k_multiclass_50k/metadata_labeled_50k.csv"
+labeled_arrays_dir = "data/processed/x64/wm811k_multiclass_50k/arrays_labeled_50k"
+unlabeled_predictions_csv = "artifacts/multiclass_classifier_50k/unlabeled_predictions.csv"
+image_size = 64
+class_names = [
+  "none",
+  "Center",
+  "Donut",
+  "Edge-Loc",
+  "Edge-Ring",
+  "Loc",
+  "Near-full",
+  "Random",
+  "Scratch",
+]
+
+[splits]
+train_fraction = 0.70
+val_fraction = 0.15
+test_fraction = 0.15
+random_seed = 42
