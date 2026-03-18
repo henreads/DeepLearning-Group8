@@ -1,4 +1,5 @@
 """Training loop for reconstruction-only autoencoder models."""
+# src/wafer_defect/training/autoencoder.py
 
 from __future__ import annotations
 

@@ -1,4 +1,5 @@
 """Shared training datatypes used by model-specific training loops."""
+# src/wafer_defect/training/common.py
 
 from __future__ import annotations
 

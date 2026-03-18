@@ -1,4 +1,5 @@
 """Training loop and helpers for Deep SVDD models."""
+# src/wafer_defect/training/svdd.py
 
 from __future__ import annotations
 

@@ -1,4 +1,5 @@
 """Helpers for fitting a PatchCore-style memory bank on normal wafers."""
+# src/wafer_defect/training/patchcore.py
 
 from __future__ import annotations
 

@@ -1,4 +1,5 @@
 """Training loop for variational autoencoder models."""
+#src/wafer_defect/training/vae.py
 
 from __future__ import annotations
 
