@@ -19,6 +19,7 @@ What is included
 - `scripts/predict_unlabeled_multiclass.py` for single-checkpoint inference
 - `scripts/ensemble_multiclass_classifier.py` for ensemble evaluation plus optional unlabeled inference
 - optional `ensemble_combiner.json` for applying a saved stacking combiner at inference time
+- output exports for `unlabeled_predictions.csv`, `unlabeled_predictions.defect_candidates.csv`, and `unlabeled_predictions.accepted_pseudo_labels.csv`
 - `src/wafer_defect/...` runtime code required by the scripts
 - `configs/data/data_multiclass_50k.toml`
 - `Outputs/model_a`, `Outputs/model_b`, and `Outputs/model_c` with the released checkpoints
@@ -109,6 +110,8 @@ else:
 
 OUTPUT_DIR = REPO_ROOT / "artifacts/ensemble_abc"
 OUTPUT_CSV = OUTPUT_DIR / "unlabeled_predictions.csv"
+DEFECT_CSV = OUTPUT_DIR / "unlabeled_predictions.defect_candidates.csv"
+ACCEPTED_CSV = OUTPUT_DIR / "unlabeled_predictions.accepted_pseudo_labels.csv"
 SUMMARY_JSON = OUTPUT_DIR / "unlabeled_predictions.summary.json"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -137,6 +140,10 @@ command = [
     str(RAW_PICKLE),
     "--output-csv",
     str(OUTPUT_CSV),
+    "--defect-csv",
+    str(DEFECT_CSV),
+    "--accepted-csv",
+    str(ACCEPTED_CSV),
     "--summary-json",
     str(SUMMARY_JSON),
     "--batch-size",
@@ -158,6 +165,7 @@ Notes
 - The raw data path is intentionally supplied via `--raw-pickle` for Kaggle portability.
 - The default `num_workers` is `0` for compatibility. Increase it only if your Kaggle runtime supports it cleanly.
 - If `ensemble_combiner.json` is present, the recommended command will automatically use it for stacking inference.
+- `unlabeled_predictions.csv` keeps every row, while the defect-candidate and accepted-pseudo-label CSVs make review and downstream tracking easier.
 - This bundle is prepared locally. It is not uploaded automatically by this script.
 """
 
@@ -249,9 +257,16 @@ def main() -> None:
     if args.combiner_json:
         copy_file(repo_root, args.combiner_json, bundle_dir / "ensemble_combiner.json")
 
+    manifest_description = "Three-checkpoint WM811K multiclass ensemble of model_a, model_b, and model_c."
+    if args.combiner_json:
+        manifest_description = (
+            "Three-checkpoint WM811K multiclass ensemble of model_a, model_b, and model_c "
+            "with a saved stacking combiner for deployment inference."
+        )
+
     manifest = {
         "name": "ensemble_abc",
-        "description": "Averaged ensemble of model_a, model_b, and model_c for WM-811K multiclass inference.",
+        "description": manifest_description,
         "ensemble_size": len(released_checkpoints),
         "checkpoints": released_checkpoints,
         "combiner_json": "ensemble_combiner.json" if args.combiner_json else None,

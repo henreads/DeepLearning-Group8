@@ -42,6 +42,8 @@ Class balance in the `50k` labeled subset:
 
 The dataset is still strongly imbalanced, especially for `Near-full`, `Donut`, `Random`, and `Scratch`, so balanced accuracy and per-class recall remain more informative than raw accuracy alone.
 
+One important consequence of the current `50k` construction is that it already uses all `25,519` labeled defect wafers available in the raw WM-811K labels. The labeled remainder outside the `50k` subset is therefore `122,950` rows of `none` only. That means any secondary validation outside the `50k` set is a useful unseen-normal check, but it is not a full external multiclass holdout.
+
 ## Current Pipeline
 
 ### Validated baseline branch
@@ -110,6 +112,27 @@ Interpretation:
 - If the project priority is balanced performance across defect classes, the averaged ensemble is the safest headline result.
 - Stacking increases raw test accuracy and macro F1, but it shifts the operating point toward higher precision and lower balanced recall. That tradeoff is visible in the test balanced-accuracy drop.
 
+### Secondary external validation outside the `50k`
+
+A secondary validation was run on a random `10,000`-row sample from the labeled rows not included in the multiclass `50k` dataset. Because the `50k` subset already consumed every labeled defect row, this outside-of-`50k` validation set contains only `none` wafers. It should therefore be interpreted as an unseen-normal false-positive check rather than a full multiclass generalization benchmark.
+
+| Holdout | Sample Size | Label Composition | Average-Ensemble Accuracy | Stacked-Ensemble Accuracy | Interpretation |
+| --- | ---: | --- | ---: | ---: | --- |
+| Unseen labeled remainder outside `50k` | 10,000 | 10,000 `none` | 0.9352 | 0.9607 | Stacking reduces false defect predictions on unseen normals |
+
+Additional notes:
+
+- full unseen labeled remainder outside the `50k`: `122,950` rows
+- full unseen label distribution outside the `50k`: all `none`
+- average ensemble false defect predictions on the sampled external holdout: `648`
+- stacked ensemble false defect predictions on the sampled external holdout: `393`
+
+Interpretation:
+
+- the external labeled remainder confirms that the main out-of-sample risk is false positives on normal wafers
+- on this normal-only holdout, stacking is clearly more conservative than averaging and produces fewer incorrect defect flags
+- these numbers should not replace the main multiclass test-set result because the outside-of-`50k` holdout contains no unseen defect classes
+
 ## Per-Class Behavior
 
 Using the averaged ensemble:
@@ -177,6 +200,7 @@ Based on the saved development evidence in the repository:
 2. Keep stacking as an optional accuracy-oriented variant rather than the primary balanced-performance result.
 3. Treat the enhanced classifier branch as implemented but not yet fully benchmarked.
 4. Before large-scale pseudo-labeling, validate a reviewed sample because the current high-confidence gate appears to favor `none` almost exclusively.
+5. If a true external multiclass validation is required, rebuild the training subset so some labeled defect rows are intentionally held out instead of using all labeled defects inside the `50k`.
 
 ## Relevant Files
 
@@ -197,4 +221,5 @@ Based on the saved development evidence in the repository:
 - `kaggle_upload/Outputs/ensemble_abc/metrics.json`
 - `artifacts/multiclass_classifier_50k_eval_20260318/metrics.json`
 - `artifacts/multiclass_classifier_50k_stacking_accuracy_eval/metrics.json`
+- `artifacts/external_unseen_labeled_normal_sample10k_eval_20260318/metrics.json`
 - `artifacts/multiclass_classifier_50k_stacking_eval/smoke_unlabeled_predictions.summary.json`
