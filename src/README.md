@@ -8,6 +8,8 @@ The code under `src/wafer_defect/` is the reusable library those notebooks impor
 
 - `data/`
   Loads processed wafer arrays and handles the legacy raw pickle format.
+- `classification/`
+  Groups the supervised multiclass classifier code so it stays separate from the anomaly-detection pipeline.
 - `models/`
   Defines the model architectures used in experiments such as the autoencoder, VAE, SVDD encoder, PatchCore model, EfficientAD model, and ResNet feature extractor.
 - `training/`

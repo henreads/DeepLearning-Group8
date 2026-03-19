@@ -12,8 +12,8 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, balanced_accuracy_score
 from sklearn.model_selection import StratifiedKFold
 
-from wafer_defect.data.supervised import DEFAULT_CLASS_NAMES
-from wafer_defect.models.classifier import WaferClassifier
+from wafer_defect.classification.data import DEFAULT_CLASS_NAMES
+from wafer_defect.classification.models import WaferClassifier
 
 
 SUPPORTED_STACKING_FEATURE_TYPES = ("probabilities", "logits")

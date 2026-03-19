@@ -6,7 +6,7 @@ import argparse
 from pathlib import Path
 
 from wafer_defect.config import load_toml
-from wafer_defect.data.supervised import (
+from wafer_defect.classification.data import (
     DEFAULT_CLASS_NAMES,
     build_labeled_metadata,
     prepare_supervised_dataframe,
@@ -15,7 +15,7 @@ from wafer_defect.data.supervised import (
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="configs/data/data_multiclass.toml")
+    parser.add_argument("--config", default="configs/data/classifier/data_multiclass.toml")
     parser.add_argument("--limit-per-class", type=int, default=None)
     return parser.parse_args()
 

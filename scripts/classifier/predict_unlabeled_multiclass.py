@@ -10,13 +10,13 @@ import torch
 from torch.utils.data import DataLoader
 
 from wafer_defect.config import load_toml
-from wafer_defect.data.supervised import DEFAULT_CLASS_NAMES, RawWaferInferenceDataset, prepare_supervised_dataframe
-from wafer_defect.models.classifier import WaferClassifier
+from wafer_defect.classification.data import DEFAULT_CLASS_NAMES, RawWaferInferenceDataset, prepare_supervised_dataframe
+from wafer_defect.classification.models import WaferClassifier
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="configs/data/data_multiclass.toml")
+    parser.add_argument("--config", default="configs/data/classifier/data_multiclass.toml")
     parser.add_argument("--checkpoint", default="artifacts/multiclass_classifier/best_model.pt")
     parser.add_argument("--output-csv", default=None)
     parser.add_argument("--batch-size", type=int, default=256)

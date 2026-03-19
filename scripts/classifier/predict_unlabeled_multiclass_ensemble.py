@@ -12,13 +12,18 @@ import torch
 from torch.utils.data import DataLoader
 
 from wafer_defect.config import load_toml
-from wafer_defect.data.supervised import RawWaferInferenceDataset, prepare_supervised_dataframe
-from wafer_defect.ensemble import StackingCombiner, average_probabilities, collect_model_outputs, load_classifier_models
+from wafer_defect.classification.data import RawWaferInferenceDataset, prepare_supervised_dataframe
+from wafer_defect.classification.ensemble import (
+    StackingCombiner,
+    average_probabilities,
+    collect_model_outputs,
+    load_classifier_models,
+)
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="configs/data/data_multiclass_50k.toml")
+    parser.add_argument("--config", default="configs/data/classifier/data_multiclass_50k.toml")
     parser.add_argument("--raw-pickle", default=None)
     parser.add_argument("--manifest", default=None)
     parser.add_argument("--checkpoints", nargs="+", default=None)

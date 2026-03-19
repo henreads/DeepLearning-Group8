@@ -22,3 +22,4 @@ This classifier is trained as a supervised multiclass wafer-defect model on the 
 ### Practical implication
 
 The classifier should be judged first by labeled validation and test performance, especially balanced accuracy and per-class recall. Unlabeled predictions should be treated as candidate pseudo-labels, not as guaranteed ground truth.
+

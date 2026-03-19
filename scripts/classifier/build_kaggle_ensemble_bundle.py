@@ -15,12 +15,12 @@ This bundle is prepared for Kaggle release and inference deployment of the WM-81
 
 What is included
 
-- `scripts/predict_unlabeled_multiclass_ensemble.py` for direct ensemble inference
-- `scripts/predict_unlabeled_multiclass.py` for single-checkpoint inference
-- `scripts/ensemble_multiclass_classifier.py` for ensemble evaluation plus optional unlabeled inference
+- `scripts/classifier/predict_unlabeled_multiclass_ensemble.py` for direct ensemble inference
+- `scripts/classifier/predict_unlabeled_multiclass.py` for single-checkpoint inference
+- `scripts/classifier/ensemble_multiclass_classifier.py` for ensemble evaluation plus optional unlabeled inference
 - optional `ensemble_combiner.json` for applying a saved stacking combiner at inference time
 - `src/wafer_defect/...` runtime code required by the scripts
-- `configs/data/data_multiclass_50k.toml`
+- `configs/data/classifier/data_multiclass_50k.toml`
 - `Outputs/model_a`, `Outputs/model_b`, and `Outputs/model_c` with the released checkpoints
 - `Outputs/ensemble_abc/metrics.json` with the test-set ensemble result
 - `ensemble_manifest.json` listing the released checkpoint files
@@ -128,11 +128,11 @@ import sys
 
 command = [
     sys.executable,
-    str(REPO_ROOT / "scripts/predict_unlabeled_multiclass_ensemble.py"),
+    str(REPO_ROOT / "scripts/classifier/predict_unlabeled_multiclass_ensemble.py"),
     "--manifest",
     str(REPO_ROOT / "ensemble_manifest.json"),
     "--config",
-    str(REPO_ROOT / "configs/data/data_multiclass_50k.toml"),
+    str(REPO_ROOT / "configs/data/classifier/data_multiclass_50k.toml"),
     "--raw-pickle",
     str(RAW_PICKLE),
     "--output-csv",
@@ -212,7 +212,7 @@ def write_zip(bundle_dir: Path, zip_path: Path) -> None:
 
 def main() -> None:
     args = parse_args()
-    repo_root = Path(__file__).resolve().parents[1]
+    repo_root = Path(__file__).resolve().parents[2]
     bundle_dir = (repo_root / args.bundle_dir).resolve()
     zip_path = (repo_root / args.zip_path).resolve()
 
@@ -225,14 +225,18 @@ def main() -> None:
     bundle_dir.mkdir(parents=True, exist_ok=True)
 
     copy_file(repo_root, "requirements.txt", bundle_dir / "requirements.txt")
-    copy_file(repo_root, "configs/data/data_multiclass_50k.toml", bundle_dir / "configs/data/data_multiclass_50k.toml")
+    copy_file(
+        repo_root,
+        "configs/data/classifier/data_multiclass_50k.toml",
+        bundle_dir / "configs/data/classifier/data_multiclass_50k.toml",
+    )
 
     for script_name in [
         "predict_unlabeled_multiclass.py",
         "predict_unlabeled_multiclass_ensemble.py",
         "ensemble_multiclass_classifier.py",
     ]:
-        copy_file(repo_root, f"scripts/{script_name}", bundle_dir / "scripts" / script_name)
+        copy_file(repo_root, f"scripts/classifier/{script_name}", bundle_dir / "scripts/classifier" / script_name)
 
     copy_tree(repo_root, "src/wafer_defect", bundle_dir / "src/wafer_defect")
 
