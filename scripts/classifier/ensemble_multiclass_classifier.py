@@ -13,8 +13,8 @@ from sklearn.metrics import accuracy_score, balanced_accuracy_score, classificat
 from torch.utils.data import DataLoader
 
 from wafer_defect.config import load_toml
-from wafer_defect.data.supervised import LabeledWaferDataset, RawWaferInferenceDataset, prepare_supervised_dataframe
-from wafer_defect.ensemble import (
+from wafer_defect.classification.data import LabeledWaferDataset, RawWaferInferenceDataset, prepare_supervised_dataframe
+from wafer_defect.classification.ensemble import (
     SUPPORTED_STACKING_FEATURE_TYPES,
     SUPPORTED_STACKING_SELECTION_METRICS,
     StackingCombiner,
@@ -27,7 +27,7 @@ from wafer_defect.ensemble import (
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--data-config", default="configs/data/data_multiclass_50k.toml")
+    parser.add_argument("--data-config", default="configs/data/classifier/data_multiclass_50k.toml")
     parser.add_argument("--metadata-csv", default="data/processed/x64/wm811k_multiclass_50k/metadata_labeled_50k.csv")
     parser.add_argument("--checkpoints", nargs="+", required=True)
     parser.add_argument("--output-dir", default="artifacts/multiclass_classifier_50k_ensemble")

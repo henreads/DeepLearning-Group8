@@ -57,8 +57,8 @@ def extract_overall_comparison_table(report_text: str) -> pd.DataFrame:
 def infer_family(row: pd.Series) -> str:
     model = row["model"]
     experiment = row["experiment"]
-    if experiment.startswith("TS-Res"):
-        return "Teacher-Distillation-ResNet"
+    if experiment.startswith("TS-"):
+        return "Teacher-Distillation"
     if "PatchCore" in model:
         return "PatchCore"
     if "Autoencoder" in model:
@@ -67,7 +67,7 @@ def infer_family(row: pd.Series) -> str:
         return "VAE"
     if model == "Deep SVDD":
         return "SVDD"
-    if "ResNet18 Backbone" in model:
+    if "Backbone" in model:
         return "Backbone Baseline"
     return "Other"
 
@@ -88,12 +88,27 @@ def infer_autoencoder_subfamily(row: pd.Series) -> str:
 
 def infer_patchcore_source(row: pd.Series) -> str:
     model = row["model"]
+    experiment = row["experiment"]
     if "AE-BN Backbone" in model:
         return "AE-BN Encoder"
+    if "WideResNet50-2" in model or "PatchCore-WideRes50" in experiment:
+        return "WideResNet50-2"
     if "ResNet18" in model:
         return "ResNet18"
     if "ResNet50" in model:
         return "ResNet50"
+    return "Other"
+
+
+def infer_ts_backbone(row: pd.Series) -> str:
+    model = row["model"]
+    experiment = row["experiment"]
+    if "WideResNet50-2" in model or "TS-WideRes50" in experiment:
+        return "WideResNet50-2"
+    if "ResNet50" in model or "TS-Res50" in experiment:
+        return "ResNet50"
+    if "ResNet18" in model or "TS-Res18" in experiment:
+        return "ResNet18"
     return "Other"
 
 
@@ -103,7 +118,7 @@ def shorten_label(label: str, max_len: int = 28) -> str:
 
 def save_overall_plot(df: pd.DataFrame) -> None:
     colors = {
-        "Teacher-Distillation-ResNet": "#0f766e",
+        "Teacher-Distillation": "#0f766e",
         "Autoencoder": "#b45309",
         "PatchCore": "#2563eb",
         "VAE": "#7c3aed",
@@ -428,7 +443,7 @@ def save_baseline_family_plot(df: pd.DataFrame) -> None:
     )
 
     fig.suptitle(
-        "Compact Baseline Comparison\nVAE variants, Deep SVDD, and the simple pretrained ResNet baseline",
+        "Compact Baseline Comparison\nVAE variants, Deep SVDD, and the simple pretrained backbone baselines",
         fontsize=15,
         y=0.99,
     )
@@ -453,6 +468,7 @@ def save_patchcore_family_plot(df: pd.DataFrame) -> None:
         "AE-BN Encoder": "#b45309",
         "ResNet18": "#2563eb",
         "ResNet50": "#0f766e",
+        "WideResNet50-2": "#7c2d12",
     }
     score_markers = {
         "mean": "o",
@@ -587,15 +603,18 @@ def save_patchcore_family_plot(df: pd.DataFrame) -> None:
 
 
 def save_ts_family_plot(df: pd.DataFrame) -> None:
-    ts_df = df[df["family"] == "Teacher-Distillation-ResNet"].copy()
+    ts_df = df[df["family"] == "Teacher-Distillation"].copy()
     if ts_df.empty:
         raise ValueError("No teacher-distillation rows found in overall comparison table")
 
-    ts_df = ts_df.sort_values("experiment").reset_index(drop=True)
+    ts_df["backbone"] = ts_df.apply(infer_ts_backbone, axis=1)
+    ts_df = ts_df.sort_values(["backbone", "val-threshold F1"], ascending=[True, False]).reset_index(drop=True)
     ts_df["plot_index"] = ts_df.index
     colors = {
         "TS-Res18-student-topk20": "#2563eb",
         "TS-Res50-mixed-topk20": "#0f766e",
+        "TS-WideRes50-layer2-mixed-topk25": "#c2410c",
+        "TS-WideRes50-multilayer-mixed-topk15": "#7c2d12",
     }
     ts_df["color"] = ts_df["experiment"].map(colors).fillna("#6b7280")
 
@@ -683,7 +702,7 @@ def save_ts_family_plot(df: pd.DataFrame) -> None:
     )
 
     fig.suptitle(
-        "Teacher-Distillation-ResNet Family Comparison\nMetric and operating-point view of the ResNet18 and ResNet50 teacher variants",
+        "Teacher-Distillation Family Comparison\nMetric and operating-point view of the ResNet18, ResNet50, and WideResNet50-2 teacher variants",
         fontsize=15,
         y=0.99,
     )
@@ -691,6 +710,184 @@ def save_ts_family_plot(df: pd.DataFrame) -> None:
 
     output_path = OUTPUT_DIR / "ts_family_comparison.png"
     fig.savefig(output_path, dpi=220, bbox_inches="tight")
+    print(f"Saved {output_path}")
+
+
+def save_wrn_family_plot(df: pd.DataFrame) -> None:
+    representative_experiments = [
+        "WideRes50-center",
+        "TS-WideRes50-layer2-mixed-topk25",
+        "TS-WideRes50-multilayer-mixed-topk15",
+        "PatchCore-WideRes50-topk-mb50k-r010",
+    ]
+    wrn_df = df[df["experiment"].isin(representative_experiments)].copy()
+    if wrn_df.empty:
+        raise ValueError("No WideResNet50-2 rows found in overall comparison table")
+
+    wrn_df = wrn_df.sort_values("val-threshold F1", ascending=False).reset_index(drop=True)
+    wrn_df["plot_index"] = wrn_df.index
+    wrn_df["variant_group"] = np.select(
+        [
+            wrn_df["experiment"].eq("WideRes50-center"),
+            wrn_df["experiment"].str.startswith("TS-WideRes50"),
+            wrn_df["experiment"].str.startswith("PatchCore-WideRes50"),
+        ],
+        [
+            "Backbone Baseline",
+            "Teacher-Distillation",
+            "PatchCore",
+        ],
+        default="Other",
+    )
+    group_colors = {
+        "Backbone Baseline": "#4b5563",
+        "Teacher-Distillation": "#c2410c",
+        "PatchCore": "#0f766e",
+        "Other": "#6b7280",
+    }
+    wrn_df["color"] = wrn_df["variant_group"].map(group_colors).fillna(group_colors["Other"])
+    wrn_df["score_clean"] = wrn_df["score"].astype(str).str.replace("`", "", regex=False)
+    score_markers = {
+        "center_l2": "o",
+        "topk_mean": "s",
+        "mean": "^",
+        "max": "D",
+    }
+
+    plt.close("all")
+    fig = plt.figure(figsize=(15, 8.5), constrained_layout=False)
+    grid = fig.add_gridspec(2, 2, width_ratios=[1.05, 1.0], height_ratios=[1.0, 0.09])
+
+    ax_rank = fig.add_subplot(grid[0, 0])
+    ax_tradeoff = fig.add_subplot(grid[0, 1])
+    ax_legend = fig.add_subplot(grid[1, :])
+    ax_legend.axis("off")
+
+    ranked_df = wrn_df.iloc[::-1]
+    ax_rank.barh(
+        ranked_df["experiment"].map(
+            lambda value: {
+                "WideRes50-center": "WideRes50-center",
+                "TS-WideRes50-layer2-mixed-topk25": "TS-WideRes50-layer2",
+                "TS-WideRes50-multilayer-mixed-topk15": "TS-WideRes50-multilayer",
+                "PatchCore-WideRes50-topk-mb50k-r010": "PatchCore-WideRes50-topk",
+            }.get(value, shorten_label(value, max_len=26))
+        ),
+        ranked_df["val-threshold F1"],
+        color=ranked_df["color"],
+        edgecolor="black",
+        linewidth=0.5,
+    )
+    ax_rank.set_title("WideResNet50-2 Variants Ranked by Validation-Threshold F1", pad=12)
+    ax_rank.set_xlabel("Validation-Threshold F1")
+    ax_rank.set_xlim(0, max(0.62, wrn_df["val-threshold F1"].max() + 0.05))
+    ax_rank.grid(axis="x", alpha=0.25, linestyle="--")
+
+    for y_pos, (_, row) in enumerate(ranked_df.iterrows()):
+        ax_rank.text(
+            row["val-threshold F1"] + 0.008,
+            y_pos,
+            f"AUROC {row['AUROC']:.3f} | PR {row['AUPRC']:.3f}",
+            va="center",
+            fontsize=8.4,
+        )
+
+    sizes = 80 + (wrn_df["best sweep F1"] - wrn_df["best sweep F1"].min()) / max(
+        wrn_df["best sweep F1"].max() - wrn_df["best sweep F1"].min(),
+        1e-9,
+    ) * 240
+    for _, row in wrn_df.iterrows():
+        ax_tradeoff.scatter(
+            row["val-threshold recall"],
+            row["val-threshold precision"],
+            s=sizes[row["plot_index"]],
+            c=row["color"],
+            marker=score_markers.get(row["score_clean"], "o"),
+            alpha=0.84,
+            edgecolors="black",
+            linewidths=0.5,
+        )
+        ax_tradeoff.annotate(
+            {
+                "WideRes50-center": "WideRes50-center",
+                "TS-WideRes50-layer2-mixed-topk25": "TS-WideRes50-layer2",
+                "TS-WideRes50-multilayer-mixed-topk15": "TS-WideRes50-multilayer",
+                "PatchCore-WideRes50-topk-mb50k-r010": "PatchCore-WideRes50-topk",
+            }.get(row["experiment"], shorten_label(row["experiment"], max_len=22)),
+            (row["val-threshold recall"], row["val-threshold precision"]),
+            xytext=(6, 5),
+            textcoords="offset points",
+            fontsize=8.5,
+        )
+
+    ax_tradeoff.set_title("WideResNet50-2 Precision-Recall Operating Points", pad=12)
+    ax_tradeoff.set_xlabel("Validation-Threshold Recall")
+    ax_tradeoff.set_ylabel("Validation-Threshold Precision")
+    ax_tradeoff.set_xlim(
+        max(0.20, wrn_df["val-threshold recall"].min() - 0.03),
+        min(0.75, wrn_df["val-threshold recall"].max() + 0.03),
+    )
+    ax_tradeoff.set_ylim(
+        max(0.20, wrn_df["val-threshold precision"].min() - 0.01),
+        min(0.44, wrn_df["val-threshold precision"].max() + 0.01),
+    )
+    ax_tradeoff.grid(alpha=0.25, linestyle="--")
+
+    legend_handles = [
+        plt.Line2D(
+            [0],
+            [0],
+            marker="o",
+            color="w",
+            label=group,
+            markerfacecolor=color,
+            markeredgecolor="black",
+            markersize=8,
+        )
+        for group, color in group_colors.items()
+        if group in wrn_df["variant_group"].values
+    ]
+    legend_groups = ax_legend.legend(
+        handles=legend_handles,
+        loc="center left",
+        bbox_to_anchor=(0.22, 0.5),
+        ncol=min(3, len(legend_handles)),
+        frameon=False,
+        title="WideResNet50-2 Family Branch",
+    )
+    ax_legend.add_artist(legend_groups)
+    marker_handles = [
+        plt.Line2D(
+            [0],
+            [0],
+            marker=marker,
+            color="black",
+            linestyle="None",
+            label=score_name,
+            markersize=7,
+        )
+        for score_name, marker in score_markers.items()
+        if score_name in wrn_df["score_clean"].values
+    ]
+    if marker_handles:
+        ax_legend.legend(
+            handles=marker_handles,
+            loc="center right",
+            bbox_to_anchor=(0.82, 0.5),
+            ncol=min(4, len(marker_handles)),
+            frameon=False,
+            title="Score",
+        )
+
+    fig.suptitle(
+        "WideResNet50-2 Family Comparison\nRepresentative WRN experiments: baseline, single-layer TS, multilayer TS, and selected PatchCore run",
+        fontsize=15,
+        y=0.99,
+    )
+    fig.subplots_adjust(top=0.86, bottom=0.10, left=0.08, right=0.98, wspace=0.16, hspace=0.18)
+
+    output_path = OUTPUT_DIR / "wrn_family_comparison.png"
+    fig.savefig(output_path, dpi=220)
     print(f"Saved {output_path}")
 
 
@@ -705,6 +902,7 @@ def main() -> None:
     save_baseline_family_plot(df)
     save_patchcore_family_plot(df)
     save_ts_family_plot(df)
+    save_wrn_family_plot(df)
 
 
 if __name__ == "__main__":

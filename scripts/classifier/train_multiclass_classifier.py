@@ -15,13 +15,13 @@ from torch import nn
 from torch.utils.data import DataLoader, WeightedRandomSampler
 
 from wafer_defect.config import load_toml
-from wafer_defect.data.supervised import LabeledWaferDataset
-from wafer_defect.models.classifier import WaferClassifier
+from wafer_defect.classification.data import LabeledWaferDataset
+from wafer_defect.classification.models import WaferClassifier
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", default="configs/training/train_multiclass_classifier.toml")
+    parser.add_argument("--config", default="configs/training/classifier/train_multiclass_classifier.toml")
     parser.add_argument("--epochs", type=int, default=None)
     parser.add_argument("--batch-size", type=int, default=None)
     parser.add_argument("--limit-train", type=int, default=None)
