@@ -1756,6 +1756,72 @@ Interpretation:
 - compared with the best multilayer teacher-student `WideResNet50-2` run, multilayer PatchCore improved deployed recall and F1 while staying competitive on AUROC and AUPRC
 - the winning WRN PatchCore setting also stayed very consistent with the notebook sweep pattern: `topk_mean` won clearly, `50k` memory bank stayed worthwhile, and the best ratio region remained narrow around `0.10`
 
+### Follow-up: WideResNet50-2 PatchCore on the labeled `120k / 10k / 20k` split
+
+This follow-up is reported separately from the earlier `64x64` shared-split leaderboard because it uses a different evaluation setup: a larger labeled split with `120,000` train wafers, `10,000` validation wafers, and `20,000` test wafers. That means the numbers below should not be merged directly into the older main ranking table. The comparison inside this section is still fair, though, because both runs use the same labeled split and the same validation-F1 threshold rule.
+
+The main question in this follow-up was narrower than the original WRN PatchCore experiment:
+
+- first, rerun the best current `WideResNet50-2` PatchCore recipe cleanly on the labeled split as a new control
+- second, test whether the limitation was not the backbone or the `50k` bank size itself, but the way the memory bank was sourced
+- third, separate three possible improvement axes inside one follow-up sweep:
+  - larger normal-only memory-bank source coverage
+  - higher wafer-map input detail at `96` and `128`
+  - `layer1` inclusion on top of the current `layer2 + layer3` feature pair
+
+Implementation:
+
+- baseline labeled-run notebook: [1_patchcore_wideresnet50_multilayer_training.ipynb](notebooks/patchcore_wrn50_120k_labeled/1_patchcore_wideresnet50_multilayer_training.ipynb)
+- memory-bank follow-up notebook: [4_patchcore_memorybank_feature_sweep.ipynb](notebooks/patchcore_wrn50_120k_labeled/4_patchcore_memorybank_feature_sweep.ipynb)
+- folder overview: [README.md](notebooks/patchcore_wrn50_120k_labeled/README.md)
+- baseline labeled artifacts: [patchcore_wrn50_multilayer_120k_5pct](outputs/modal_runs/patchcore_wrn50_120k_20260322_validation_f1/patchcore_wrn50_multilayer_120k_5pct)
+- follow-up sweep artifacts: [patchcore_wrn50_multilayer_120k_notebook4](outputs/modal_runs/patchcore_wrn50_120k_20260322_notebook4_fetch/patchcore_wrn50_multilayer_120k_notebook4)
+- executed follow-up notebook: [19_patchcore_wideresnet50_memorybank_feature_sweep_ran.ipynb](outputs/modal_runs/patchcore_wrn50_120k_20260322_notebook4_fetch/executed_notebooks/19_patchcore_wideresnet50_memorybank_feature_sweep_ran.ipynb)
+
+The strongest baseline labeled run kept the same core recipe as the earlier WRN PatchCore winner:
+
+- backbone: frozen ImageNet-pretrained `WideResNet50-2`
+- teacher layers: `layer2` and `layer3`
+- reduction: `topk_mean`
+- top-k ratio: `0.05`
+- memory bank size: `50,000`
+- threshold policy: best validation-F1 threshold on the labeled validation split
+
+The important change in the follow-up was that the bank size stayed fixed at `50,000`, but the source-image policy changed. Instead of drawing the effective bank from about `64` sampled train wafers with mixed sampling, the follow-up tested normal-only sampling with much larger source coverage such as `512`, `2048`, and `8192` source wafers. That made this section a direct test of whether the earlier WRN PatchCore recipe was bank-coverage limited rather than bank-size limited.
+
+Direct comparison against the labeled baseline:
+
+| run | source-image policy | image size | teacher layers | precision | recall | F1 | AUROC | AUPRC | predicted anomalies |
+| --- | ------------------- | ---------- | -------------- | --------- | ------ | -- | ----- | ----- | ------------------- |
+| `topk_mb50k_r005` baseline | mixed sampling, auto source count (`64`) | `64x64` | `layer2 + layer3` | `0.514718` | `0.612000` | `0.559159` | `0.927347` | `0.538246` | `1189` |
+| `coverage__64_l23_normals_2048src` | normal-only, `2048` source wafers | `64x64` | `layer2 + layer3` | `0.573930` | `0.590000` | `0.581854` | `0.932747` | `0.585621` | `1028` |
+| `coverage__64_l23_normals_8192src` | normal-only, `8192` source wafers | `64x64` | `layer2 + layer3` | `0.562727` | `0.619000` | `0.589524` | `0.932287` | `0.585945` | `1100` |
+| `image__128_l23_normals_2048src` | normal-only, `2048` source wafers | `128x128` | `layer2 + layer3` | `0.548833` | `0.635000` | `0.588781` | `0.930487` | `0.512442` | `1157` |
+
+Layer-sweep comparison:
+
+| run | image size | teacher layers | patches per image | feature dim | precision | recall | F1 | AUROC | AUPRC |
+| --- | ---------- | -------------- | ----------------- | ----------- | --------- | ------ | -- | ----- | ----- |
+| `layer__96_l12_normals_2048src` | `96x96` | `layer1 + layer2` | `3136` | `768` | `0.493176` | `0.542000` | `0.516436` | `0.879388` | `0.447339` |
+| `layer__96_l123_normals_2048src` | `96x96` | `layer1 + layer2 + layer3` | `3136` | `1792` | `0.464344` | `0.573000` | `0.512981` | `0.888872` | `0.440582` |
+| `layer__128_l123_normals_2048src` | `128x128` | `layer1 + layer2 + layer3` | `3136` | `1792` | `0.505329` | `0.569000` | `0.535278` | `0.894032` | `0.434649` |
+
+Interpretation:
+
+- the strongest labeled-split gain came from memory-bank construction, not from changing the backbone
+- compared with the labeled baseline, `coverage__64_l23_normals_8192src` improved precision by about `+0.0480`, recall by `+0.0070`, and F1 by about `+0.0304`, while also reducing the number of flagged wafers from `1189` to `1100`
+- `coverage__64_l23_normals_2048src` is the cleaner cost-performance compromise: it did not reach the absolute best F1, but it produced the best AUROC in the follow-up, materially improved AUPRC, and reduced predicted anomalies to `1028`
+- `image__128_l23_normals_2048src` nearly matched the best coverage result on deployed-threshold F1 and produced the highest recall in the follow-up (`0.635000`), but its AUPRC dropped sharply relative to the stronger coverage-only runs; that looks more like a recall-leaning operating-point gain than a cleaner ranking improvement
+- `image__96_l23_normals_2048src` did not beat the baseline, so extra resolution alone was not enough without the right bank-sourcing choice
+- all `layer1` follow-ups underperformed the simpler `layer2 + layer3` setup even though they increased `patches_per_image` from `784` to `3136`; this made them both slower and worse in final metrics
+- the follow-up therefore supports a specific diagnosis of the baseline WRN PatchCore run: the earlier `50k` bank was too narrow in source coverage, and normal-only higher-coverage sourcing fixed more of the problem than adding shallower features
+
+Practical takeaway:
+
+- if the goal is the strongest deployed-threshold result on this labeled split, `coverage__64_l23_normals_8192src` is the current winner
+- if the goal is the best trade-off between runtime and performance, `coverage__64_l23_normals_2048src` is the better next control
+- the strongest next-step branch is still `WideResNet50-2` PatchCore with `layer2 + layer3`; future work should keep `normal_only_memory_sampling=True`, focus on larger source coverage, and only revisit higher input resolution after the bank-coverage decision is settled
+
 ## Experiment Family: FastFlow `64x64`
 
 This family starts a new flow-based anomaly branch built on frozen pretrained spatial features rather than reconstruction or memory-bank nearest-neighbor scoring.
