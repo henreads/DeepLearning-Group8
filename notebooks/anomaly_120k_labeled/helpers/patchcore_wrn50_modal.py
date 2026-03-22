@@ -598,14 +598,66 @@ class MultiLayerPatchCoreModel(nn.Module):
         return self.reduce_patch_distances(patch_distances)
 
 
-def sample_memory_indices(dataset_size: int, memory_bank_size: int, patches_per_image: int, seed: int) -> np.ndarray:
-    image_count = min(dataset_size, max(1, math.ceil(memory_bank_size / patches_per_image)))
+def resolve_memory_sampling_candidate_indices(dataset: Dataset, normal_only: bool = False) -> np.ndarray | None:
+    if not normal_only:
+        return None
+    metadata = getattr(dataset, "metadata", None)
+    if metadata is None or "is_anomaly" not in metadata.columns:
+        raise ValueError(
+            "normal_only_memory_sampling requires a dataset with a metadata frame "
+            "that contains an 'is_anomaly' column."
+        )
+    candidate_indices = np.flatnonzero(metadata["is_anomaly"].to_numpy(dtype=int) == 0)
+    if candidate_indices.size == 0:
+        raise ValueError("normal_only_memory_sampling requested, but no normal rows were available.")
+    return candidate_indices.astype(np.int64, copy=False)
+
+
+def sample_memory_indices(
+    dataset_size: int,
+    memory_bank_size: int,
+    patches_per_image: int,
+    seed: int,
+    *,
+    source_image_count: int | None = None,
+    candidate_indices: np.ndarray | None = None,
+) -> np.ndarray:
+    if candidate_indices is None:
+        candidate_indices = np.arange(dataset_size, dtype=np.int64)
+    else:
+        candidate_indices = np.asarray(candidate_indices, dtype=np.int64)
+        if candidate_indices.ndim != 1:
+            raise ValueError("candidate_indices must be a 1D array.")
+        if candidate_indices.size == 0:
+            raise ValueError("candidate_indices must contain at least one element.")
+
+    default_image_count = max(1, math.ceil(memory_bank_size / patches_per_image))
+    requested_image_count = default_image_count if source_image_count is None else int(source_image_count)
+    if requested_image_count <= 0:
+        raise ValueError("source_image_count must be positive when provided.")
+
+    image_count = min(candidate_indices.size, requested_image_count)
     rng = np.random.default_rng(seed)
-    return np.sort(rng.choice(dataset_size, size=image_count, replace=False))
+    return np.sort(rng.choice(candidate_indices, size=image_count, replace=False))
 
 
-def build_memory_subset(dataset: Dataset, memory_bank_size: int, patches_per_image: int, seed: int) -> Subset:
-    indices = sample_memory_indices(len(dataset), memory_bank_size, patches_per_image, seed)
+def build_memory_subset(
+    dataset: Dataset,
+    memory_bank_size: int,
+    patches_per_image: int,
+    seed: int,
+    *,
+    source_image_count: int | None = None,
+    candidate_indices: np.ndarray | None = None,
+) -> Subset:
+    indices = sample_memory_indices(
+        len(dataset),
+        memory_bank_size,
+        patches_per_image,
+        seed,
+        source_image_count=source_image_count,
+        candidate_indices=candidate_indices,
+    )
     return Subset(dataset, indices.tolist())
 
 
@@ -668,6 +720,8 @@ def run_patchcore_variant(
     threshold_strategy: str = "normal_quantile",
     max_validation_false_positive_rate: float | None = None,
 ) -> dict[str, Any]:
+    normal_only_memory_sampling = bool(variant.get("normal_only_memory_sampling", False))
+    memory_source_images = variant.get("memory_source_images")
     model = MultiLayerPatchCoreModel(
         teacher_layers=teacher_layers,
         reduction=str(variant["reduction"]),
@@ -680,11 +734,18 @@ def run_patchcore_variant(
         memory_chunk_size=memory_chunk_size,
     ).to(device)
 
+    candidate_indices = resolve_memory_sampling_candidate_indices(
+        train_dataset,
+        normal_only=normal_only_memory_sampling,
+    )
+    candidate_pool_images = len(train_dataset) if candidate_indices is None else int(candidate_indices.size)
     memory_subset = build_memory_subset(
         train_dataset,
         memory_bank_size=int(variant["memory_bank_size"]),
         patches_per_image=model.patches_per_image,
         seed=seed,
+        source_image_count=None if memory_source_images is None else int(memory_source_images),
+        candidate_indices=candidate_indices,
     )
     memory_loader = DataLoader(memory_subset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
     memory_bank = collect_memory_bank(
@@ -725,6 +786,9 @@ def run_patchcore_variant(
         "name": str(variant["name"]),
         "memory_bank_size": int(variant["memory_bank_size"]),
         "memory_subset_images": int(len(memory_subset)),
+        "memory_source_images_requested": None if memory_source_images is None else int(memory_source_images),
+        "memory_sampling_candidate_images": int(candidate_pool_images),
+        "normal_only_memory_sampling": normal_only_memory_sampling,
         "patches_per_image": int(model.patches_per_image),
         "feature_dim": int(model.feature_dim),
         "reduction": str(variant["reduction"]),
@@ -760,6 +824,12 @@ def run_patchcore_variant(
         "teacher_backbone": "wideresnet50_2",
         "teacher_layers": teacher_layers,
         "threshold_quantile": float(threshold_quantile),
+        "memory_sampling": {
+            "normal_only": normal_only_memory_sampling,
+            "candidate_pool_images": int(candidate_pool_images),
+            "source_images_requested": None if memory_source_images is None else int(memory_source_images),
+            "source_images_sampled": int(len(memory_subset)),
+        },
         "selected_threshold": {
             "strategy": str(threshold_strategy),
             "threshold": float(threshold),
