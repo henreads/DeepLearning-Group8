@@ -1,9 +1,13 @@
-data/raw/
-data/processed/
-artifacts/
-outputs/
-kaggle_upload/
-outputs/
+# Generated data and experiment artifacts
+/data/raw/
+/data/processed/
+/artifacts/
+/outputs/
+/uploads/
+/kaggle_outputs/
+/kaggle_upload/
+
+# Python caches and local environments
 .torch-cache/
 __pycache__/
 *.pyc
@@ -13,5 +17,3 @@ __pycache__/
 venv/
 .env
 .DS_Store
-kaggle_outputs/
-uploads/
