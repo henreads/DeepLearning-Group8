@@ -1,6 +1,6 @@
 PatchCore WRN50 120k Labeled Notebooks
 
-This folder keeps the dedicated WideResNet50-2 PatchCore work for the `120k / 10k / 20k` labeled split separate from the older flat notebook naming used elsewhere in the repo.
+This folder keeps the dedicated WideResNet50-2 PatchCore work for the `120k / 10k / 20k` labeled split inside the larger `notebooks/anomaly_120k_labeled/` namespace.
 
 Contents
 

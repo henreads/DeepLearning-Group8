@@ -10,6 +10,9 @@ image_size = 64
 normal_label = "none"
 defect_label = "pattern"
 
+[split_generation]
+mode = "normal_only_test_defects"
+
 [splits]
 train_normal_fraction = 0.8
 val_normal_fraction = 0.1

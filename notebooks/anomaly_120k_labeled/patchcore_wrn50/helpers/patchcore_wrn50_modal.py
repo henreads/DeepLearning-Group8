@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import pickle
 import random
 import sys
@@ -66,9 +67,45 @@ def resolve_device(device_name: str = "auto") -> torch.device:
 def resolve_bundle_root(start: str | Path | None = None) -> Path:
     start_path = Path(start or Path.cwd()).resolve()
     for candidate in [start_path, *start_path.parents]:
-        if (candidate / "helpers" / "patchcore_wrn50_kaggle.py").exists() and (candidate / "notebooks").exists():
+        if (candidate / "helpers" / "patchcore_wrn50_modal.py").exists() and (candidate / "README.md").exists():
             return candidate
-    raise FileNotFoundError("Could not locate the Kaggle bundle root.")
+        if (
+            (
+                candidate
+                / "notebooks"
+                / "anomaly_120k_labeled"
+                / "patchcore_wrn50"
+                / "helpers"
+                / "patchcore_wrn50_modal.py"
+            ).exists()
+            and (candidate / "configs").exists()
+        ):
+            return candidate
+    raise FileNotFoundError("Could not locate the Modal bundle root.")
+
+
+def resolve_data_root(bundle_root: str | Path | None = None) -> Path:
+    env_root = os.environ.get("WM811K_DATA_ROOT")
+    if env_root:
+        return Path(env_root).resolve()
+    resolved_bundle_root = Path(bundle_root).resolve() if bundle_root else resolve_bundle_root()
+    return (resolved_bundle_root / "data").resolve()
+
+
+def resolve_output_root(bundle_root: str | Path | None = None) -> Path:
+    env_root = os.environ.get("WM811K_OUTPUT_ROOT")
+    if env_root:
+        return Path(env_root).resolve()
+    resolved_bundle_root = Path(bundle_root).resolve() if bundle_root else resolve_bundle_root()
+    return (resolved_bundle_root / "artifacts").resolve()
+
+
+def infer_data_root_from_metadata_path(metadata_path: str | Path) -> Path:
+    metadata_path = Path(metadata_path).resolve()
+    for candidate in [metadata_path.parent, *metadata_path.parents]:
+        if candidate.name == "processed":
+            return candidate.parent.resolve()
+    return metadata_path.parent.resolve()
 
 
 def auto_find_raw_pickle(explicit_path: str | Path | None = None) -> Path:
@@ -80,8 +117,8 @@ def auto_find_raw_pickle(explicit_path: str | Path | None = None) -> Path:
 
     search_roots = [
         Path.cwd(),
-        Path("/kaggle/input"),
-        Path("/kaggle/working"),
+        Path("/vol/data"),
+        Path("/data"),
         Path("/root"),
         Path("/mnt/data"),
         Path("/workspace"),
@@ -137,9 +174,9 @@ def split_slug(split_config: dict[str, int]) -> str:
     )
 
 
-def metadata_paths(bundle_root: Path, image_size: int, split_config: dict[str, int]) -> tuple[Path, Path]:
+def metadata_paths(data_root: Path, image_size: int, split_config: dict[str, int]) -> tuple[Path, Path]:
     slug = split_slug(split_config)
-    processed_dir = bundle_root / "data" / "processed" / f"x{image_size}" / "wm811k_patchcore_custom"
+    processed_dir = data_root / "processed" / f"x{image_size}" / "wm811k_patchcore_custom"
     metadata_path = processed_dir / f"metadata_{slug}.csv"
     arrays_dir = processed_dir / f"arrays_{slug}"
     return metadata_path, arrays_dir
@@ -217,13 +254,13 @@ def build_labeled_split_dataframe(raw_df: pd.DataFrame, split_config: dict[str, 
 
 def prepare_dataset(
     raw_pickle: Path,
-    bundle_root: Path,
+    data_root: Path,
     image_size: int,
     split_config: dict[str, int],
     seed: int = 42,
     overwrite: bool = False,
 ) -> Path:
-    metadata_path, arrays_dir = metadata_paths(bundle_root, image_size, split_config)
+    metadata_path, arrays_dir = metadata_paths(data_root, image_size, split_config)
     if metadata_path.exists() and not overwrite:
         return metadata_path
 
@@ -241,7 +278,7 @@ def prepare_dataset(
         np.save(array_path, normalize_map(raw_map, image_size=image_size))
         records.append(
             {
-                "array_path": array_path.relative_to(bundle_root).as_posix(),
+                "array_path": array_path.relative_to(data_root).as_posix(),
                 "label": row["label"],
                 "defect_type": row["failureTypeText"] or "unlabeled",
                 "is_anomaly": int(row["label"] == LABEL_DEFECT),
@@ -302,9 +339,9 @@ def defect_type_summary(metadata: pd.DataFrame) -> pd.DataFrame:
 
 
 class WaferArrayDataset(Dataset):
-    def __init__(self, metadata_csv: str | Path, split: str, bundle_root: str | Path | None = None) -> None:
+    def __init__(self, metadata_csv: str | Path, split: str, data_root: str | Path | None = None) -> None:
         self.metadata_path = Path(metadata_csv).resolve()
-        self.bundle_root = Path(bundle_root).resolve() if bundle_root else resolve_bundle_root(self.metadata_path)
+        self.data_root = Path(data_root).resolve() if data_root else infer_data_root_from_metadata_path(self.metadata_path)
         self.metadata = pd.read_csv(self.metadata_path)
         self.metadata = self.metadata[self.metadata["split"] == split].reset_index(drop=True)
 
@@ -313,7 +350,7 @@ class WaferArrayDataset(Dataset):
 
     def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor]:
         row = self.metadata.iloc[index]
-        wafer_map = np.load(self.bundle_root / row["array_path"]).astype(np.float32)
+        wafer_map = np.load(self.data_root / row["array_path"]).astype(np.float32)
         tensor = torch.from_numpy(wafer_map).unsqueeze(0)
         label = torch.tensor(int(row["is_anomaly"]), dtype=torch.long)
         return tensor, label
@@ -789,5 +826,5 @@ def attach_scores_to_metadata(metadata: pd.DataFrame, scores_df: pd.DataFrame, t
     return scored
 
 
-def load_wafer_array(bundle_root: Path, relative_array_path: str) -> np.ndarray:
-    return np.load((bundle_root / relative_array_path).resolve())
+def load_wafer_array(data_root: Path, relative_array_path: str) -> np.ndarray:
+    return np.load((data_root / relative_array_path).resolve())

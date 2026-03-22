@@ -52,17 +52,17 @@ Relevant files:
 - [src/wafer_defect/training/patchcore.py](src/wafer_defect/training/patchcore.py)
 - [src/wafer_defect/training/vae.py](src/wafer_defect/training/vae.py)
 - [src/wafer_defect/training/svdd.py](src/wafer_defect/training/svdd.py)
-- [notebooks/02_autoencoder_training.ipynb](notebooks/02_autoencoder_training.ipynb)
-- [notebooks/05_autoencoder_batchnorm_training.ipynb](notebooks/05_autoencoder_batchnorm_training.ipynb)
-- [notebooks/06_autoencoder_batchnorm_dropout_training.ipynb](notebooks/06_autoencoder_batchnorm_dropout_training.ipynb)
-- [notebooks/07_patchcore_training.ipynb](notebooks/07_patchcore_training.ipynb)
-- [notebooks/08_autoencoder_residual_training.ipynb](notebooks/08_autoencoder_residual_training.ipynb)
-- [notebooks/09_resnet18_backbone_baseline.ipynb](notebooks/09_resnet18_backbone_baseline.ipynb)
-- [notebooks/10_patchcore_resnet18_training.ipynb](notebooks/10_patchcore_resnet18_training.ipynb)
-- [notebooks/11_patchcore_resnet50_training.ipynb](notebooks/11_patchcore_resnet50_training.ipynb)
-- [notebooks/12_ts_distillation_training.ipynb](notebooks/12_ts_distillation_training.ipynb)
-- [notebooks/03_vae_training.ipynb](notebooks/03_vae_training.ipynb)
-- [notebooks/04_svdd_training.ipynb](notebooks/04_svdd_training.ipynb)
+- [notebooks/anomaly_50k/02_autoencoder_training.ipynb](notebooks/anomaly_50k/02_autoencoder_training.ipynb)
+- [notebooks/anomaly_50k/05_autoencoder_batchnorm_training.ipynb](notebooks/anomaly_50k/05_autoencoder_batchnorm_training.ipynb)
+- [notebooks/anomaly_50k/06_autoencoder_batchnorm_dropout_training.ipynb](notebooks/anomaly_50k/06_autoencoder_batchnorm_dropout_training.ipynb)
+- [notebooks/anomaly_50k/07_patchcore_training.ipynb](notebooks/anomaly_50k/07_patchcore_training.ipynb)
+- [notebooks/anomaly_50k/08_autoencoder_residual_training.ipynb](notebooks/anomaly_50k/08_autoencoder_residual_training.ipynb)
+- [notebooks/anomaly_50k/09_resnet18_backbone_baseline.ipynb](notebooks/anomaly_50k/09_resnet18_backbone_baseline.ipynb)
+- [notebooks/anomaly_50k/10_patchcore_resnet18_training.ipynb](notebooks/anomaly_50k/10_patchcore_resnet18_training.ipynb)
+- [notebooks/anomaly_50k/11_patchcore_resnet50_training.ipynb](notebooks/anomaly_50k/11_patchcore_resnet50_training.ipynb)
+- [notebooks/anomaly_50k/12_ts_distillation_training.ipynb](notebooks/anomaly_50k/12_ts_distillation_training.ipynb)
+- [notebooks/anomaly_50k/03_vae_training.ipynb](notebooks/anomaly_50k/03_vae_training.ipynb)
+- [notebooks/anomaly_50k/04_svdd_training.ipynb](notebooks/anomaly_50k/04_svdd_training.ipynb)
 
 Data preparation:
 
@@ -373,7 +373,7 @@ Purpose:
 Configuration:
 
 - config: [train_autoencoder_batchnorm.toml](configs/training/train_autoencoder_batchnorm.toml)
-- notebook: [05_autoencoder_batchnorm_training.ipynb](notebooks/05_autoencoder_batchnorm_training.ipynb)
+- notebook: [05_autoencoder_batchnorm_training.ipynb](notebooks/anomaly_50k/05_autoencoder_batchnorm_training.ipynb)
 - artifact dir: [artifacts/x64/autoencoder_batchnorm](artifacts/x64/autoencoder_batchnorm)
 - metadata: `data/processed/x64/wm811k/metadata_50k_5pct.csv`
 - latent dimension: `128`
@@ -472,7 +472,7 @@ Purpose:
 Configuration:
 
 - config: [train_autoencoder_batchnorm_dropout.toml](configs/training/train_autoencoder_batchnorm_dropout.toml)
-- notebook: [06_autoencoder_batchnorm_dropout_training.ipynb](notebooks/06_autoencoder_batchnorm_dropout_training.ipynb)
+- notebook: [06_autoencoder_batchnorm_dropout_training.ipynb](notebooks/anomaly_50k/06_autoencoder_batchnorm_dropout_training.ipynb)
 - artifact root: [artifacts/x64/autoencoder_batchnorm_dropout](artifacts/x64/autoencoder_batchnorm_dropout)
 - metadata: `data/processed/x64/wm811k/metadata_50k_5pct.csv`
 - latent dimension: `128`
@@ -533,7 +533,7 @@ Purpose:
 Configuration:
 
 - config: [train_autoencoder_residual.toml](configs/training/train_autoencoder_residual.toml)
-- notebook: [08_autoencoder_residual_training.ipynb](notebooks/08_autoencoder_residual_training.ipynb)
+- notebook: [08_autoencoder_residual_training.ipynb](notebooks/anomaly_50k/08_autoencoder_residual_training.ipynb)
 - artifact dir: [artifacts/x64/autoencoder_residual](artifacts/x64/autoencoder_residual)
 - architecture: residual autoencoder with residual down/up blocks
 - latent dimension: `128`
@@ -724,7 +724,7 @@ Interpretation:
 
 Longer-epoch rerun using the selected score:
 
-- notebook: [02_autoencoder_training.ipynb](notebooks/02_autoencoder_training.ipynb)
+- notebook: [02_autoencoder_training.ipynb](notebooks/anomaly_50k/02_autoencoder_training.ipynb)
 - artifact dir: [artifacts/x64/autoencoder_baseline](artifacts/x64/autoencoder_baseline)
 - training override: `50` max epochs
 - actual epochs run: `43`
@@ -757,7 +757,7 @@ Interpretation of the rerun:
 
 Failure-mode analysis from the selected AE run:
 
-- notebook section: [02_autoencoder_training.ipynb](notebooks/02_autoencoder_training.ipynb)
+- notebook section: [02_autoencoder_training.ipynb](notebooks/anomaly_50k/02_autoencoder_training.ipynb)
 - evaluated on the validation-threshold predictions from the longer rerun
 - error-type counts and mean scores:
   - true positive: `145`, mean score `0.758864`
@@ -881,7 +881,7 @@ Purpose:
 Implementation:
 
 - config: [train_svdd.toml](configs/training/train_svdd.toml)
-- notebook: [04_svdd_training.ipynb](notebooks/04_svdd_training.ipynb)
+- notebook: [04_svdd_training.ipynb](notebooks/anomaly_50k/04_svdd_training.ipynb)
 - model: fixed-center Deep SVDD
 - encoder: three strided convolution blocks
 - latent dimension: `128`
@@ -923,7 +923,7 @@ Purpose:
 Implementation:
 
 - config: [train_patchcore.toml](configs/training/train_patchcore.toml)
-- notebook: [07_patchcore_training.ipynb](notebooks/07_patchcore_training.ipynb)
+- notebook: [07_patchcore_training.ipynb](notebooks/anomaly_50k/07_patchcore_training.ipynb)
 - artifact dir: [artifacts/x64/patchcore_ae_bn](artifacts/x64/patchcore_ae_bn)
 - backbone checkpoint: [best_model.pt](artifacts/x64/autoencoder_batchnorm/best_model.pt)
 - backbone source: frozen BatchNorm autoencoder encoder
@@ -999,7 +999,7 @@ Purpose:
 Implementation:
 
 - config: [train_resnet18_backbone.toml](configs/training/train_resnet18_backbone.toml)
-- notebook: [09_resnet18_backbone_baseline.ipynb](notebooks/09_resnet18_backbone_baseline.ipynb)
+- notebook: [09_resnet18_backbone_baseline.ipynb](notebooks/anomaly_50k/09_resnet18_backbone_baseline.ipynb)
 - artifact dir: [artifacts/x64/resnet18_embedding_baseline](artifacts/x64/resnet18_embedding_baseline)
 - backbone: ImageNet-pretrained `ResNet18`
 - input adaptation: RGB stem averaged into a single-channel wafer input stem
@@ -1061,7 +1061,7 @@ Purpose:
 Implementation:
 
 - config: [train_patchcore_resnet18.toml](configs/training/train_patchcore_resnet18.toml)
-- notebook: [10_patchcore_resnet18_training.ipynb](notebooks/10_patchcore_resnet18_training.ipynb)
+- notebook: [10_patchcore_resnet18_training.ipynb](notebooks/anomaly_50k/10_patchcore_resnet18_training.ipynb)
 - artifact dir: [artifacts/x64/patchcore_resnet18](artifacts/x64/patchcore_resnet18)
 - backbone: frozen ImageNet-pretrained `ResNet18`
 - input adaptation: single-channel wafer maps resized internally to `224x224`
@@ -1131,7 +1131,7 @@ Purpose:
 Implementation:
 
 - config: [train_patchcore_resnet50.toml](configs/training/train_patchcore_resnet50.toml)
-- notebook: [11_patchcore_resnet50_training.ipynb](notebooks/11_patchcore_resnet50_training.ipynb)
+- notebook: [11_patchcore_resnet50_training.ipynb](notebooks/anomaly_50k/11_patchcore_resnet50_training.ipynb)
 - artifact dir: [artifacts/x64/patchcore_resnet50](artifacts/x64/patchcore_resnet50)
 - backbone: frozen ImageNet-pretrained `ResNet50`
 - input adaptation: single-channel wafer maps resized internally to `224x224`
@@ -1203,7 +1203,7 @@ Purpose:
 Implementation:
 
 - config: [train_patchcore_wideresnet50_multilayer.toml](configs/training/train_patchcore_wideresnet50_multilayer.toml)
-- notebook: [18-patchcore-wideresnet50-multilayer.ipynb](notebooks/18-patchcore-wideresnet50-multilayer.ipynb)
+- notebook: [18-patchcore-wideresnet50-multilayer.ipynb](notebooks/anomaly_50k/18-patchcore-wideresnet50-multilayer.ipynb)
 - artifact dir: [artifacts/x64/WRN-Patchcore-Modal](artifacts/x64/WRN-Patchcore-Modal)
 - execution note: repo-runnable all-in-one notebook, with the heavy run completed on Modal and then imported back into the repo artifacts
 - backbone: frozen ImageNet-pretrained `WideResNet50-2`
@@ -1295,7 +1295,7 @@ Purpose:
 Implementation:
 
 - config: [train_ts_resnet18.toml](configs/training/train_ts_resnet18.toml)
-- notebook: [12_ts_distillation_training.ipynb](notebooks/12_ts_distillation_training.ipynb)
+- notebook: [12_ts_distillation_training.ipynb](notebooks/anomaly_50k/12_ts_distillation_training.ipynb)
 - training script: [train_ts_distillation.py](scripts/train_ts_distillation.py)
 - artifact dir: [artifacts/x64/ts_resnet18](artifacts/x64/ts_resnet18)
 - model: teacher-student distillation detector with a frozen teacher backbone, a lightweight student CNN, and an auxiliary feature autoencoder
@@ -1392,8 +1392,8 @@ Purpose:
 
 Implementation:
 
-- main repo notebook: [13_ts_resnet50_kaggle_import_analysis.ipynb](notebooks/13_ts_resnet50_kaggle_import_analysis.ipynb)
-- repo layer-comparison notebook: [14_ts_resnet50_teacher_layer_ablation_analysis.ipynb](notebooks/14_ts_resnet50_teacher_layer_ablation_analysis.ipynb)
+- main repo notebook: [13_ts_resnet50_kaggle_import_analysis.ipynb](notebooks/anomaly_50k/13_ts_resnet50_kaggle_import_analysis.ipynb)
+- repo layer-comparison notebook: [14_ts_resnet50_teacher_layer_ablation_analysis.ipynb](notebooks/anomaly_50k/14_ts_resnet50_teacher_layer_ablation_analysis.ipynb)
 - local import config: [train_ts_resnet50_kaggle.toml](configs/training/train_ts_resnet50_kaggle.toml)
 - training entry point: [train_ts_distillation.py](scripts/train_ts_distillation.py)
 - evaluation entry point: [evaluate_reconstruction_model.py](scripts/evaluate_reconstruction_model.py)
@@ -1533,7 +1533,7 @@ Purpose:
 Implementation:
 
 - config: [train_wideresnet50_backbone.toml](configs/training/train_wideresnet50_backbone.toml)
-- notebook: [15_wideresnet50_2_backbone_baseline.ipynb](notebooks/15_wideresnet50_2_backbone_baseline.ipynb)
+- notebook: [15_wideresnet50_2_backbone_baseline.ipynb](notebooks/anomaly_50k/15_wideresnet50_2_backbone_baseline.ipynb)
 - artifact dir: [artifacts/x64/wideresnet50_embedding_baseline](artifacts/x64/wideresnet50_embedding_baseline)
 - model: frozen ImageNet-pretrained `WideResNet50-2` adapted to single-channel wafer maps
 - score: embedding center-distance from the train-normal feature center
@@ -1577,7 +1577,7 @@ Purpose:
 Implementation:
 
 - config reference: [train_ts_wideresnet50.toml](configs/training/train_ts_wideresnet50.toml)
-- notebook: [16-ts-wideresnet50-training-all-in-one.ipynb](notebooks/16-ts-wideresnet50-training-all-in-one.ipynb)
+- notebook: [16-ts-wideresnet50-training-all-in-one.ipynb](notebooks/anomaly_50k/16-ts-wideresnet50-training-all-in-one.ipynb)
 - teacher backbone: frozen ImageNet-pretrained `WideResNet50-2`
 - teacher feature layer: `layer2`
 - input adaptation: single-channel wafer maps resized internally to `224x224`
@@ -1638,7 +1638,7 @@ Purpose:
 
 Implementation:
 
-- notebook: [17-ts-wideresnet50-training-multilayer.ipynb](notebooks/17-ts-wideresnet50-training-multilayer.ipynb)
+- notebook: [17-ts-wideresnet50-training-multilayer.ipynb](notebooks/anomaly_50k/17-ts-wideresnet50-training-multilayer.ipynb)
 - artifact dir: [artifacts/x64/wideresnet50_2_modal](artifacts/x64/wideresnet50_2_modal)
 - teacher backbone: frozen ImageNet-pretrained `WideResNet50-2`
 - teacher layers: `layer2` and `layer3`
@@ -1713,7 +1713,7 @@ Purpose:
 Implementation:
 
 - config: [train_patchcore_wideresnet50_multilayer.toml](configs/training/train_patchcore_wideresnet50_multilayer.toml)
-- notebook: [18-patchcore-wideresnet50-multilayer.ipynb](notebooks/18-patchcore-wideresnet50-multilayer.ipynb)
+- notebook: [18-patchcore-wideresnet50-multilayer.ipynb](notebooks/anomaly_50k/18-patchcore-wideresnet50-multilayer.ipynb)
 - artifact dir: [artifacts/x64/WRN-Patchcore-Modal](artifacts/x64/WRN-Patchcore-Modal)
 - execution note: all-in-one notebook prepared in-repo, with the heavy run executed on Modal and the outputs copied back into the repo artifacts
 - teacher backbone: frozen ImageNet-pretrained `WideResNet50-2`
@@ -1779,8 +1779,8 @@ Purpose:
 
 Implementation:
 
-- repo notebook: [19_fastflow_training.ipynb](notebooks/19_fastflow_training.ipynb)
-- Modal all-in-one notebook: [19A_fastflow_all_in_one.ipynb](notebooks/19A_fastflow_all_in_one.ipynb)
+- repo notebook: [19_fastflow_training.ipynb](notebooks/anomaly_50k/19_fastflow_training.ipynb)
+- Modal all-in-one notebook: [19A_fastflow_all_in_one.ipynb](notebooks/anomaly_50k/19A_fastflow_all_in_one.ipynb)
 - execution note: the ablation sweep was executed on Modal using the self-contained `19A` notebook
 - backbone: frozen ImageNet-pretrained `WideResNet50-2`
 - input adaptation: single-channel wafer maps resized internally to `224x224`
@@ -1864,7 +1864,7 @@ Purpose:
 
 Implementation:
 
-- notebook: [20_score_ensemble_analysis.ipynb](notebooks/20_score_ensemble_analysis.ipynb)
+- notebook: [20_score_ensemble_analysis.ipynb](notebooks/anomaly_50k/20_score_ensemble_analysis.ipynb)
 - artifact dir: [artifacts/x64/ensemble_patchcore_ts_res50](artifacts/x64/ensemble_patchcore_ts_res50)
 - base models:
   - `PatchCore-WideRes50-topk-mb50k-r010`
@@ -1980,3 +1980,4 @@ Recommended follow-up work:
 - if more teacher-student distillation work is justified, tune it from the new `TS-Res50` selected-score baseline: teacher layer choice, student capacity, branch weighting, and wafer-level reduction are higher-priority than longer training alone
 - if more PatchCore work is justified, tune the multilayer WideResNet50-2 branch first around the `topk_mean` ratio band near `0.05` to `0.10` before returning to older backbones
 - keep the validation-derived threshold as the main reported result, and treat test-set threshold sweeps as analysis only
+
