@@ -198,7 +198,7 @@ The default config locations are now:
 After preparing the dataset, use the notebooks for the main experiments. The notebook folders are now split by workflow:
 
 - `notebooks/anomaly_50k/` for the original anomaly-detection sequence on the `50k` benchmark split
-- `notebooks/anomaly_120k_labeled/` for larger labeled anomaly-detection workflows, currently including `patchcore_wrn50/`
+- `notebooks/anomaly_120k_labeled/` for larger labeled anomaly-detection workflows, currently including `patchcore_wrn50/` and `ts_resnet50/`
 - `notebooks/classifier/` for the multiclass classification workflow
 
 Main anomaly-detection notebooks on the original `50k` benchmark split:

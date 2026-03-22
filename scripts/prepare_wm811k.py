@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn.functional as F
+from tqdm.auto import tqdm
 
 from wafer_defect.config import load_toml
 from wafer_defect.data.legacy_pickle import read_legacy_pickle, unwrap_legacy_value
@@ -311,7 +312,13 @@ def main() -> None:
     records: list[dict[str, object]] = []
     repo_root = Path(__file__).resolve().parents[1]
 
-    for row_index, row in export_df.iterrows():
+    iterator = tqdm(
+        export_df.iterrows(),
+        total=len(export_df),
+        desc="prepare_wm811k",
+        leave=True,
+    )
+    for row_index, row in iterator:
         file_name = f"wafer_{row_index:07d}.npy"
         array_path = arrays_dir / file_name
         raw_map = np.asarray(row["waferMap"])
@@ -330,6 +337,7 @@ def main() -> None:
                 "original_width": int(raw_map.shape[1]),
             }
         )
+        iterator.set_postfix(split=str(row["split"]))
 
     metadata = pd.DataFrame(records)
     metadata.to_csv(metadata_path, index=False)

@@ -6,6 +6,7 @@ from __future__ import annotations
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
+from tqdm.auto import tqdm
 
 from wafer_defect.training.common import EpochMetrics
 
@@ -15,6 +16,7 @@ def run_ts_epoch(
     dataloader: DataLoader,
     device: torch.device,
     optimizer: torch.optim.Optimizer | None = None,
+    desc: str | None = None,
 ) -> EpochMetrics:
     is_training = optimizer is not None
     model.train(is_training)
@@ -26,7 +28,11 @@ def run_ts_epoch(
     total_autoencoder_loss = 0.0
     total_items = 0
 
-    for inputs, labels in dataloader:
+    iterator = dataloader
+    if desc is not None:
+        iterator = tqdm(dataloader, desc=desc, leave=False)
+
+    for inputs, labels in iterator:
         inputs = inputs.to(device)
         labels = labels.to(device)
 
@@ -50,6 +56,12 @@ def run_ts_epoch(
         total_student_loss += student_loss.item() * batch_size
         total_autoencoder_loss += autoencoder_loss.item() * batch_size
         total_items += batch_size
+        if desc is not None:
+            iterator.set_postfix(
+                loss=f"{(total_loss / max(total_items, 1)):.4f}",
+                distill=f"{(total_student_loss / max(total_items, 1)):.4f}",
+                feat_ae=f"{(total_autoencoder_loss / max(total_items, 1)):.4f}",
+            )
 
     average_loss = total_loss / max(total_items, 1)
     average_student_loss = total_student_loss / max(total_items, 1)

@@ -62,6 +62,12 @@ def main() -> None:
         num_workers=int(config["data"]["num_workers"]),
     )
 
+    print(
+        f"Training TS distillation | train={len(train_dataset)} | val={len(val_dataset)} "
+        f"| batch_size={int(config['data']['batch_size'])} | output_dir={output_dir}",
+        flush=True,
+    )
+
     model = build_ts_distillation_from_config(config, image_size=image_size).to(device)
     optimizer = torch.optim.Adam(
         (parameter for parameter in model.parameters() if parameter.requires_grad),
@@ -96,8 +102,19 @@ def main() -> None:
         print(f"Resumed from {resume_path} at epoch {start_epoch}", flush=True)
 
     for epoch in range(start_epoch, int(config["training"]["epochs"])):
-        train_metrics = run_ts_epoch(model, train_loader, device, optimizer=optimizer)
-        val_metrics = run_ts_epoch(model, val_loader, device)
+        train_metrics = run_ts_epoch(
+            model,
+            train_loader,
+            device,
+            optimizer=optimizer,
+            desc=f"train:e{epoch + 1}",
+        )
+        val_metrics = run_ts_epoch(
+            model,
+            val_loader,
+            device,
+            desc=f"val:e{epoch + 1}",
+        )
         record = {
             "epoch": epoch + 1,
             "train_loss": train_metrics.loss,

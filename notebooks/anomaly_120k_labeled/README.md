@@ -6,6 +6,8 @@ Current subfolders:
 
 - `patchcore_wrn50/`
   Dedicated WideResNet50-2 PatchCore workflow for the labeled `120k / 10k / 20k` split.
+- `ts_resnet50/`
+  Teacher-student ResNet50 workflow for the same larger labeled split.
 
 Why this folder exists:
 
