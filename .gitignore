@@ -6,6 +6,7 @@
 /uploads/
 /kaggle_outputs/
 /kaggle_upload/
+/notebooks/anomaly_120k_labeled/patchcore_wrn50/
 
 # Python caches and local environments
 .torch-cache/

@@ -198,7 +198,7 @@ The default config locations are now:
 After preparing the dataset, use the notebooks for the main experiments. The notebook folders are now split by workflow:
 
 - `notebooks/anomaly_50k/` for the original anomaly-detection sequence on the `50k` benchmark split
-- `notebooks/anomaly_120k_labeled/` for larger labeled anomaly-detection workflows, currently including `patchcore_wrn50/`
+- `notebooks/anomaly_120k_labeled/` for larger labeled anomaly-detection workflows, including the root-level WRN50 PatchCore sequence and `ts_resnet50/`
 - `notebooks/classifier/` for the multiclass classification workflow
 
 Main anomaly-detection notebooks on the original `50k` benchmark split:
@@ -229,8 +229,8 @@ Main anomaly-detection notebooks on the original `50k` benchmark split:
   Train and evaluate the teacher-student distillation detector, including optional shared evaluation and ablation cells.
 - `notebooks/anomaly_50k/13_ts_resnet50_kaggle_import_analysis.ipynb`
   Inspect the Kaggle-imported teacher-student ResNet50 results and compare imported artifacts before final reporting.
-- `notebooks/anomaly_120k_labeled/patchcore_wrn50/`
-  Dedicated WRN50 PatchCore workflow for the larger labeled split, including dataset prep, training review, and threshold-policy analysis.
+- `notebooks/anomaly_120k_labeled/`
+  Dedicated labeled-split anomaly folder containing the WRN50 PatchCore workflow at the folder root plus the `ts_resnet50/` pilot notebook.
 - `notebooks/classifier/1_multiclass_classifier_training.ipynb`
   Prepare the `50k` labeled multiclass subset and train/evaluate the classifier without generating unlabeled predictions automatically.
   The current training config runs for up to `80` epochs with learning-rate decay and early stopping, saves the best checkpoint by validation balanced accuracy, and marks only high-confidence unlabeled predictions as safe pseudo-label candidates.

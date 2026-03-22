@@ -1,0 +1,34 @@
+[run]
+output_dir = "artifacts/x64/ts_resnet50_120k"
+seed = 42
+
+[data]
+metadata_csv = "data/processed/x64/wm811k_patchcore_custom/metadata_train120000_a6000_val10000_a500_test20000_a1000.csv"
+image_size = 64
+batch_size = 16
+num_workers = 0
+
+[training]
+epochs = 30
+learning_rate = 0.0003
+weight_decay = 0.00001
+device = "auto"
+early_stopping_patience = 5
+early_stopping_min_delta = 0.0001
+checkpoint_every = 5
+resume_from = ""
+
+[model]
+type = "ts_distillation"
+teacher_backbone = "resnet50"
+teacher_layer = "layer2"
+teacher_pretrained = true
+teacher_input_size = 224
+normalize_teacher_input = true
+feature_autoencoder_hidden_dim = 128
+student_weight = 1.0
+autoencoder_weight = 1.0
+score_student_weight = 1.0
+score_autoencoder_weight = 0.0
+reduction = "topk_mean"
+topk_ratio = 0.20
