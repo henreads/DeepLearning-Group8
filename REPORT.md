@@ -52,17 +52,17 @@ Relevant files:
 - [src/wafer_defect/training/patchcore.py](src/wafer_defect/training/patchcore.py)
 - [src/wafer_defect/training/vae.py](src/wafer_defect/training/vae.py)
 - [src/wafer_defect/training/svdd.py](src/wafer_defect/training/svdd.py)
-- [notebooks/02_autoencoder_training.ipynb](notebooks/02_autoencoder_training.ipynb)
-- [notebooks/05_autoencoder_batchnorm_training.ipynb](notebooks/05_autoencoder_batchnorm_training.ipynb)
-- [notebooks/06_autoencoder_batchnorm_dropout_training.ipynb](notebooks/06_autoencoder_batchnorm_dropout_training.ipynb)
-- [notebooks/07_patchcore_training.ipynb](notebooks/07_patchcore_training.ipynb)
-- [notebooks/08_autoencoder_residual_training.ipynb](notebooks/08_autoencoder_residual_training.ipynb)
-- [notebooks/09_resnet18_backbone_baseline.ipynb](notebooks/09_resnet18_backbone_baseline.ipynb)
-- [notebooks/10_patchcore_resnet18_training.ipynb](notebooks/10_patchcore_resnet18_training.ipynb)
-- [notebooks/11_patchcore_resnet50_training.ipynb](notebooks/11_patchcore_resnet50_training.ipynb)
-- [notebooks/12_ts_distillation_training.ipynb](notebooks/12_ts_distillation_training.ipynb)
-- [notebooks/03_vae_training.ipynb](notebooks/03_vae_training.ipynb)
-- [notebooks/04_svdd_training.ipynb](notebooks/04_svdd_training.ipynb)
+- [notebooks/anomaly_50k/02_autoencoder_training.ipynb](notebooks/anomaly_50k/02_autoencoder_training.ipynb)
+- [notebooks/anomaly_50k/05_autoencoder_batchnorm_training.ipynb](notebooks/anomaly_50k/05_autoencoder_batchnorm_training.ipynb)
+- [notebooks/anomaly_50k/06_autoencoder_batchnorm_dropout_training.ipynb](notebooks/anomaly_50k/06_autoencoder_batchnorm_dropout_training.ipynb)
+- [notebooks/anomaly_50k/07_patchcore_training.ipynb](notebooks/anomaly_50k/07_patchcore_training.ipynb)
+- [notebooks/anomaly_50k/08_autoencoder_residual_training.ipynb](notebooks/anomaly_50k/08_autoencoder_residual_training.ipynb)
+- [notebooks/anomaly_50k/09_resnet18_backbone_baseline.ipynb](notebooks/anomaly_50k/09_resnet18_backbone_baseline.ipynb)
+- [notebooks/anomaly_50k/10_patchcore_resnet18_training.ipynb](notebooks/anomaly_50k/10_patchcore_resnet18_training.ipynb)
+- [notebooks/anomaly_50k/11_patchcore_resnet50_training.ipynb](notebooks/anomaly_50k/11_patchcore_resnet50_training.ipynb)
+- [notebooks/anomaly_50k/12_ts_distillation_training.ipynb](notebooks/anomaly_50k/12_ts_distillation_training.ipynb)
+- [notebooks/anomaly_50k/03_vae_training.ipynb](notebooks/anomaly_50k/03_vae_training.ipynb)
+- [notebooks/anomaly_50k/04_svdd_training.ipynb](notebooks/anomaly_50k/04_svdd_training.ipynb)
 
 Data preparation:
 
@@ -103,11 +103,13 @@ Main comparison across completed experiments:
 | experiment    | model       | score | image size | val-threshold precision | val-threshold recall | val-threshold F1 | AUROC      | AUPRC      | best sweep F1 |
 | ------------- | ----------- | ----- | ---------- | ----------------------- | -------------------- | ---------------- | ---------- | ---------- | ------------- |
 | PatchCore-WideRes50-topk-mb50k-r010 | PatchCore + WideResNet50-2 (`layer2` + `layer3`) | `topk_mean` | `64x64`    | `0.421546`              | `0.720000`           | `0.531758`       | `0.916943` | `0.561855` | `0.585774`    |
+| Ensemble-PatchCore-TSRes50-maxpair | Score ensemble of PatchCore-WideRes50-topk-mb50k-r010 + TS-Res50-mixed-topk20 | `max` on normalized scores | `64x64`    | `0.422434`              | `0.708000`           | `0.529148`       | `0.916330` | `0.611277` | `0.619718`    |
 | PatchCore-WideRes50-topk-mb50k-r015 | PatchCore + WideResNet50-2 (`layer2` + `layer3`) | `topk_mean` | `64x64`    | `0.420673`              | `0.700000`           | `0.525526`       | `0.911559` | `0.548919` | `0.592902`    |
 | PatchCore-WideRes50-topk-mb50k-r005 | PatchCore + WideResNet50-2 (`layer2` + `layer3`) | `topk_mean` | `64x64`    | `0.415888`              | `0.712000`           | `0.525074`       | `0.920518` | `0.563612` | `0.579281`    |
 | TS-Res50-mixed-topk20 | Teacher-Student Distillation + ResNet50 Teacher Backbone | `topk_mean` | `64x64`    | `0.418052`              | `0.704000`           | `0.524590`       | `0.909189` | `0.599169` | `0.606299`    |
 | TS-WideRes50-multilayer-mixed-topk15 | Teacher-Student Distillation + WideResNet50-2 Teacher Backbone (`layer2` + `layer3`) | `topk_mean` | `64x64`    | `0.421951`              | `0.692000`           | `0.524242`       | `0.923114` | `0.546305` | `0.560928`    |
 | PatchCore-WideRes50-topk-mb50k-r020 | PatchCore + WideResNet50-2 (`layer2` + `layer3`) | `topk_mean` | `64x64`    | `0.408451`              | `0.696000`           | `0.514793`       | `0.906730` | `0.533386` | `0.585657`    |
+| FastFlow-WideRes50-l23-s4-mean | FastFlow + WideResNet50-2 (`layer2` + `layer3`), `4` flow steps | `mean` | `64x64`    | `0.420253`              | `0.664000`           | `0.514729`       | `0.880458` | `0.533389` | `0.514729`    |
 | TS-WideRes50-layer2-mixed-topk25 | Teacher-Student Distillation + WideResNet50-2 Teacher Backbone | `topk_mean` | `64x64`    | `0.404651`              | `0.696000`           | `0.511765`       | `0.903371` | `0.512148` | `0.526316`    |
 | PatchCore-WideRes50-topk-mb50k-r025 | PatchCore + WideResNet50-2 (`layer2` + `layer3`) | `topk_mean` | `64x64`    | `0.398169`              | `0.696000`           | `0.506550`       | `0.902348` | `0.518213` | `0.575488`    |
 | TS-Res50-layer1-mixed-topk10 | Teacher-Student Distillation + ResNet50 Teacher Backbone | `topk_mean` | `64x64`    | `0.407862`              | `0.664000`           | `0.505327`       | `0.872754` | `0.527526` | `0.547284`    |
@@ -184,25 +186,26 @@ Current top ranking:
 This ranking is based mainly on `val-threshold F1`, with the other metrics used as supporting evidence.
 
 1. PatchCore + WideResNet50-2 multilayer `layer2 + layer3` `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.10`
-2. PatchCore + WideResNet50-2 multilayer `layer2 + layer3` `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.15`
-3. PatchCore + WideResNet50-2 multilayer `layer2 + layer3` `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.05`
-4. Teacher-student distillation + ResNet50 teacher `64x64` with mixed student+autoencoder `topk_mean`, top-k ratio `0.20`
-5. Teacher-student distillation + WideResNet50-2 teacher `64x64` with multilayer `layer2 + layer3`, mixed student+autoencoder `topk_mean`, top-k ratio `0.15`
-6. PatchCore + WideResNet50-2 multilayer `layer2 + layer3` `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.20`
-7. Teacher-student distillation + WideResNet50-2 teacher `64x64` with `layer2`, mixed student+autoencoder `topk_mean`, top-k ratio `0.25`
-8. PatchCore + WideResNet50-2 multilayer `layer2 + layer3` `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.25`
-9. Teacher-student distillation + ResNet50 teacher `64x64` with `layer1`, mixed student+autoencoder `topk_mean`, top-k ratio `0.10`
-10. Autoencoder + BatchNorm `64x64` with `max_abs`
-11. Teacher-student distillation + ResNet18 teacher `64x64` with student-only `topk_mean`, top-k ratio `0.20`
-12. Autoencoder + BatchNorm + Dropout `0.00` `64x64` with `max_abs`
-13. Autoencoder + BatchNorm + Dropout `0.10` `64x64` with `max_abs`
-14. PatchCore + WideResNet50-2 multilayer `layer2 + layer3` `64x64`, `mean`, memory bank `50k`
-15. Autoencoder + BatchNorm + Dropout `0.05` `64x64` with `max_abs`
-16. Residual autoencoder `64x64` with `max_abs`
-17. Autoencoder + BatchNorm + Dropout `0.20` `64x64` with `max_abs`
-18. Autoencoder `64x64` with `topk_abs_mean`
-19. PatchCore + WideResNet50-2 multilayer `layer2 + layer3` `64x64`, `mean`, memory bank `20k`
-20. Autoencoder `64x64` with `topk_abs_mean`, longer-epoch rerun
+2. Score ensemble of WRN PatchCore + `TS-Res50` with normalized-score `max` fusion
+3. PatchCore + WideResNet50-2 multilayer `layer2 + layer3` `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.15`
+4. PatchCore + WideResNet50-2 multilayer `layer2 + layer3` `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.05`
+5. Teacher-student distillation + ResNet50 teacher `64x64` with mixed student+autoencoder `topk_mean`, top-k ratio `0.20`
+6. Teacher-student distillation + WideResNet50-2 teacher `64x64` with multilayer `layer2 + layer3`, mixed student+autoencoder `topk_mean`, top-k ratio `0.15`
+7. PatchCore + WideResNet50-2 multilayer `layer2 + layer3` `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.20`
+8. FastFlow + WideResNet50-2 multilayer `layer2 + layer3` `64x64`, `4` flow steps, with `mean`
+9. Teacher-student distillation + WideResNet50-2 teacher `64x64` with `layer2`, mixed student+autoencoder `topk_mean`, top-k ratio `0.25`
+10. PatchCore + WideResNet50-2 multilayer `layer2 + layer3` `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.25`
+11. Teacher-student distillation + ResNet50 teacher `64x64` with `layer1`, mixed student+autoencoder `topk_mean`, top-k ratio `0.10`
+12. Autoencoder + BatchNorm `64x64` with `max_abs`
+13. Teacher-student distillation + ResNet18 teacher `64x64` with student-only `topk_mean`, top-k ratio `0.20`
+14. Autoencoder + BatchNorm + Dropout `0.00` `64x64` with `max_abs`
+15. Autoencoder + BatchNorm + Dropout `0.10` `64x64` with `max_abs`
+16. PatchCore + WideResNet50-2 multilayer `layer2 + layer3` `64x64`, `mean`, memory bank `50k`
+17. Autoencoder + BatchNorm + Dropout `0.05` `64x64` with `max_abs`
+18. Residual autoencoder `64x64` with `max_abs`
+19. Autoencoder + BatchNorm + Dropout `0.20` `64x64` with `max_abs`
+20. Autoencoder `64x64` with `topk_abs_mean`
+21. PatchCore + WideResNet50-2 multilayer `layer2 + layer3` `64x64`, `mean`, memory bank `20k`
 
 High-level interpretation:
 
@@ -228,9 +231,60 @@ High-level interpretation:
 - once the teacher-student checkpoint was rescored with a student-only `topk_mean` rule and a wider top-k ratio, it became a genuinely competitive validation-threshold result rather than a failed branch
 - this is the strongest evidence so far that architecture and anomaly scoring interact very strongly in this project; a weak default score can hide a strong checkpoint
 - teacher-student distillation still remains extremely strong: `TS-Res50` keeps the best reported `AUPRC` and best-sweep F1, while the multilayer `TS-WideRes50` run still holds the highest AUROC in the report
+- the full FastFlow `19A` sweep improved materially over the first completed flow run; the best variant was the multilayer `WideResNet50-2` model with `4` flow steps and plain `mean` reduction, reaching `F1 = 0.514729`
+- that best FastFlow run moved into the upper tier of the report and now sits very close to the strongest PatchCore and teacher-student family members, though it still remains below the best multilayer `WideResNet50-2` PatchCore result
+- the first score-level ensemble study was competitive but not decisive: the best true fusion, normalized-score `max` over WRN PatchCore and `TS-Res50`, reached `F1 = 0.529148` and a much stronger `AUPRC = 0.611277`, but it still did not beat the standalone WRN PatchCore leader on the main deployed F1 metric
+- the FastFlow family still follows the same defect pattern seen elsewhere in the project: broad defects such as `Edge-Ring` are much easier than smaller local defects such as `Scratch`, `Loc`, and `Edge-Loc`
 - Deep SVDD had especially weak AUPRC, which suggests poorer ranking quality under class imbalance
 - local-error-focused scoring appears more effective than full-image averaging on wafer maps
 - all tested approaches learn a real anomaly signal, but class separation is still only moderate
+
+## Cross-Model Defect Breakdown
+
+To compare what each strong family is actually good at, I compiled the selected per-defect breakdowns for the strongest representative runs that have trustworthy saved artifact outputs:
+
+- `AE-64-BN-max`
+- `TS-Res18-student-topk20`
+- `TS-Res50-s2_a1_topk_mean_r0.20`
+- `WideRes50-center`
+- `PatchCore-WideRes50-topk-mb50k-r010`
+- `FastFlow-WideRes50-l23-s4-mean`
+
+Per-defect recall comparison:
+
+| defect type | AE-64-BN-max | TS-Res18-student-topk20 | TS-Res50-s2_a1_topk_mean_r0.20 | WideRes50-center | PatchCore-WideRes50-topk-mb50k-r010 | FastFlow-WideRes50-l23-s4-mean |
+| ----------- | ------------ | ----------------------- | ------------------------------ | ---------------- | ----------------------------------- | ------------------------------ |
+| `Scratch` | `0.466667` | `0.333333` | `0.333333` | `0.200000` | `0.533333` | `0.200000` |
+| `Loc` | `0.294118` | `0.441176` | `0.558824` | `0.176471` | `0.558824` | `0.558824` |
+| `Edge-Loc` | `0.471698` | `0.490566` | `0.490566` | `0.132075` | `0.584906` | `0.547170` |
+| `Center` | `0.800000` | `0.620000` | `0.720000` | `0.140000` | `0.620000` | `0.720000` |
+| `Donut` | `0.571429` | `0.714286` | `0.714286` | `0.285714` | `1.000000` | `0.714286` |
+| `Edge-Ring` | `0.892857` | `0.857143` | `0.928571` | `0.464286` | `0.916667` | `0.797619` |
+| `Random` | `0.800000` | `1.000000` | `1.000000` | `0.600000` | `1.000000` | `1.000000` |
+| `Near-full` | `1.000000` | `1.000000` | `1.000000` | `0.000000` | `1.000000` | `1.000000` |
+
+Best model by defect type:
+
+| defect type | best model | best recall |
+| ----------- | ---------- | ----------- |
+| `Scratch` | `PatchCore-WideRes50-topk-mb50k-r010` | `0.533333` |
+| `Loc` | `TS-Res50-s2_a1_topk_mean_r0.20`, `PatchCore-WideRes50-topk-mb50k-r010`, and `FastFlow-WideRes50-l23-s4-mean` (tie) | `0.558824` |
+| `Edge-Loc` | `PatchCore-WideRes50-topk-mb50k-r010` | `0.584906` |
+| `Center` | `AE-64-BN-max` | `0.800000` |
+| `Donut` | `PatchCore-WideRes50-topk-mb50k-r010` | `1.000000` |
+| `Edge-Ring` | `TS-Res50-s2_a1_topk_mean_r0.20` | `0.928571` |
+| `Random` | multiple models tie | `1.000000` |
+| `Near-full` | multiple models tie | `1.000000` |
+
+Interpretation:
+
+- the strongest `Scratch` and `Edge-Loc` detector among the compared selected runs is the best multilayer `WideResNet50-2` PatchCore variant, which supports the idea that local patch aggregation is still the most reliable approach for small localized defects
+- `Loc` is much less one-sided: the best `PatchCore`, best `TS-Res50`, and best `FastFlow` selected runs all tie at `0.558824`, which suggests this defect family is learnable through multiple mechanisms once the scoring rule is tuned properly
+- `Center` is the one clear category where the simpler `AE-64-BN-max` run is still strongest, reaching `0.800000`; this matches the broader observation that broader and more centrally distributed anomaly structure is easier for reconstruction-style models than tiny local defects
+- `Edge-Ring` is led by `TS-Res50` at `0.928571`, with the best `PatchCore` very close behind at `0.916667`; both are clearly strong on larger structured rings
+- the plain `WideRes50-center` baseline remains weak on almost every defect type, which reinforces the earlier conclusion that a strong pretrained backbone alone is not enough without a better local anomaly scoring rule
+- `FastFlow` is competitive on `Loc`, `Edge-Loc`, `Center`, and the easier broad-defect categories, but it is still clearly weak on `Scratch`, which is the same hard local regime that also separates the winning PatchCore run from the rest of the leaderboard
+- the saved multilayer `TS-WideRes50` defect-breakdown recomputation was not included in this cross-model table because the reconstructed per-defect output was internally inconsistent with its saved summary metrics; it should be recomputed cleanly before being used in the final apples-to-apples defect comparison
 
 ## Evaluation Rule
 
@@ -319,7 +373,7 @@ Purpose:
 Configuration:
 
 - config: [train_autoencoder_batchnorm.toml](configs/training/train_autoencoder_batchnorm.toml)
-- notebook: [05_autoencoder_batchnorm_training.ipynb](notebooks/05_autoencoder_batchnorm_training.ipynb)
+- notebook: [05_autoencoder_batchnorm_training.ipynb](notebooks/anomaly_50k/05_autoencoder_batchnorm_training.ipynb)
 - artifact dir: [artifacts/x64/autoencoder_batchnorm](artifacts/x64/autoencoder_batchnorm)
 - metadata: `data/processed/x64/wm811k/metadata_50k_5pct.csv`
 - latent dimension: `128`
@@ -418,7 +472,7 @@ Purpose:
 Configuration:
 
 - config: [train_autoencoder_batchnorm_dropout.toml](configs/training/train_autoencoder_batchnorm_dropout.toml)
-- notebook: [06_autoencoder_batchnorm_dropout_training.ipynb](notebooks/06_autoencoder_batchnorm_dropout_training.ipynb)
+- notebook: [06_autoencoder_batchnorm_dropout_training.ipynb](notebooks/anomaly_50k/06_autoencoder_batchnorm_dropout_training.ipynb)
 - artifact root: [artifacts/x64/autoencoder_batchnorm_dropout](artifacts/x64/autoencoder_batchnorm_dropout)
 - metadata: `data/processed/x64/wm811k/metadata_50k_5pct.csv`
 - latent dimension: `128`
@@ -479,7 +533,7 @@ Purpose:
 Configuration:
 
 - config: [train_autoencoder_residual.toml](configs/training/train_autoencoder_residual.toml)
-- notebook: [08_autoencoder_residual_training.ipynb](notebooks/08_autoencoder_residual_training.ipynb)
+- notebook: [08_autoencoder_residual_training.ipynb](notebooks/anomaly_50k/08_autoencoder_residual_training.ipynb)
 - artifact dir: [artifacts/x64/autoencoder_residual](artifacts/x64/autoencoder_residual)
 - architecture: residual autoencoder with residual down/up blocks
 - latent dimension: `128`
@@ -670,7 +724,7 @@ Interpretation:
 
 Longer-epoch rerun using the selected score:
 
-- notebook: [02_autoencoder_training.ipynb](notebooks/02_autoencoder_training.ipynb)
+- notebook: [02_autoencoder_training.ipynb](notebooks/anomaly_50k/02_autoencoder_training.ipynb)
 - artifact dir: [artifacts/x64/autoencoder_baseline](artifacts/x64/autoencoder_baseline)
 - training override: `50` max epochs
 - actual epochs run: `43`
@@ -703,7 +757,7 @@ Interpretation of the rerun:
 
 Failure-mode analysis from the selected AE run:
 
-- notebook section: [02_autoencoder_training.ipynb](notebooks/02_autoencoder_training.ipynb)
+- notebook section: [02_autoencoder_training.ipynb](notebooks/anomaly_50k/02_autoencoder_training.ipynb)
 - evaluated on the validation-threshold predictions from the longer rerun
 - error-type counts and mean scores:
   - true positive: `145`, mean score `0.758864`
@@ -827,7 +881,7 @@ Purpose:
 Implementation:
 
 - config: [train_svdd.toml](configs/training/train_svdd.toml)
-- notebook: [04_svdd_training.ipynb](notebooks/04_svdd_training.ipynb)
+- notebook: [04_svdd_training.ipynb](notebooks/anomaly_50k/04_svdd_training.ipynb)
 - model: fixed-center Deep SVDD
 - encoder: three strided convolution blocks
 - latent dimension: `128`
@@ -869,7 +923,7 @@ Purpose:
 Implementation:
 
 - config: [train_patchcore.toml](configs/training/train_patchcore.toml)
-- notebook: [07_patchcore_training.ipynb](notebooks/07_patchcore_training.ipynb)
+- notebook: [07_patchcore_training.ipynb](notebooks/anomaly_50k/07_patchcore_training.ipynb)
 - artifact dir: [artifacts/x64/patchcore_ae_bn](artifacts/x64/patchcore_ae_bn)
 - backbone checkpoint: [best_model.pt](artifacts/x64/autoencoder_batchnorm/best_model.pt)
 - backbone source: frozen BatchNorm autoencoder encoder
@@ -945,7 +999,7 @@ Purpose:
 Implementation:
 
 - config: [train_resnet18_backbone.toml](configs/training/train_resnet18_backbone.toml)
-- notebook: [09_resnet18_backbone_baseline.ipynb](notebooks/09_resnet18_backbone_baseline.ipynb)
+- notebook: [09_resnet18_backbone_baseline.ipynb](notebooks/anomaly_50k/09_resnet18_backbone_baseline.ipynb)
 - artifact dir: [artifacts/x64/resnet18_embedding_baseline](artifacts/x64/resnet18_embedding_baseline)
 - backbone: ImageNet-pretrained `ResNet18`
 - input adaptation: RGB stem averaged into a single-channel wafer input stem
@@ -1007,7 +1061,7 @@ Purpose:
 Implementation:
 
 - config: [train_patchcore_resnet18.toml](configs/training/train_patchcore_resnet18.toml)
-- notebook: [10_patchcore_resnet18_training.ipynb](notebooks/10_patchcore_resnet18_training.ipynb)
+- notebook: [10_patchcore_resnet18_training.ipynb](notebooks/anomaly_50k/10_patchcore_resnet18_training.ipynb)
 - artifact dir: [artifacts/x64/patchcore_resnet18](artifacts/x64/patchcore_resnet18)
 - backbone: frozen ImageNet-pretrained `ResNet18`
 - input adaptation: single-channel wafer maps resized internally to `224x224`
@@ -1077,7 +1131,7 @@ Purpose:
 Implementation:
 
 - config: [train_patchcore_resnet50.toml](configs/training/train_patchcore_resnet50.toml)
-- notebook: [11_patchcore_resnet50_training.ipynb](notebooks/11_patchcore_resnet50_training.ipynb)
+- notebook: [11_patchcore_resnet50_training.ipynb](notebooks/anomaly_50k/11_patchcore_resnet50_training.ipynb)
 - artifact dir: [artifacts/x64/patchcore_resnet50](artifacts/x64/patchcore_resnet50)
 - backbone: frozen ImageNet-pretrained `ResNet50`
 - input adaptation: single-channel wafer maps resized internally to `224x224`
@@ -1149,7 +1203,7 @@ Purpose:
 Implementation:
 
 - config: [train_patchcore_wideresnet50_multilayer.toml](configs/training/train_patchcore_wideresnet50_multilayer.toml)
-- notebook: [18-patchcore-wideresnet50-multilayer.ipynb](notebooks/18-patchcore-wideresnet50-multilayer.ipynb)
+- notebook: [18-patchcore-wideresnet50-multilayer.ipynb](notebooks/anomaly_50k/18-patchcore-wideresnet50-multilayer.ipynb)
 - artifact dir: [artifacts/x64/WRN-Patchcore-Modal](artifacts/x64/WRN-Patchcore-Modal)
 - execution note: repo-runnable all-in-one notebook, with the heavy run completed on Modal and then imported back into the repo artifacts
 - backbone: frozen ImageNet-pretrained `WideResNet50-2`
@@ -1241,7 +1295,7 @@ Purpose:
 Implementation:
 
 - config: [train_ts_resnet18.toml](configs/training/train_ts_resnet18.toml)
-- notebook: [12_ts_distillation_training.ipynb](notebooks/12_ts_distillation_training.ipynb)
+- notebook: [12_ts_distillation_training.ipynb](notebooks/anomaly_50k/12_ts_distillation_training.ipynb)
 - training script: [train_ts_distillation.py](scripts/train_ts_distillation.py)
 - artifact dir: [artifacts/x64/ts_resnet18](artifacts/x64/ts_resnet18)
 - model: teacher-student distillation detector with a frozen teacher backbone, a lightweight student CNN, and an auxiliary feature autoencoder
@@ -1338,8 +1392,8 @@ Purpose:
 
 Implementation:
 
-- main repo notebook: [13_ts_resnet50_kaggle_import_analysis.ipynb](notebooks/13_ts_resnet50_kaggle_import_analysis.ipynb)
-- repo layer-comparison notebook: [14_ts_resnet50_teacher_layer_ablation_analysis.ipynb](notebooks/14_ts_resnet50_teacher_layer_ablation_analysis.ipynb)
+- main repo notebook: [13_ts_resnet50_kaggle_import_analysis.ipynb](notebooks/anomaly_50k/13_ts_resnet50_kaggle_import_analysis.ipynb)
+- repo layer-comparison notebook: [14_ts_resnet50_teacher_layer_ablation_analysis.ipynb](notebooks/anomaly_50k/14_ts_resnet50_teacher_layer_ablation_analysis.ipynb)
 - local import config: [train_ts_resnet50_kaggle.toml](configs/training/train_ts_resnet50_kaggle.toml)
 - training entry point: [train_ts_distillation.py](scripts/train_ts_distillation.py)
 - evaluation entry point: [evaluate_reconstruction_model.py](scripts/evaluate_reconstruction_model.py)
@@ -1479,7 +1533,7 @@ Purpose:
 Implementation:
 
 - config: [train_wideresnet50_backbone.toml](configs/training/train_wideresnet50_backbone.toml)
-- notebook: [15_wideresnet50_2_backbone_baseline.ipynb](notebooks/15_wideresnet50_2_backbone_baseline.ipynb)
+- notebook: [15_wideresnet50_2_backbone_baseline.ipynb](notebooks/anomaly_50k/15_wideresnet50_2_backbone_baseline.ipynb)
 - artifact dir: [artifacts/x64/wideresnet50_embedding_baseline](artifacts/x64/wideresnet50_embedding_baseline)
 - model: frozen ImageNet-pretrained `WideResNet50-2` adapted to single-channel wafer maps
 - score: embedding center-distance from the train-normal feature center
@@ -1523,7 +1577,7 @@ Purpose:
 Implementation:
 
 - config reference: [train_ts_wideresnet50.toml](configs/training/train_ts_wideresnet50.toml)
-- notebook: [16-ts-wideresnet50-training-all-in-one.ipynb](notebooks/16-ts-wideresnet50-training-all-in-one.ipynb)
+- notebook: [16-ts-wideresnet50-training-all-in-one.ipynb](notebooks/anomaly_50k/16-ts-wideresnet50-training-all-in-one.ipynb)
 - teacher backbone: frozen ImageNet-pretrained `WideResNet50-2`
 - teacher feature layer: `layer2`
 - input adaptation: single-channel wafer maps resized internally to `224x224`
@@ -1584,7 +1638,7 @@ Purpose:
 
 Implementation:
 
-- notebook: [17-ts-wideresnet50-training-multilayer.ipynb](notebooks/17-ts-wideresnet50-training-multilayer.ipynb)
+- notebook: [17-ts-wideresnet50-training-multilayer.ipynb](notebooks/anomaly_50k/17-ts-wideresnet50-training-multilayer.ipynb)
 - artifact dir: [artifacts/x64/wideresnet50_2_modal](artifacts/x64/wideresnet50_2_modal)
 - teacher backbone: frozen ImageNet-pretrained `WideResNet50-2`
 - teacher layers: `layer2` and `layer3`
@@ -1659,7 +1713,7 @@ Purpose:
 Implementation:
 
 - config: [train_patchcore_wideresnet50_multilayer.toml](configs/training/train_patchcore_wideresnet50_multilayer.toml)
-- notebook: [18-patchcore-wideresnet50-multilayer.ipynb](notebooks/18-patchcore-wideresnet50-multilayer.ipynb)
+- notebook: [18-patchcore-wideresnet50-multilayer.ipynb](notebooks/anomaly_50k/18-patchcore-wideresnet50-multilayer.ipynb)
 - artifact dir: [artifacts/x64/WRN-Patchcore-Modal](artifacts/x64/WRN-Patchcore-Modal)
 - execution note: all-in-one notebook prepared in-repo, with the heavy run executed on Modal and the outputs copied back into the repo artifacts
 - teacher backbone: frozen ImageNet-pretrained `WideResNet50-2`
@@ -1702,6 +1756,144 @@ Interpretation:
 - compared with the best multilayer teacher-student `WideResNet50-2` run, multilayer PatchCore improved deployed recall and F1 while staying competitive on AUROC and AUPRC
 - the winning WRN PatchCore setting also stayed very consistent with the notebook sweep pattern: `topk_mean` won clearly, `50k` memory bank stayed worthwhile, and the best ratio region remained narrow around `0.10`
 
+## Experiment Family: FastFlow `64x64`
+
+This family starts a new flow-based anomaly branch built on frozen pretrained spatial features rather than reconstruction or memory-bank nearest-neighbor scoring.
+
+The initial goal was:
+
+- test whether a FastFlow-style density model can compete with the stronger non-AE anomaly branches without relying on a PatchCore memory bank
+- keep the same shared `64x64` split and validation-threshold rule so comparison against the current leaderboard stays fair
+- run the first study as a Modal-friendly all-in-one notebook with a small set of layer-choice and flow-depth ablations in one sitting
+
+### Experiment 19: FastFlow with WideResNet50-2 flow ablations
+
+Purpose:
+
+- test whether multilayer `WideResNet50-2` features remain strong when paired with flow-based density estimation instead of PatchCore local nearest-neighbor scoring
+- preserve the same shared `64x64` 5% test-defect setup and the same validation-normal threshold rule
+- compare a small, cost-aware set of FastFlow ablations in one Modal sweep:
+  - multilayer `layer2 + layer3`, `6` flow steps
+  - `layer2` only, `6` flow steps
+  - multilayer `layer2 + layer3`, `4` flow steps
+
+Implementation:
+
+- repo notebook: [19_fastflow_training.ipynb](notebooks/anomaly_50k/19_fastflow_training.ipynb)
+- Modal all-in-one notebook: [19A_fastflow_all_in_one.ipynb](notebooks/anomaly_50k/19A_fastflow_all_in_one.ipynb)
+- execution note: the ablation sweep was executed on Modal using the self-contained `19A` notebook
+- backbone: frozen ImageNet-pretrained `WideResNet50-2`
+- input adaptation: single-channel wafer maps resized internally to `224x224`
+- model head: FastFlow-style affine coupling flow on each selected feature map
+- training stabilizers used in the Modal notebook:
+  - reduced learning rate
+  - gradient clipping
+  - disabled AMP
+  - more conservative flow initialization and scale clamp
+- compared wafer-level reductions:
+  - `mean`
+  - `topk_mean`, top-k ratio `0.05`
+  - `topk_mean`, top-k ratio `0.10`
+  - `topk_mean`, top-k ratio `0.15`
+  - `max`
+
+Ablation summary:
+
+| training variant | feature layers | flow steps | best score variant | val-threshold precision | val-threshold recall | val-threshold F1 | AUROC | AUPRC |
+| ---------------- | -------------- | ---------- | ------------------ | ----------------------- | -------------------- | ---------------- | ----- | ----- |
+| `wrn50_l23_s4` | `layer2` + `layer3` | `4` | `mean` | `0.420253` | `0.664000` | `0.514729` | `0.880458` | `0.533389` |
+| `wrn50_l23_s6` | `layer2` + `layer3` | `6` | `mean` | `0.398477` | `0.628000` | `0.487578` | `0.876862` | `0.513479` |
+| `wrn50_l2_s6` | `layer2` | `6` | `topk_mean`, ratio `0.15` | `0.405714` | `0.568000` | `0.473333` | `0.891069` | `0.492186` |
+
+Evaluation for the best training variant `wrn50_l23_s4`:
+
+| score variant | reduction | top-k ratio | val-threshold F1 | AUROC | AUPRC | balanced accuracy |
+| ------------- | --------- | ----------- | ---------------- | ----- | ----- | ----------------- |
+| `mean` | `mean` | `0.10` | `0.514729` | `0.880458` | `0.533389` | `0.809100` |
+| `topk_r015` | `topk_mean` | `0.15` | `0.504092` | `0.900715` | `0.503875` | `0.787300` |
+| `topk_r010` | `topk_mean` | `0.10` | `0.473083` | `0.894947` | `0.481436` | `0.768200` |
+| `topk_r005` | `topk_mean` | `0.05` | `0.415282` | `0.881003` | `0.440664` | `0.727300` |
+| `max` | `max` | `0.10` | `0.304729` | `0.802977` | `0.364477` | `0.650600` |
+
+Selected result:
+
+- selected training variant: `wrn50_l23_s4`
+- selected wafer-level reduction: `mean`
+- validation threshold: `0.396222`
+- precision: `0.420253`
+- recall: `0.664000`
+- F1: `0.514729`
+- AUROC: `0.880458`
+- AUPRC: `0.533389`
+- balanced accuracy: `0.809100`
+- true positive: `166`
+- false negative: `84`
+- false positive: `229`
+- true negative: `4771`
+
+Defect-type recall for the selected `mean` score:
+
+| defect type | count | detected | recall |
+| ----------- | ----- | -------- | ------ |
+| `Scratch` | `15` | `3` | `0.200000` |
+| `Edge-Loc` | `53` | `29` | `0.547170` |
+| `Loc` | `34` | `19` | `0.558824` |
+| `Donut` | `7` | `5` | `0.714286` |
+| `Center` | `50` | `36` | `0.720000` |
+| `Edge-Ring` | `84` | `67` | `0.797619` |
+| `Random` | `5` | `5` | `1.000000` |
+| `Near-full` | `2` | `2` | `1.000000` |
+
+Interpretation:
+
+- the full `19A` FastFlow sweep was meaningfully better than the first completed flow run; reducing flow depth from `6` to `4` improved deployed precision, recall, and F1 at the same time
+- the best FastFlow result is now very close to the strongest non-winning models in the report and slightly beats the strongest autoencoder-family result on deployed F1, but it still does not beat the best multilayer `WideResNet50-2` PatchCore or the strongest teacher-student leaders
+- within this family, multilayer features clearly mattered more than switching to `layer2` only; the `wrn50_l2_s6` ablation produced the weakest deployed F1 of the three training variants
+- unlike the best `WideResNet50-2` PatchCore result, the best FastFlow operating point still prefers plain `mean` reduction rather than `topk_mean`
+- the failure pattern matches the rest of the report closely: `Scratch` remains the weakest defect class by far, while `Loc` and `Edge-Loc` are still only moderate
+- broader or structurally clearer defects such as `Edge-Ring`, `Center`, `Random`, and `Near-full` remain much easier than the smaller local defect families
+- this suggests that simply replacing PatchCore with flow-based density estimation on the same backbone is promising but still not enough by itself; the key remaining challenge is still the small local-defect regime
+
+## Experiment 20: Post-Hoc Score Ensemble of WRN PatchCore + TS-Res50
+
+Purpose:
+
+- test whether the strongest PatchCore and teacher-student branches make complementary enough errors that a cheap score-level ensemble can beat the best standalone WRN PatchCore run
+- keep the experiment post-hoc and low-cost by reusing saved artifacts rather than introducing a new training pipeline
+- preserve the same validation-normal threshold rule so the comparison stays fair
+
+Implementation:
+
+- notebook: [20_score_ensemble_analysis.ipynb](notebooks/anomaly_50k/20_score_ensemble_analysis.ipynb)
+- artifact dir: [artifacts/x64/ensemble_patchcore_ts_res50](artifacts/x64/ensemble_patchcore_ts_res50)
+- base models:
+  - `PatchCore-WideRes50-topk-mb50k-r010`
+  - `TS-Res50-s2_a1_topk_mean_r0.20`
+- procedure:
+  - load saved PatchCore `val` and `test` wafer scores
+  - recompute the selected `TS-Res50` score from the saved checkpoint
+  - normalize both score streams using validation-normal statistics
+  - compare weighted means and `max` fusion
+
+Ensemble sweep summary:
+
+| fusion variant | val-threshold precision | val-threshold recall | val-threshold F1 | AUROC | AUPRC | best sweep F1 |
+| -------------- | ----------------------- | -------------------- | ---------------- | ----- | ----- | ------------- |
+| `patchcore_only` | `0.421546` | `0.720000` | `0.531758` | `0.916943` | `0.561855` | `0.585774` |
+| `max_pair` | `0.422434` | `0.708000` | `0.529148` | `0.916330` | `0.611277` | `0.619718` |
+| `mean_70_30_patchcore` | `0.418224` | `0.716000` | `0.528024` | `0.917946` | `0.595837` | `0.616052` |
+| `mean_50_50` | `0.416279` | `0.716000` | `0.526471` | `0.916686` | `0.606252` | `0.615385` |
+| `ts_only` | `0.418052` | `0.704000` | `0.524590` | `0.909189` | `0.599169` | `0.606299` |
+| `mean_30_70_patchcore` | `0.408676` | `0.716000` | `0.520349` | `0.914454` | `0.607724` | `0.621677` |
+
+Interpretation:
+
+- among the true fusion strategies, normalized-score `max_pair` was the strongest ensemble result
+- `max_pair` slightly improved precision and improved ranking quality substantially, pushing `AUPRC` to `0.611277`, which is higher than the standalone WRN PatchCore result
+- however, its deployed `F1 = 0.529148` was still below the standalone WRN PatchCore `F1 = 0.531758`
+- the best overall row in the notebook was still `patchcore_only`, which means the ensemble study did not change the final deployment-style winner
+- this suggests that `TS-Res50` does add some complementary ranking information, but not enough thresholded decision improvement to justify replacing the standalone WRN PatchCore benchmark
+
 ## Overall Interpretation
 
 Across all completed experiments:
@@ -1728,6 +1920,7 @@ Across all completed experiments:
 - the best `WideResNet50-2` multilayer teacher-student run slightly trailed the best `TS-Res50` result on deployed F1, but it improved the wider-teacher branch to `AUROC > 0.92` and became a strong stepping stone to the later WRN PatchCore win
 - within the `WideResNet50-2` branch, the multilayer `layer2 + layer3` teacher gave a small but consistent gain over the single-layer `layer2` version, which suggests that combining two spatial scales is useful here
 - multilayer `WideResNet50-2` PatchCore now gives the strongest deployed operating point in the report, while `TS-Res50` still keeps the best AUPRC and best-sweep F1 and multilayer `TS-WideRes50` still keeps the best AUROC
+- the first post-hoc score ensemble of WRN PatchCore + `TS-Res50` was close but not enough; the best true fusion improved AUPRC but still fell slightly short of the standalone WRN PatchCore result on deployed F1
 - the best BatchNorm autoencoder remains a strong comparison point because it is still simpler, still very competitive on thresholded F1, and now trails the new WRN PatchCore leader by only a modest margin
 - all tested models show overlap between normal and anomaly score distributions, which explains the moderate F1 values and missed anomalies
 - the score-ablation result shows that part of the bottleneck was the scoring rule, not only the model architecture
@@ -1787,3 +1980,4 @@ Recommended follow-up work:
 - if more teacher-student distillation work is justified, tune it from the new `TS-Res50` selected-score baseline: teacher layer choice, student capacity, branch weighting, and wafer-level reduction are higher-priority than longer training alone
 - if more PatchCore work is justified, tune the multilayer WideResNet50-2 branch first around the `topk_mean` ratio band near `0.05` to `0.10` before returning to older backbones
 - keep the validation-derived threshold as the main reported result, and treat test-set threshold sweeps as analysis only
+

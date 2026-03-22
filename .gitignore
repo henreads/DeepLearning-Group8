@@ -3,6 +3,7 @@ data/processed/
 artifacts/
 outputs/
 kaggle_upload/
+outputs/
 .torch-cache/
 __pycache__/
 *.pyc
@@ -12,4 +13,5 @@ __pycache__/
 venv/
 .env
 .DS_Store
+kaggle_outputs/
 uploads/

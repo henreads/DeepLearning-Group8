@@ -180,6 +180,10 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=0)
     parser.add_argument("--threshold-quantile", type=float, default=0.95)
     parser.add_argument("--output-dir", default="")
+    parser.add_argument("--reduction", default="")
+    parser.add_argument("--topk-ratio", type=float, default=-1.0)
+    parser.add_argument("--score-student-weight", type=float, default=float("nan"))
+    parser.add_argument("--score-autoencoder-weight", type=float, default=float("nan"))
     args = parser.parse_args()
 
     checkpoint_path = Path(args.checkpoint)
@@ -195,6 +199,16 @@ def main() -> None:
             raise ValueError("Checkpoint does not include config. Pass --config explicitly.")
 
     model_type = infer_model_type(config, args.model_type)
+    model_config = config.setdefault("model", {})
+    if args.reduction:
+        model_config["reduction"] = args.reduction
+    if args.topk_ratio >= 0.0:
+        model_config["topk_ratio"] = float(args.topk_ratio)
+    if not torch.isnan(torch.tensor(args.score_student_weight)):
+        model_config["score_student_weight"] = float(args.score_student_weight)
+    if not torch.isnan(torch.tensor(args.score_autoencoder_weight)):
+        model_config["score_autoencoder_weight"] = float(args.score_autoencoder_weight)
+
     beta = float(config["model"].get("beta", 0.01))
     device = resolve_device(args.device or config["training"].get("device", "auto"))
     batch_size = args.batch_size or int(config["data"].get("batch_size", 64))

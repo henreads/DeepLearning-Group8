@@ -32,6 +32,11 @@ data/processed/        Local processed outputs (ignored by git)
 artifacts/             Saved model outputs (ignored by git if desired later)
 ```
 
+The processed data now has two separate anomaly-detection families:
+
+- `data/processed/x64/wm811k/` for the original `50k`-normal benchmark workflow used by most notebooks
+- `data/processed/x64/wm811k_patchcore_custom/` for the larger labeled WRN50 PatchCore split such as `120k / 10k / 20k`
+
 The notebooks are the primary way to run experiments in this repo.
 Top-level scripts are kept small on purpose:
 
@@ -112,6 +117,18 @@ The main `64x64` training configs expect:
 data/processed/x64/wm811k/metadata_50k_5pct.csv
 ```
 
+If you also want the larger labeled WRN50 PatchCore split, prepare it separately:
+
+```powershell
+python scripts/prepare_wm811k.py --config configs/data/data_patchcore_wrn50_120k.toml
+```
+
+That writes to:
+
+```text
+data/processed/x64/wm811k_patchcore_custom/metadata_train120000_a6000_val10000_a500_test20000_a1000.csv
+```
+
 7. Open Jupyter only after the processed metadata exists:
 
 ```powershell
@@ -168,72 +185,82 @@ Notes:
 - `--dev` switches to the small development subset and writes a variant-specific file such as `data/processed/x64/wm811k/metadata_dev_2kn_400d.csv`
 - with the current default config, `python scripts/prepare_wm811k.py` writes `data/processed/x64/wm811k/metadata_50k_5pct.csv`
 - the script also writes arrays to a matching variant folder such as `data/processed/x64/wm811k/arrays_50k_5pct`
+- `python scripts/prepare_wm811k.py --config configs/data/data_patchcore_wrn50_120k.toml` writes the larger labeled WRN50 PatchCore split under `data/processed/x64/wm811k_patchcore_custom/`
 - `--metadata-path` still works as an override; when you use it, the arrays folder name is derived from that metadata filename
 - with the current `configs/data/data.toml`, the main non-dev build uses `50000` normal wafers and samples test defects at `5%` of the test-normal count
 
 The default config locations are now:
 
 - data prep: `configs/data/data.toml`
+- large WRN50 labeled split: `configs/data/data_patchcore_wrn50_120k.toml`
 - training: `configs/training/*.toml`
 
-After preparing the dataset, use the notebooks for the main experiments:
+After preparing the dataset, use the notebooks for the main experiments. The notebook folders are now split by workflow:
 
-- `notebooks/01_data_exploration.ipynb`
+- `notebooks/anomaly_50k/` for the original anomaly-detection sequence on the `50k` benchmark split
+- `notebooks/anomaly_120k_labeled/` for larger labeled anomaly-detection workflows, currently including `patchcore_wrn50/`
+- `notebooks/classifier/` for the multiclass classification workflow
+
+Main anomaly-detection notebooks on the original `50k` benchmark split:
+
+- `notebooks/anomaly_50k/01_data_exploration.ipynb`
   Explore the processed metadata, class balance, and sample wafer maps. If you switch dataset variants, update the metadata path in the first code cell.
-- `notebooks/02_autoencoder_training.ipynb`
+- `notebooks/anomaly_50k/02_autoencoder_training.ipynb`
   Train and evaluate the baseline autoencoder.
-- `notebooks/03_vae_training.ipynb`
+- `notebooks/anomaly_50k/03_vae_training.ipynb`
   Train and evaluate the convolutional VAE.
-- `notebooks/04_svdd_training.ipynb`
+- `notebooks/anomaly_50k/04_svdd_training.ipynb`
   Train and evaluate the Deep SVDD experiment.
-- `notebooks/05_autoencoder_batchnorm_training.ipynb`
+- `notebooks/anomaly_50k/05_autoencoder_batchnorm_training.ipynb`
   Train and evaluate the BatchNorm autoencoder variant on the same `64x64` 5% dataset and evaluation protocol.
-- `notebooks/06_autoencoder_batchnorm_dropout_training.ipynb`
+- `notebooks/anomaly_50k/06_autoencoder_batchnorm_dropout_training.ipynb`
   Train and evaluate the BatchNorm + Dropout autoencoder variant on the same `64x64` 5% dataset and evaluation protocol.
-- `notebooks/07_patchcore_training.ipynb`
+- `notebooks/anomaly_50k/07_patchcore_training.ipynb`
   Fit and evaluate a PatchCore-style local nearest-neighbor detector on the same `64x64` 5% dataset using the BatchNorm autoencoder checkpoint as the frozen feature backbone.
-- `notebooks/08_autoencoder_residual_training.ipynb`
+- `notebooks/anomaly_50k/08_autoencoder_residual_training.ipynb`
   Train and evaluate a stronger residual autoencoder backbone on the same `64x64` 5% dataset and evaluation protocol.
-- `notebooks/09_resnet18_backbone_baseline.ipynb`
+- `notebooks/anomaly_50k/09_resnet18_backbone_baseline.ipynb`
   Evaluate a frozen pretrained ResNet18 backbone with simple center-distance scoring on the same `64x64` 5% dataset.
-- `notebooks/10_patchcore_resnet18_training.ipynb`
+- `notebooks/anomaly_50k/10_patchcore_resnet18_training.ipynb`
   Fit and evaluate PatchCore on a frozen pretrained ResNet18 backbone using the same `64x64` 5% dataset and validation-threshold protocol.
-- `notebooks/11_patchcore_resnet50_training.ipynb`
+- `notebooks/anomaly_50k/11_patchcore_resnet50_training.ipynb`
   Fit and evaluate PatchCore on a frozen pretrained ResNet50 backbone using the same `64x64` 5% dataset and validation-threshold protocol.
-- `notebooks/12_ts_distillation_training.ipynb`
+- `notebooks/anomaly_50k/12_ts_distillation_training.ipynb`
   Train and evaluate the teacher-student distillation detector, including optional shared evaluation and ablation cells.
-- `notebooks/13_ts_resnet50_kaggle_import_analysis.ipynb`
+- `notebooks/anomaly_50k/13_ts_resnet50_kaggle_import_analysis.ipynb`
   Inspect the Kaggle-imported teacher-student ResNet50 results and compare imported artifacts before final reporting.
-- `notebooks/classifier/14_multiclass_classifier_training.ipynb`
+- `notebooks/anomaly_120k_labeled/patchcore_wrn50/`
+  Dedicated WRN50 PatchCore workflow for the larger labeled split, including dataset prep, training review, and threshold-policy analysis.
+- `notebooks/classifier/1_multiclass_classifier_training.ipynb`
   Prepare the `50k` labeled multiclass subset and train/evaluate the classifier without generating unlabeled predictions automatically.
   The current training config runs for up to `80` epochs with learning-rate decay and early stopping, saves the best checkpoint by validation balanced accuracy, and marks only high-confidence unlabeled predictions as safe pseudo-label candidates.
-- `notebooks/classifier/14_multiclass_classifier_methodology.md`
+- `notebooks/classifier/1_multiclass_classifier_methodology.md`
   Summarize the research-aligned rationale behind the current multiclass classifier design and pseudo-labeling workflow.
-- `notebooks/classifier/16_multiclass_classifier_final_labeling.ipynb`
+- `notebooks/classifier/3_multiclass_classifier_final_labeling.ipynb`
   Generate unlabeled pseudo-labels only after you have selected the final classifier checkpoint you want to trust.
-- `notebooks/classifier/17_multiclass_classifier_ensemble_workflow.ipynb`
+- `notebooks/classifier/4_multiclass_classifier_ensemble_workflow.ipynb`
   Evaluate and use an ensemble of multiple multiclass classifier checkpoints trained with different random seeds.
 - `scripts/classifier/ensemble_multiclass_classifier.py`
   Evaluate either a simple averaged ensemble or a validation-fitted stacking ensemble from multiple classifier checkpoints.
   The stacking mode saves a reusable `stacking_combiner.json` file for later inference.
 - `scripts/classifier/predict_unlabeled_multiclass_ensemble.py`
   Run unlabeled inference with the same checkpoint set, optionally using `--combiner-json` to apply a saved stacking combiner.
-- `notebooks/classifier/15_multiclass_classifier_showcase.ipynb`
-  Present the multiclass classifier results, plots, and example predictions after notebook `14` has produced the artifacts.
+- `notebooks/classifier/2_multiclass_classifier_showcase.ipynb`
+  Present the multiclass classifier results, plots, and example predictions after notebook `1` has produced the artifacts.
 
 Recommended run order for a fresh setup:
 
-1. Run `notebooks/01_data_exploration.ipynb` to confirm the processed dataset looks correct.
-2. Run `notebooks/02_autoencoder_training.ipynb` for the baseline autoencoder.
-3. Run `notebooks/03_vae_training.ipynb` if you want the VAE comparison.
-4. Run `notebooks/04_svdd_training.ipynb` if you want the Deep SVDD comparison.
-5. Run `notebooks/05_autoencoder_batchnorm_training.ipynb` if you want the BatchNorm autoencoder comparison.
-6. Run `notebooks/06_autoencoder_batchnorm_dropout_training.ipynb` if you want the BatchNorm + Dropout autoencoder comparison.
-7. Run `notebooks/07_patchcore_training.ipynb` if you want the PatchCore-style comparison.
-8. Run `notebooks/08_autoencoder_residual_training.ipynb` if you want the stronger residual autoencoder backbone comparison.
-9. Run `notebooks/09_resnet18_backbone_baseline.ipynb` if you want the plain pretrained ResNet18 backbone baseline.
-10. Run `notebooks/10_patchcore_resnet18_training.ipynb` if you want PatchCore with a pretrained ResNet18 backbone.
-11. Run `notebooks/11_patchcore_resnet50_training.ipynb` if you want PatchCore with a pretrained ResNet50 backbone.
+1. Run `notebooks/anomaly_50k/01_data_exploration.ipynb` to confirm the processed dataset looks correct.
+2. Run `notebooks/anomaly_50k/02_autoencoder_training.ipynb` for the baseline autoencoder.
+3. Run `notebooks/anomaly_50k/03_vae_training.ipynb` if you want the VAE comparison.
+4. Run `notebooks/anomaly_50k/04_svdd_training.ipynb` if you want the Deep SVDD comparison.
+5. Run `notebooks/anomaly_50k/05_autoencoder_batchnorm_training.ipynb` if you want the BatchNorm autoencoder comparison.
+6. Run `notebooks/anomaly_50k/06_autoencoder_batchnorm_dropout_training.ipynb` if you want the BatchNorm + Dropout autoencoder comparison.
+7. Run `notebooks/anomaly_50k/07_patchcore_training.ipynb` if you want the PatchCore-style comparison.
+8. Run `notebooks/anomaly_50k/08_autoencoder_residual_training.ipynb` if you want the stronger residual autoencoder backbone comparison.
+9. Run `notebooks/anomaly_50k/09_resnet18_backbone_baseline.ipynb` if you want the plain pretrained ResNet18 backbone baseline.
+10. Run `notebooks/anomaly_50k/10_patchcore_resnet18_training.ipynb` if you want PatchCore with a pretrained ResNet18 backbone.
+11. Run `notebooks/anomaly_50k/11_patchcore_resnet50_training.ipynb` if you want PatchCore with a pretrained ResNet50 backbone.
 
 How to run them:
 
@@ -243,6 +270,8 @@ How to run them:
 - keep the config paths unchanged unless you intentionally want a different dataset variant
 
 ## Changing the Test Defect Ratio
+
+This section applies to the original `50k` benchmark family under `configs/data/data.toml`.
 
 The test defect ratio is controlled in [configs/data/data.toml](DeepLearning-Group8\configs\data\data.toml):
 
@@ -327,3 +356,4 @@ So after changing the ratio, make sure your training or evaluation config points
 - For model development: keep the current `5%` split if you are already comparing experiments on it.
 - For final realism: make a separate `1%` metadata file and evaluate the final frozen model on that.
 - For fair reporting: do not keep changing the test ratio during tuning. Pick the final evaluation ratio first and report it clearly.
+
