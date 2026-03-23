@@ -104,6 +104,7 @@ Main comparison across completed experiments:
 
 | experiment    | model       | score | image size | val-threshold precision | val-threshold recall | val-threshold F1 | AUROC      | AUPRC      | best sweep F1 |
 | ------------- | ----------- | ----- | ---------- | ----------------------- | -------------------- | ---------------- | ---------- | ---------- | ------------- |
+| PatchCore-WideRes50-x224-topk-mb600k-r005 | PatchCore + WideResNet50-2 (`layer2` + `layer3`) | `topk_mean` | `224x224`   | `0.432184`              | `0.752000`           | `0.548905`       | `0.930680` | `0.659063` | `0.634146`    |
 | PatchCore-EffNetB0-x224-topk-mb240k-r002 | PatchCore + EfficientNet-B0 (`mid=3`, `deep=6`) | `topk_mean` | `224x224`   | `0.438725`              | `0.716000`           | `0.544073`       | `0.924586` | `0.483186` | `0.566667`    |
 | PatchCore-WideRes50-topk-mb50k-r010 | PatchCore + WideResNet50-2 (`layer2` + `layer3`) | `topk_mean` | `64x64`    | `0.421546`              | `0.720000`           | `0.531758`       | `0.916943` | `0.561855` | `0.585774`    |
 | Ensemble-PatchCore-TSRes50-maxpair | Score ensemble of PatchCore-WideRes50-topk-mb50k-r010 + TS-Res50-mixed-topk20 | `max` on normalized scores | `64x64`    | `0.422434`              | `0.708000`           | `0.529148`       | `0.916330` | `0.611277` | `0.619718`    |
@@ -189,27 +190,28 @@ Current top ranking:
 
 This ranking is based mainly on `val-threshold F1`, with the other metrics used as supporting evidence.
 
-1. PatchCore + EfficientNet-B0 direct `224x224`, `topk_mean`, memory bank `240k`, top-k ratio `0.02`
-2. PatchCore + WideResNet50-2 multilayer `layer2 + layer3` `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.10`
-3. Score ensemble of WRN PatchCore + `TS-Res50` with normalized-score `max` fusion
-4. PatchCore + WideResNet50-2 multilayer `layer2 + layer3` `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.15`
-5. PatchCore + WideResNet50-2 multilayer `layer2 + layer3` `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.05`
-6. Teacher-student distillation + ResNet50 teacher `64x64` with mixed student+autoencoder `topk_mean`, top-k ratio `0.20`
-7. Teacher-student distillation + WideResNet50-2 teacher `64x64` with multilayer `layer2 + layer3`, mixed student+autoencoder `topk_mean`, top-k ratio `0.15`
-8. PatchCore + WideResNet50-2 multilayer `layer2 + layer3` `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.20`
-9. FastFlow + WideResNet50-2 multilayer `layer2 + layer3` `64x64`, `4` flow steps, with `mean`
-10. Teacher-student distillation + WideResNet50-2 teacher `64x64` with `layer2`, mixed student+autoencoder `topk_mean`, top-k ratio `0.25`
-11. PatchCore + WideResNet50-2 multilayer `layer2 + layer3` `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.25`
-12. Teacher-student distillation + ResNet50 teacher `64x64` with `layer1`, mixed student+autoencoder `topk_mean`, top-k ratio `0.10`
-13. Autoencoder + BatchNorm `64x64` with `max_abs`
-14. Teacher-student distillation + ResNet18 teacher `64x64` with student-only `topk_mean`, top-k ratio `0.20`
-15. Autoencoder + BatchNorm + Dropout `0.00` `64x64` with `max_abs`
-16. Autoencoder + BatchNorm + Dropout `0.10` `64x64` with `max_abs`
-17. PatchCore + WideResNet50-2 multilayer `layer2 + layer3` `64x64`, `mean`, memory bank `50k`
-18. Autoencoder + BatchNorm + Dropout `0.05` `64x64` with `max_abs`
-19. Residual autoencoder `64x64` with `max_abs`
-20. Autoencoder + BatchNorm + Dropout `0.20` `64x64` with `max_abs`
-21. Autoencoder `64x64` with `topk_abs_mean`
+1. PatchCore + WideResNet50-2 multilayer direct `224x224`, `topk_mean`, memory bank `600k`, top-k ratio `0.05`
+2. PatchCore + EfficientNet-B0 direct `224x224`, `topk_mean`, memory bank `240k`, top-k ratio `0.02`
+3. PatchCore + WideResNet50-2 multilayer `layer2 + layer3` `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.10`
+4. Score ensemble of WRN PatchCore + `TS-Res50` with normalized-score `max` fusion
+5. PatchCore + WideResNet50-2 multilayer `layer2 + layer3` `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.15`
+6. PatchCore + WideResNet50-2 multilayer `layer2 + layer3` `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.05`
+7. Teacher-student distillation + ResNet50 teacher `64x64` with mixed student+autoencoder `topk_mean`, top-k ratio `0.20`
+8. Teacher-student distillation + WideResNet50-2 teacher `64x64` with multilayer `layer2 + layer3`, mixed student+autoencoder `topk_mean`, top-k ratio `0.15`
+9. PatchCore + WideResNet50-2 multilayer `layer2 + layer3` `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.20`
+10. FastFlow + WideResNet50-2 multilayer `layer2 + layer3` `64x64`, `4` flow steps, with `mean`
+11. Teacher-student distillation + WideResNet50-2 teacher `64x64` with `layer2`, mixed student+autoencoder `topk_mean`, top-k ratio `0.25`
+12. PatchCore + WideResNet50-2 multilayer `layer2 + layer3` `64x64`, `topk_mean`, memory bank `50k`, top-k ratio `0.25`
+13. Teacher-student distillation + ResNet50 teacher `64x64` with `layer1`, mixed student+autoencoder `topk_mean`, top-k ratio `0.10`
+14. Autoencoder + BatchNorm `64x64` with `max_abs`
+15. Teacher-student distillation + ResNet18 teacher `64x64` with student-only `topk_mean`, top-k ratio `0.20`
+16. Autoencoder + BatchNorm + Dropout `0.00` `64x64` with `max_abs`
+17. Autoencoder + BatchNorm + Dropout `0.10` `64x64` with `max_abs`
+18. PatchCore + WideResNet50-2 multilayer `layer2 + layer3` `64x64`, `mean`, memory bank `50k`
+19. Autoencoder + BatchNorm + Dropout `0.05` `64x64` with `max_abs`
+20. Residual autoencoder `64x64` with `max_abs`
+21. Autoencoder + BatchNorm + Dropout `0.20` `64x64` with `max_abs`
+22. Autoencoder `64x64` with `topk_abs_mean`
 
 High-level interpretation:
 
@@ -224,23 +226,23 @@ High-level interpretation:
 - increasing the autoencoder resolution to `128x128` did not improve results
 - VAE beta tuning helped slightly, but the VAE remained below both autoencoder runs
 - Deep SVDD beat the tuned VAE on validation-threshold F1 and AUROC, but still did not beat the best autoencoder
-- PatchCore improved in stages: the AE-backed version was weak, the ResNet18 and ResNet50 versions validated the pretrained-backbone direction, the later WideResNet50-2 multilayer follow-up became the strongest `64x64` PatchCore result, and the direct-`224x224` EfficientNet-B0 follow-up ultimately became the strongest deployed PatchCore result overall
-- the best completed PatchCore variant is now the direct-`224x224` EfficientNet-B0 `topk_mean` run with memory bank `240k` and top-k ratio `0.02`, reaching `F1 = 0.544073`, `AUROC = 0.924586`, and `AUPRC = 0.483186`
+- PatchCore improved in stages: the AE-backed version was weak, the ResNet18 and ResNet50 versions validated the pretrained-backbone direction, the later WideResNet50-2 multilayer follow-up became the strongest `64x64` PatchCore result, the direct-`224x224` EfficientNet-B0 follow-up then pushed the branch higher, and the newer direct-`224x224` WideResNet50-2 all-in-one run is now the strongest deployed PatchCore result overall
+- the best completed PatchCore variant is now the direct-`224x224` WideResNet50-2 multilayer `topk_mean` run with memory bank `600k` and top-k ratio `0.05`, reaching `F1 = 0.548905`, `AUROC = 0.930680`, and `AUPRC = 0.659063`
 - within the WideResNet50-2 PatchCore sweep, `topk_mean` clearly beat both `mean` and `max`; the strongest operating region was the narrow top-k range around `0.05` to `0.10`
 - the frozen pretrained ResNet18 backbone with simple center-distance scoring was weak, which suggests the backbone alone is not enough without a stronger local-anomaly scoring rule
 - ResNet18 + PatchCore fixed that issue materially; the best ResNet18 PatchCore variant reached `F1 = 0.400673` and clearly outperformed the plain ResNet18 center-distance baseline
 - scaling that same PatchCore direction to a pretrained ResNet50 backbone helped further; the best ResNet50 PatchCore variant reached `F1 = 0.419602`
 - the first all-in-one EfficientNet-B0 PatchCore run at `64x64` preprocessing was only a mid-tier report result, reaching `F1 = 0.467492` and `AUROC = 0.905171`
-- moving that same EfficientNet-B0 branch to direct `224x224` preprocessing changed the picture materially: the report-compatible `x224` follow-up reached `F1 = 0.544073` and `AUROC = 0.924586`, overtaking the earlier WRN PatchCore leader on deployed F1
-- this EfficientNet-B0 branch is now useful for two reasons: it shows that direct `224x224` preprocessing matters for pretrained-backbone PatchCore, and it provides a report-compatible bridge between the weaker `64x64` run and the older CT-style results
+- moving that same EfficientNet-B0 branch to direct `224x224` preprocessing changed the picture materially: the report-compatible `x224` follow-up reached `F1 = 0.544073` and `AUROC = 0.924586`, overtaking the earlier `64x64` WRN PatchCore leader on deployed F1 before the later WRN `x224` follow-up moved the bar again
+- this EfficientNet-B0 branch is still useful for two reasons: it shows that direct `224x224` preprocessing matters for pretrained-backbone PatchCore, and it provides a strong report-compatible bridge between the weaker `64x64` run and the newer WRN `x224` leader
 - the ResNet50 PatchCore sweep was a useful intermediate step, but the larger WideResNet50-2 PatchCore follow-up is the result that finally pushed PatchCore above both the AE family and the teacher-student baselines on deployed F1
 - the original combined teacher-student score looked weak, but a post-training score sweep showed that the main bottleneck was scoring rather than the checkpoint itself
 - once the teacher-student checkpoint was rescored with a student-only `topk_mean` rule and a wider top-k ratio, it became a genuinely competitive validation-threshold result rather than a failed branch
 - this is the strongest evidence so far that architecture and anomaly scoring interact very strongly in this project; a weak default score can hide a strong checkpoint
-- teacher-student distillation still remains extremely strong: `TS-Res50` keeps the best reported `AUPRC` and best-sweep F1, even though the new direct-`224x224` EfficientNet-B0 PatchCore run now holds the highest AUROC in the report
+- teacher-student distillation still remains extremely strong, but it no longer holds the report's best ranking metrics; the new direct-`224x224` WRN PatchCore follow-up now leads on deployed F1, AUROC, AUPRC, and best-sweep F1
 - the full FastFlow `19A` sweep improved materially over the first completed flow run; the best variant was the multilayer `WideResNet50-2` model with `4` flow steps and plain `mean` reduction, reaching `F1 = 0.514729`
 - that best FastFlow run moved into the upper tier of the report and now sits very close to the strongest PatchCore and teacher-student family members, though it still remains below the best multilayer `WideResNet50-2` PatchCore result
-- the first score-level ensemble study was competitive but not decisive: the best true fusion, normalized-score `max` over WRN PatchCore and `TS-Res50`, reached `F1 = 0.529148` and a much stronger `AUPRC = 0.611277`, but it still does not beat the new direct-`224x224` EfficientNet-B0 leader on the main deployed F1 metric
+- the first score-level ensemble study was competitive but not decisive: the best true fusion, normalized-score `max` over WRN PatchCore and `TS-Res50`, reached `F1 = 0.529148` and a much stronger `AUPRC = 0.611277`, but it still does not beat the new direct-`224x224` WRN PatchCore leader on the main deployed F1 metric
 - the FastFlow family still follows the same defect pattern seen elsewhere in the project: broad defects such as `Edge-Ring` are much easier than smaller local defects such as `Scratch`, `Loc`, and `Edge-Loc`
 - Deep SVDD had especially weak AUPRC, which suggests poorer ranking quality under class imbalance
 - local-error-focused scoring appears more effective than full-image averaging on wafer maps
@@ -1270,6 +1272,64 @@ Interpretation:
 - the best operating region was narrow rather than broad: `r = 0.10` gave the best deployed F1, while `r = 0.05` slightly improved AUROC and AUPRC but not the deployed thresholded result
 - memory bank size still mattered: `mean_mb50k` was clearly better than `mean_mb20k`, which is consistent with the earlier ResNet PatchCore runs
 
+### Experiment 18A: PatchCore with WideResNet50-2 Multilayer All-in-One `x224`
+
+Purpose:
+
+- test whether the same multilayer `WideResNet50-2` PatchCore branch improves materially when wafer preprocessing is cached directly at `224x224`
+- keep the report-compatible split and the same validation-normal threshold rule, while reusing the all-in-one Modal-friendly workflow
+- determine whether the strongest `64x64` WRN PatchCore operating region remains strong after moving the full preprocessing path to `224x224`
+
+Implementation:
+
+- notebook: [18A-patchcore-wideresnet50-multilayer-x224.ipynb](notebooks/anomaly_50k/18A-patchcore-wideresnet50-multilayer-x224.ipynb)
+- artifact dir: [artifacts/x224/patchcore-wideresnet50-multilayer](artifacts/x224/patchcore-wideresnet50-multilayer)
+- execution note: all-in-one notebook prepared for Modal / A10 execution, with saved sweep artifacts copied back into the repo
+- split and evaluation:
+  - same shared `40,000 / 5,000 / 5,000 + 250` report split from raw `LSWMD.pkl`
+  - threshold selected as the `95th` percentile of validation-normal raw scores
+- key model settings:
+  - wafer preprocessing cached directly at `224x224`
+  - frozen ImageNet-pretrained `WideResNet50-2`
+  - multilayer patch embedding from `layer2` and `layer3`
+  - feature dimension `1536`
+  - memory bank cap `600,000`
+  - wafer score = mean of top `5%` or top `10%` patch anomaly scores
+
+Sweep summary:
+
+| variant | reduction | memory bank | top-k ratio | val-threshold precision | val-threshold recall | val-threshold F1 | AUROC | AUPRC | best sweep F1 |
+| ------- | --------- | ----------- | ----------- | ----------------------- | -------------------- | ---------------- | ----- | ----- | ------------- |
+| `topk_mb50k_r005_x224` | `topk_mean` | `600000` | `0.05` | `0.432184` | `0.752000` | `0.548905` | `0.930680` | `0.659063` | `0.634146` |
+| `topk_mb50k_r010_x224` | `topk_mean` | `600000` | `0.10` | `0.418345` | `0.748000` | `0.536585` | `0.920673` | `0.619938` | `0.598753` |
+
+Selected result:
+
+| variant | val-threshold precision | val-threshold recall | val-threshold F1 | AUROC | AUPRC | best sweep F1 |
+| ------- | ----------------------- | -------------------- | ---------------- | ----- | ----- | ------------- |
+| `PatchCore-WideRes50-x224-topk-mb600k-r005` | `0.432184` | `0.752000` | `0.548905` | `0.930680` | `0.659063` | `0.634146` |
+
+Per-defect recall:
+
+| defect type | recall |
+| ----------- | ------ |
+| `Edge-Loc` | `0.622642` |
+| `Scratch` | `0.666667` |
+| `Loc` | `0.735294` |
+| `Center` | `0.780000` |
+| `Edge-Ring` | `0.797619` |
+| `Donut` | `1.000000` |
+| `Random` | `1.000000` |
+| `Near-full` | `1.000000` |
+
+Interpretation:
+
+- this follow-up is the strongest completed deployment-style result in the report so far, improving over both the earlier `64x64` WRN PatchCore leader and the direct-`224x224` EfficientNet-B0 PatchCore run on deployed F1
+- the gain is not just thresholded: this run also sets the current best `AUROC`, `AUPRC`, and best-sweep F1 in the report, which means the improvement is visible in both ranking quality and the deployed operating point
+- direct `224x224` preprocessing appears to matter for the WRN PatchCore branch just as it did for EfficientNet-B0, but the larger WRN backbone now converts that extra spatial detail into a stronger final operating point
+- the best ratio moved slightly toward a narrower top-k region than the earlier `64x64` winner: here `r = 0.05` beats `r = 0.10` on both thresholded F1 and ranking metrics
+- defect behavior is especially encouraging in the small-local regime: `Scratch`, `Loc`, and `Edge-Loc` all improve over the older `64x64` WRN PatchCore pattern, while broad defects remain consistently easy
+
 The PatchCore family figure below now summarizes the full branch, including the newer WideResNet50-2 multilayer follow-up: the left panel compares the best PatchCore result from each backbone or source, while the right panel shows all PatchCore variants colored by backbone/source and marked by wafer-level reduction.
 
 ![PatchCore family comparison](artifacts/report_plots/patchcore_family_comparison.png)
@@ -1997,7 +2057,7 @@ Interpretation:
 
 - this follow-up changed the EfficientNet-B0 story materially: direct `224x224` preprocessing lifted deployed F1 from `0.467492` to `0.544073` and AUROC from `0.905171` to `0.924586`
 - the gain came without changing the report split or threshold policy, which strongly suggests the earlier bottleneck was the `64x64 -> 224x224` preprocessing path rather than threshold selection
-- the direct-`224x224` run is now the strongest completed deployment-style result in the report on F1 and also the highest AUROC, although its AUPRC still trails the strongest `TS-Res50` and WRN PatchCore entries
+- this direct-`224x224` run became a strong upper-tier PatchCore result and temporarily set the best deployed operating point in the report, before the later WRN `x224` follow-up pushed the branch higher still
 - defect behavior improved in the local regime as well: `Edge-Loc` and `Scratch` both moved up, and `Edge-Ring` became very strong, while `Center` remains more moderate
 - this makes direct high-resolution preprocessing the default recommendation for future pretrained-backbone PatchCore follow-ups
 
@@ -2005,7 +2065,7 @@ Interpretation:
 
 Across all completed experiments:
 
-- the best current result on the main deployment-style F1 metric is now the direct-`224x224` EfficientNet-B0 PatchCore follow-up, which reached `F1 = 0.544073`
+- the best current result on the main deployment-style F1 metric is now the direct-`224x224` WideResNet50-2 PatchCore follow-up, which reached `F1 = 0.548905`
 - the original `64x64` autoencoder checkpoint improved substantially just by changing the scoring rule
 - retraining that autoencoder longer did not materially change the outcome, so epoch count alone is unlikely to be the key lever
 - adding BatchNorm changed the best score choice for the autoencoder from `topk_abs_mean` to `max_abs`
@@ -2019,7 +2079,7 @@ Across all completed experiments:
 - the frozen pretrained ResNet18 backbone baseline with center-distance scoring was weak, so simply switching backbones without a stronger local scoring rule is not enough
 - ResNet18 + PatchCore validated the non-AE backbone direction; it beat the earlier AE-backed PatchCore sweep and substantially improved over plain ResNet18 center-distance
 - ResNet50 + PatchCore pushed that non-AE branch a bit further, but the bigger breakthrough came later from multilayer `WideResNet50-2` PatchCore
-- the EfficientNet-B0 all-in-one branch ended up splitting cleanly into two stories: the first `x64` cache-path run was only mid-pack, but the direct-`224x224` follow-up became the strongest deployed result in the report
+- the EfficientNet-B0 all-in-one branch ended up splitting cleanly into two stories: the first `x64` cache-path run was only mid-pack, but the direct-`224x224` follow-up became a strong upper-tier result and validated the high-resolution preprocessing direction
 - the ResNet50 gain was still useful because it showed the backbone direction was working, even before the stronger `WideResNet50-2` follow-up widened the margin
 - the teacher-student distillation branch improved materially once its scoring rule was fixed, and the new `TS-Res50` variation became the strongest teacher-student result on deployed F1
 - inside the `TS-Res50` family, both `layer1` and `layer2` teacher-feature variants were run; `layer1` stayed competitive, but the best verified `layer2` score remained stronger overall
@@ -2027,14 +2087,14 @@ Across all completed experiments:
 - once `WideResNet50-2` was used as a teacher inside the teacher-student framework, performance jumped sharply and became competitive with the strongest experiments in the project
 - the best `WideResNet50-2` multilayer teacher-student run slightly trailed the best `TS-Res50` result on deployed F1, but it improved the wider-teacher branch to `AUROC > 0.92` and became a strong stepping stone to the later WRN PatchCore win
 - within the `WideResNet50-2` branch, the multilayer `layer2 + layer3` teacher gave a small but consistent gain over the single-layer `layer2` version, which suggests that combining two spatial scales is useful here
-- the direct-`224x224` EfficientNet-B0 PatchCore follow-up now gives the strongest deployed operating point in the report and also the best AUROC, while `TS-Res50` still keeps the best AUPRC and best-sweep F1
+- the direct-`224x224` WRN PatchCore follow-up now gives the strongest deployed operating point in the report and also the best AUROC, AUPRC, and best-sweep F1
 - the first post-hoc score ensemble of WRN PatchCore + `TS-Res50` was close but not enough; the best true fusion improved AUPRC but still fell slightly short of the standalone WRN PatchCore result on deployed F1
-- the best BatchNorm autoencoder remains a strong comparison point because it is still simpler, still very competitive on thresholded F1, and now trails the new EfficientNet-B0 `x224` leader by only a modest margin
+- the best BatchNorm autoencoder remains a strong comparison point because it is still simpler, still very competitive on thresholded F1, and now trails the new WRN `x224` leader by only a modest margin
 - all tested models show overlap between normal and anomaly score distributions, which explains the moderate F1 values and missed anomalies
 - the score-ablation result shows that part of the bottleneck was the scoring rule, not only the model architecture
 - after fixing the score, the remaining bottleneck still looks more like limited class separation than threshold selection alone
 - the AE failure analysis shows that the remaining weakness is concentrated in smaller local defects rather than large global defect patterns
-- this makes the next decision clearer: keep the direct-`224x224` EfficientNet-B0 PatchCore run as the deployment-style benchmark, keep `TS-Res50` as the strongest teacher-student reference, and keep the BatchNorm autoencoder as the strongest reconstruction baseline
+- this makes the next decision clearer: keep the direct-`224x224` WRN PatchCore run as the deployment-style benchmark, keep `TS-Res50` as the strongest teacher-student reference, and keep the BatchNorm autoencoder as the strongest reconstruction baseline
 
 ## What Was Implemented
 
@@ -2079,14 +2139,14 @@ Recommended follow-up work:
 
 - avoid spending more time on longer-epoch reruns alone unless another change is paired with them
 - do not spend more time on dropout tuning for the current AE family unless another structural change is introduced
-- keep the direct-`224x224` EfficientNet-B0 PatchCore run as the new deployment-style benchmark to beat
+- keep the direct-`224x224` WRN PatchCore run as the new deployment-style benchmark to beat
 - keep `TS-Res50` as the main teacher-student benchmark and score-quality reference
 - keep the current AE + BatchNorm + `max_abs` result as the strongest reconstruction baseline and a useful AUPRC sanity check
 - if more non-AE work is justified, keep it on pretrained ResNet backbones with PatchCore-style local scoring rather than returning to plain global embedding-distance baselines
 - do not spend more time on larger backbone changes alone unless they are paired with PatchCore or another local-anomaly scoring method
 - keep the residual autoencoder as a logged comparison result, but stop using AE encoders as the main PatchCore improvement path
 - keep the completed multilayer WideResNet50-2 PatchCore branch as the strongest `64x64` local-anomaly challenger and the best comparison point for the older report regime
-- keep the direct-`224x224` EfficientNet-B0 PatchCore follow-up as the new report-compatible leader, and use it as the default reference for future pretrained-backbone PatchCore work
+- keep the direct-`224x224` WRN PatchCore follow-up as the new report-compatible leader, and use it as the default reference for future pretrained-backbone PatchCore work
 - if more teacher-student distillation work is justified, tune it from the new `TS-Res50` selected-score baseline: teacher layer choice, student capacity, branch weighting, and wafer-level reduction are higher-priority than longer training alone
 - if more PatchCore work is justified, tune the multilayer WideResNet50-2 branch first around the `topk_mean` ratio band near `0.05` to `0.10` before returning to older backbones
 - keep the validation-derived threshold as the main reported result, and treat test-set threshold sweeps as analysis only
