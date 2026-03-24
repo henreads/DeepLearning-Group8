@@ -49,9 +49,10 @@ Top-level scripts are kept small on purpose:
 Optional ad hoc inspection helpers live under:
 
 - `scripts/dev/`
+- `scripts/anomaly_120k_labeled/` for repo-friendly CLI wrappers around the larger labeled WRN50 PatchCore notebooks
 
 Older standalone experiment-runner scripts were removed during cleanup.
-The experiment logic now lives primarily inside the notebooks plus reusable code under `src/wafer_defect/`.
+The experiment logic still lives primarily inside the notebooks plus reusable code under `src/wafer_defect/`, with thin `scripts/anomaly_120k_labeled/` wrappers added for the `120k` PatchCore runs.
 
 ## Setup
 

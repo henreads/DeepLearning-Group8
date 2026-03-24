@@ -30,12 +30,57 @@ DEFAULT_SPLIT_CONFIG: dict[str, int] = {
     "test_anomalies": 1_000,
 }
 
+NORMAL_ONLY_TRAIN_SPLIT_CONFIG: dict[str, int] = {
+    "train_total": 117_944,
+    "train_anomalies": 0,
+    "val_total": 14_743,
+    "val_anomalies": 0,
+    "test_total": 15_481,
+    "test_anomalies": 737,
+}
+
 DEFAULT_VARIANTS: list[dict[str, Any]] = [
     {"name": "topk_mb50k_r010", "memory_bank_size": 50_000, "reduction": "topk_mean", "topk_ratio": 0.10},
     {"name": "topk_mb50k_r015", "memory_bank_size": 50_000, "reduction": "topk_mean", "topk_ratio": 0.15},
     {"name": "topk_mb50k_r005", "memory_bank_size": 50_000, "reduction": "topk_mean", "topk_ratio": 0.05},
     {"name": "mean_mb50k", "memory_bank_size": 50_000, "reduction": "mean", "topk_ratio": 0.10},
 ]
+
+NORMAL_ONLY_IMPROVEMENT_VARIANTS: list[dict[str, Any]] = [
+    {
+        "name": "topk_knn3_mb240k_r002_normals_2048src",
+        "memory_bank_size": 240_000,
+        "reduction": "topk_mean",
+        "topk_ratio": 0.02,
+        "patch_nn_k": 3,
+        "memory_source_images": 2_048,
+        "normal_only_memory_sampling": True,
+    },
+    {
+        "name": "topk_knn3_mb240k_r005_normals_2048src",
+        "memory_bank_size": 240_000,
+        "reduction": "topk_mean",
+        "topk_ratio": 0.05,
+        "patch_nn_k": 3,
+        "memory_source_images": 2_048,
+        "normal_only_memory_sampling": True,
+    },
+    {
+        "name": "mean_knn3_mb240k_normals_2048src",
+        "memory_bank_size": 240_000,
+        "reduction": "mean",
+        "topk_ratio": 0.10,
+        "patch_nn_k": 3,
+        "memory_source_images": 2_048,
+        "normal_only_memory_sampling": True,
+    },
+]
+
+MODULE_PATH = Path(__file__).resolve()
+HELPERS_ROOT = MODULE_PATH.parent
+NOTEBOOK_BUNDLE_ROOT = HELPERS_ROOT.parent
+PROJECT_ROOT = NOTEBOOK_BUNDLE_ROOT.parent.parent
+RAW_PICKLE_FILENAMES = ("LSWMD.pkl", "WM811K.pkl", "wm811k.pkl")
 
 
 def build_wideresnet50_2(pretrained: bool) -> nn.Module:
@@ -64,28 +109,73 @@ def resolve_device(device_name: str = "auto") -> torch.device:
     return torch.device(device_name)
 
 
+def _seed_search_paths(start: str | Path | None = None) -> list[Path]:
+    seeds: list[Path] = []
+    if start is not None:
+        start_path = Path(start).expanduser().resolve()
+        seeds.append(start_path.parent if start_path.is_file() else start_path)
+    seeds.extend([Path.cwd().resolve(), NOTEBOOK_BUNDLE_ROOT, PROJECT_ROOT])
+
+    unique_seeds: list[Path] = []
+    seen: set[Path] = set()
+    for seed in seeds:
+        if seed not in seen:
+            seen.add(seed)
+            unique_seeds.append(seed)
+    return unique_seeds
+
+
 def resolve_bundle_root(start: str | Path | None = None) -> Path:
-    start_path = Path(start or Path.cwd()).resolve()
-    for candidate in [start_path, *start_path.parents]:
-        if (candidate / "helpers" / "patchcore_wrn50_modal.py").exists() and (candidate / "notebooks").exists():
-            return candidate
+    seen: set[Path] = set()
+    for seed in _seed_search_paths(start):
+        for candidate in [seed, *seed.parents]:
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+
+            helper_path = candidate / "helpers" / "patchcore_wrn50_modal.py"
+            if helper_path.exists():
+                return candidate.resolve()
+
+            project_helper_path = candidate / "notebooks" / "anomaly_120k_labeled" / "helpers" / "patchcore_wrn50_modal.py"
+            if project_helper_path.exists():
+                return project_helper_path.parent.parent.resolve()
     raise FileNotFoundError("Could not locate the Modal bundle root.")
+
+
+def resolve_project_root(start: str | Path | None = None) -> Path:
+    seen: set[Path] = set()
+    for seed in _seed_search_paths(start):
+        for candidate in [seed, *seed.parents]:
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+
+            if (candidate / "notebooks" / "anomaly_120k_labeled" / "helpers" / "patchcore_wrn50_modal.py").exists():
+                return candidate.resolve()
+
+            if (candidate / "helpers" / "patchcore_wrn50_modal.py").exists():
+                return candidate.parent.parent.resolve()
+
+            if (candidate / "data").exists() and (
+                (candidate / "pyproject.toml").exists() or (candidate / ".git").exists()
+            ):
+                return candidate.resolve()
+    return PROJECT_ROOT
 
 
 def resolve_data_root(bundle_root: str | Path | None = None) -> Path:
     env_root = os.environ.get("WM811K_DATA_ROOT")
     if env_root:
         return Path(env_root).resolve()
-    resolved_bundle_root = Path(bundle_root).resolve() if bundle_root else resolve_bundle_root()
-    return (resolved_bundle_root / "data").resolve()
+    return (resolve_project_root(bundle_root) / "data").resolve()
 
 
 def resolve_output_root(bundle_root: str | Path | None = None) -> Path:
     env_root = os.environ.get("WM811K_OUTPUT_ROOT")
     if env_root:
         return Path(env_root).resolve()
-    resolved_bundle_root = Path(bundle_root).resolve() if bundle_root else resolve_bundle_root()
-    return (resolved_bundle_root / "artifacts").resolve()
+    return (resolve_project_root(bundle_root) / "artifacts").resolve()
 
 
 def infer_data_root_from_metadata_path(metadata_path: str | Path) -> Path:
@@ -96,28 +186,94 @@ def infer_data_root_from_metadata_path(metadata_path: str | Path) -> Path:
     return metadata_path.parent.resolve()
 
 
+def _resolve_existing_explicit_path(path_like: str | Path) -> Path | None:
+    raw_path = Path(path_like).expanduser()
+    candidates = [raw_path] if raw_path.is_absolute() else [
+        raw_path,
+        Path.cwd().resolve() / raw_path,
+        NOTEBOOK_BUNDLE_ROOT / raw_path,
+        PROJECT_ROOT / raw_path,
+        (PROJECT_ROOT / "data") / raw_path,
+        (PROJECT_ROOT / "data" / "raw") / raw_path,
+    ]
+
+    seen: set[Path] = set()
+    for candidate in candidates:
+        resolved_candidate = candidate.resolve()
+        if resolved_candidate in seen:
+            continue
+        seen.add(resolved_candidate)
+        if resolved_candidate.exists():
+            return resolved_candidate
+    return None
+
+
 def auto_find_raw_pickle(explicit_path: str | Path | None = None) -> Path:
     if explicit_path:
-        path = Path(explicit_path)
-        if path.exists():
-            return path.resolve()
-        raise FileNotFoundError(f"Raw pickle not found: {path}")
+        resolved_path = _resolve_existing_explicit_path(explicit_path)
+        if resolved_path is not None:
+            return resolved_path
+        raise FileNotFoundError(f"Raw pickle not found: {explicit_path}")
+
+    data_root_env = os.environ.get("WM811K_DATA_ROOT")
+    exact_roots = [
+        Path.cwd().resolve(),
+        NOTEBOOK_BUNDLE_ROOT,
+        PROJECT_ROOT,
+        PROJECT_ROOT / "data",
+        PROJECT_ROOT / "data" / "raw",
+    ]
+    if data_root_env:
+        data_root = Path(data_root_env).expanduser().resolve()
+        exact_roots.extend([data_root, data_root / "raw"])
+
+    seen_exact_paths: set[Path] = set()
+    for root in exact_roots:
+        for filename in RAW_PICKLE_FILENAMES:
+            for candidate in (
+                root / filename,
+                root / "raw" / filename,
+                root / "data" / filename,
+                root / "data" / "raw" / filename,
+            ):
+                resolved_candidate = candidate.resolve()
+                if resolved_candidate in seen_exact_paths:
+                    continue
+                seen_exact_paths.add(resolved_candidate)
+                if resolved_candidate.exists():
+                    return resolved_candidate
 
     search_roots = [
-        Path.cwd(),
+        Path.cwd().resolve(),
+        NOTEBOOK_BUNDLE_ROOT,
+        PROJECT_ROOT,
+        PROJECT_ROOT / "data",
+        PROJECT_ROOT / "data" / "raw",
         Path("/vol/data"),
         Path("/data"),
         Path("/root"),
         Path("/mnt/data"),
         Path("/workspace"),
     ]
+    if data_root_env:
+        search_roots.extend([Path(data_root_env).expanduser().resolve(), Path(data_root_env).expanduser().resolve() / "raw"])
+
+    seen_roots: set[Path] = set()
     for root in search_roots:
-        if root.exists():
-            matches = sorted(root.rglob("LSWMD.pkl"))
+        resolved_root = root.resolve()
+        if resolved_root in seen_roots or not resolved_root.exists():
+            continue
+        seen_roots.add(resolved_root)
+        for filename in RAW_PICKLE_FILENAMES:
+            matches = sorted(resolved_root.rglob(filename))
             if matches:
                 return matches[0].resolve()
 
-    raise FileNotFoundError("Could not find LSWMD.pkl. Set RAW_PICKLE explicitly.")
+    default_expected = (PROJECT_ROOT / "data" / "raw" / "LSWMD.pkl").resolve()
+    raise FileNotFoundError(
+        "Could not find a WM811K raw pickle. "
+        f"Expected it near {default_expected} or set WM811K_RAW_PICKLE / RAW_PICKLE explicitly."
+    )
 
 
 def read_legacy_pickle(path: Path) -> pd.DataFrame:
@@ -350,13 +506,16 @@ def summarize_threshold_metrics(labels: np.ndarray, scores: np.ndarray, threshol
     precision = float(precision_score(labels, predicted, zero_division=0))
     recall = float(recall_score(labels, predicted, zero_division=0))
     f1 = float(0.0 if precision + recall == 0 else 2.0 * precision * recall / (precision + recall))
+    unique_labels = np.unique(labels)
+    auroc = None if unique_labels.size < 2 else float(roc_auc_score(labels, scores))
+    auprc = None if np.sum(labels == 1) == 0 else float(average_precision_score(labels, scores))
     return {
         "threshold": float(threshold),
         "precision": precision,
         "recall": recall,
         "f1": f1,
-        "auroc": float(roc_auc_score(labels, scores)),
-        "auprc": float(average_precision_score(labels, scores)),
+        "auroc": auroc,
+        "auprc": auprc,
         "false_positive_rate": float(0.0 if fp + tn == 0 else fp / (fp + tn)),
         "tp": int(tp),
         "fp": int(fp),
@@ -413,20 +572,25 @@ def select_validation_threshold(
     strategy = str(threshold_strategy).lower()
     val_labels = val_scores_df["is_anomaly"].to_numpy()
     val_scores = val_scores_df["score"].to_numpy()
+    val_normal_scores = val_scores_df.loc[val_scores_df["is_anomaly"] == 0, "score"]
+    if val_normal_scores.empty:
+        raise ValueError("Validation threshold selection requires at least one normal score.")
     val_threshold_sweep_df, best_validation_sweep = sweep_threshold_metrics(
         val_labels,
         val_scores,
         max_false_positive_rate=max_false_positive_rate if strategy == "validation_f1" else None,
     )
 
-    if strategy == "normal_quantile":
-        val_normal_scores = val_scores_df.loc[val_scores_df["is_anomaly"] == 0, "score"]
+    if strategy in {"normal_quantile", "validation_normal_quantile"}:
         threshold = float(val_normal_scores.quantile(threshold_quantile))
+        threshold_reference_population = "validation_normals_only"
     elif strategy == "validation_f1":
         threshold = float(best_validation_sweep["threshold"])
+        threshold_reference_population = "validation_labels"
     else:
         raise ValueError(
-            "threshold_strategy must be one of {'normal_quantile', 'validation_f1'}, "
+            "threshold_strategy must be one of "
+            "{'normal_quantile', 'validation_normal_quantile', 'validation_f1'}, "
             f"but received {threshold_strategy!r}."
         )
 
@@ -434,10 +598,13 @@ def select_validation_threshold(
     return {
         "threshold": float(threshold),
         "threshold_strategy": strategy,
+        "threshold_reference_population": str(threshold_reference_population),
         "threshold_quantile": float(threshold_quantile),
         "max_false_positive_rate": None
         if max_false_positive_rate is None
         else float(max_false_positive_rate),
+        "validation_normal_count": int(val_normal_scores.shape[0]),
+        "validation_anomaly_count": int((val_scores_df["is_anomaly"] == 1).sum()),
         "selected_metrics": selected_metrics,
         "val_threshold_sweep_df": val_threshold_sweep_df,
         "best_validation_sweep": best_validation_sweep,
@@ -519,6 +686,7 @@ class MultiLayerPatchCoreModel(nn.Module):
         teacher_layers: list[str],
         reduction: str = "topk_mean",
         topk_ratio: float = 0.10,
+        patch_nn_k: int = 1,
         pretrained: bool = True,
         freeze_backbone: bool = True,
         backbone_input_size: int = 224,
@@ -530,8 +698,11 @@ class MultiLayerPatchCoreModel(nn.Module):
         self.teacher_layers = [str(layer).lower() for layer in teacher_layers]
         self.reduction = str(reduction)
         self.topk_ratio = float(topk_ratio)
+        self.patch_nn_k = int(patch_nn_k)
         self.query_chunk_size = int(query_chunk_size)
         self.memory_chunk_size = int(memory_chunk_size)
+        if self.patch_nn_k <= 0:
+            raise ValueError(f"patch_nn_k must be positive, got {patch_nn_k}")
 
         self.teacher = WideResNet50_2MultiLayerExtractor(
             teacher_layers=self.teacher_layers,
@@ -579,9 +750,17 @@ class MultiLayerPatchCoreModel(nn.Module):
             for memory_start in range(0, self.memory_bank.shape[0], self.memory_chunk_size):
                 memory_chunk = self.memory_bank[memory_start : memory_start + self.memory_chunk_size]
                 distances = torch.cdist(query_chunk, memory_chunk)
-                current_best = distances.min(dim=1).values
-                chunk_best = current_best if chunk_best is None else torch.minimum(chunk_best, current_best)
-            mins.append(chunk_best)
+                k_eff = min(self.patch_nn_k, memory_chunk.shape[0])
+                current_best = torch.topk(distances, k=k_eff, dim=1, largest=False).values
+                if chunk_best is None:
+                    chunk_best = current_best
+                    continue
+                combined = torch.cat([chunk_best, current_best], dim=1)
+                keep = min(self.patch_nn_k, combined.shape[1])
+                chunk_best = torch.topk(combined, k=keep, dim=1, largest=False).values
+            if chunk_best is None:
+                raise ValueError("Cannot score patches with an empty memory bank.")
+            mins.append(chunk_best.mean(dim=1))
         return torch.cat(mins, dim=0).reshape(batch_size, patch_count)
 
     def reduce_patch_distances(self, patch_distances: torch.Tensor) -> torch.Tensor:
@@ -722,10 +901,12 @@ def run_patchcore_variant(
 ) -> dict[str, Any]:
     normal_only_memory_sampling = bool(variant.get("normal_only_memory_sampling", False))
     memory_source_images = variant.get("memory_source_images")
+    patch_nn_k = int(variant.get("patch_nn_k", 1))
     model = MultiLayerPatchCoreModel(
         teacher_layers=teacher_layers,
         reduction=str(variant["reduction"]),
         topk_ratio=float(variant["topk_ratio"]),
+        patch_nn_k=patch_nn_k,
         pretrained=pretrained,
         freeze_backbone=freeze_backbone,
         backbone_input_size=backbone_input_size,
@@ -785,18 +966,23 @@ def run_patchcore_variant(
     row = {
         "name": str(variant["name"]),
         "memory_bank_size": int(variant["memory_bank_size"]),
+        "memory_bank_vectors": int(memory_bank.shape[0]),
         "memory_subset_images": int(len(memory_subset)),
         "memory_source_images_requested": None if memory_source_images is None else int(memory_source_images),
         "memory_sampling_candidate_images": int(candidate_pool_images),
         "normal_only_memory_sampling": normal_only_memory_sampling,
         "patches_per_image": int(model.patches_per_image),
         "feature_dim": int(model.feature_dim),
+        "patch_nn_k": int(model.patch_nn_k),
         "reduction": str(variant["reduction"]),
         "topk_ratio": float(variant["topk_ratio"]),
         "threshold_strategy": str(threshold_strategy),
+        "threshold_reference_population": str(threshold_selection["threshold_reference_population"]),
         "max_validation_false_positive_rate": None
         if max_validation_false_positive_rate is None
         else float(max_validation_false_positive_rate),
+        "validation_normal_count": int(threshold_selection["validation_normal_count"]),
+        "validation_anomaly_count": int(threshold_selection["validation_anomaly_count"]),
         "threshold": float(threshold),
         "precision": float(metrics["precision"]),
         "recall": float(metrics["recall"]),
@@ -829,10 +1015,12 @@ def run_patchcore_variant(
             "candidate_pool_images": int(candidate_pool_images),
             "source_images_requested": None if memory_source_images is None else int(memory_source_images),
             "source_images_sampled": int(len(memory_subset)),
+            "memory_bank_vectors": int(memory_bank.shape[0]),
         },
         "selected_threshold": {
             "strategy": str(threshold_strategy),
             "threshold": float(threshold),
+            "reference_population": str(threshold_selection["threshold_reference_population"]),
             "max_validation_false_positive_rate": None
             if max_validation_false_positive_rate is None
             else float(max_validation_false_positive_rate),

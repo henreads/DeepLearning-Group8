@@ -17,3 +17,4 @@ Other helpers are grouped to reduce top-level clutter:
 
 - `dev/` contains one-off inspection tools
 - `classifier/` contains the supervised multiclass classifier workflow scripts
+- `anomaly_120k_labeled/` contains repo-friendly CLI wrappers for the larger labeled WRN50 PatchCore workflow

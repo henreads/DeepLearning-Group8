@@ -6,6 +6,7 @@ Contents
 
 - `1_patchcore_wideresnet50_dataset_helper.ipynb`
 - `1_patchcore_wideresnet50_multilayer_training.ipynb`
+- `1A_patchcore_wideresnet50_multilayer_training_normal_only.ipynb`
 - `2_patchcore_wideresnet50_modal_results.ipynb`
 - `3_patchcore_threshold_policies.ipynb`
 - `4_patchcore_memorybank_feature_sweep.ipynb`
@@ -87,3 +88,9 @@ Notebook 4 Plan
 - normal-only memory sampling
 - `96 / 128` image size
 - `layer1` inclusion sweeps against the current `layer2 + layer3` baseline
+
+Normal-Only Report-Style Retrain
+
+- `1A_patchcore_wideresnet50_multilayer_training_normal_only.ipynb` is the clean retrain notebook for the corrected anomaly protocol.
+- It uses a report-style normal-only split that stays close to `80 / 10 / 10`: `117,944` train normals, `14,743` validation normals, and `14,744` test normals with `737` test anomalies.
+- Its deployment threshold is selected from validation normal scores only with the `0.95` quantile rule.
