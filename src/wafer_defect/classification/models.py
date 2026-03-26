@@ -252,7 +252,25 @@ class WaferClassifier(nn.Module):
                 dropout=dropout,
             )
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward_feature_map(self, x: torch.Tensor) -> torch.Tensor:
         x = self.stem(x)
-        x = self.features(x)
+        return self.features(x)
+
+    def extract_embedding(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.forward_feature_map(x)
+        if self.variant == "baseline":
+            x = self.classifier[0](x)
+            x = self.classifier[1](x)
+            x = self.classifier[2](x)
+            return self.classifier[3](x)
+
+        avg_features = self.classifier.avgpool(x)
+        max_features = self.classifier.maxpool(x)
+        x = torch.cat([avg_features, max_features], dim=1)
+        x = self.classifier.classifier[0](x)
+        x = self.classifier.classifier[1](x)
+        return self.classifier.classifier[2](x)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.forward_feature_map(x)
         return self.classifier(x)

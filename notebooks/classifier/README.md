@@ -10,3 +10,4 @@ Files here cover:
 - final pseudo-label generation
 - ensemble workflow
 - Kaggle retraining on the full labeled `80 / 10 / 10` split
+- seed07-based pseudo-label export on the unlabeled WM-811K rows

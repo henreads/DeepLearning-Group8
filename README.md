@@ -243,6 +243,8 @@ Main anomaly-detection notebooks on the original `50k` benchmark split:
   Evaluate and use an ensemble of multiple multiclass classifier checkpoints trained with different random seeds.
 - `notebooks/classifier/5_multiclass_classifier_all_labeled_kaggle.ipynb`
   Rebuild the multiclass classifier on all labeled WM-811K rows using the stratified `80 / 10 / 10` split prepared for Kaggle training.
+- `notebooks/classifier/6_seed07_unlabeled_pseudolabeling.ipynb`
+  Use the saved `seed07` all-labeled classifier checkpoint to pseudo-label the unlabeled WM-811K rows and export confidence-scored CSV files for later validation work.
 - `scripts/classifier/ensemble_multiclass_classifier.py`
   Evaluate either a simple averaged ensemble or a validation-fitted stacking ensemble from multiple classifier checkpoints.
   The stacking mode saves a reusable `stacking_combiner.json` file for later inference.
