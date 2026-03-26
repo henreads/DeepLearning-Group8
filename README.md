@@ -241,6 +241,8 @@ Main anomaly-detection notebooks on the original `50k` benchmark split:
   Generate unlabeled pseudo-labels only after you have selected the final classifier checkpoint you want to trust.
 - `notebooks/classifier/4_multiclass_classifier_ensemble_workflow.ipynb`
   Evaluate and use an ensemble of multiple multiclass classifier checkpoints trained with different random seeds.
+- `notebooks/classifier/5_multiclass_classifier_all_labeled_kaggle.ipynb`
+  Rebuild the multiclass classifier on all labeled WM-811K rows using the stratified `80 / 10 / 10` split prepared for Kaggle training.
 - `scripts/classifier/ensemble_multiclass_classifier.py`
   Evaluate either a simple averaged ensemble or a validation-fitted stacking ensemble from multiple classifier checkpoints.
   The stacking mode saves a reusable `stacking_combiner.json` file for later inference.
@@ -248,6 +250,32 @@ Main anomaly-detection notebooks on the original `50k` benchmark split:
   Run unlabeled inference with the same checkpoint set, optionally using `--combiner-json` to apply a saved stacking combiner.
 - `notebooks/classifier/2_multiclass_classifier_showcase.ipynb`
   Present the multiclass classifier results, plots, and example predictions after notebook `1` has produced the artifacts.
+
+Current all-labeled classifier snapshot from the saved `seed07` Kaggle run:
+
+- split: all labeled rows with stratified `80 / 10 / 10`
+- best epoch: `29`
+- validation balanced accuracy: `0.9463`
+- test accuracy: `0.9587`
+- test balanced accuracy: `0.9180`
+- test macro F1: `0.8456`
+- test weighted F1: `0.9619`
+
+Per-class test metrics for that `seed07` run:
+
+| Class | Precision | Recall | F1 | Support |
+| --- | ---: | ---: | ---: | ---: |
+| `none` | 0.9979 | 0.9619 | 0.9796 | 14,743 |
+| `Center` | 0.8004 | 0.9698 | 0.8770 | 430 |
+| `Donut` | 0.8246 | 0.8545 | 0.8393 | 55 |
+| `Edge-Loc` | 0.6771 | 0.9171 | 0.7791 | 519 |
+| `Edge-Ring` | 0.9704 | 0.9835 | 0.9769 | 968 |
+| `Loc` | 0.6008 | 0.8468 | 0.7029 | 359 |
+| `Near-full` | 1.0000 | 0.8667 | 0.9286 | 15 |
+| `Random` | 0.7281 | 0.9540 | 0.8259 | 87 |
+| `Scratch` | 0.5714 | 0.9076 | 0.7013 | 119 |
+
+This checkpoint is currently the strongest fully exported artifact from the interrupted all-labeled Kaggle run. The main remaining weakness is precision on the local defect families such as `Loc`, `Scratch`, and `Edge-Loc`, with most large-support mistakes still coming from normal wafers being predicted as local defects.
 
 Recommended run order for a fresh setup:
 

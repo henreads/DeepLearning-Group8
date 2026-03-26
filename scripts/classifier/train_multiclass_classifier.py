@@ -27,6 +27,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--limit-train", type=int, default=None)
     parser.add_argument("--limit-val", type=int, default=None)
     parser.add_argument("--limit-test", type=int, default=None)
+    parser.add_argument("--log-interval", type=int, default=0)
     return parser.parse_args()
 
 
@@ -110,6 +111,10 @@ def run_epoch(
     optimizer: torch.optim.Optimizer | None = None,
     mixup_alpha: float = 0.0,
     grad_clip_norm: float | None = None,
+    log_interval: int = 0,
+    phase_name: str = "train",
+    epoch_index: int | None = None,
+    total_epochs: int | None = None,
 ) -> dict[str, float]:
     is_training = optimizer is not None
     model.train(is_training)
@@ -117,8 +122,10 @@ def run_epoch(
     total_loss = 0.0
     all_targets: list[int] = []
     all_predictions: list[int] = []
+    samples_seen = 0
+    total_batches = len(loader)
 
-    for inputs, targets in loader:
+    for batch_index, (inputs, targets) in enumerate(loader, start=1):
         inputs = inputs.to(device)
         targets = targets.to(device)
 
@@ -143,6 +150,20 @@ def run_epoch(
         predictions = logits.argmax(dim=1)
         all_targets.extend(targets.detach().cpu().tolist())
         all_predictions.extend(predictions.detach().cpu().tolist())
+        samples_seen += len(inputs)
+
+        if log_interval > 0 and is_training and (batch_index % log_interval == 0 or batch_index == total_batches):
+            running_accuracy = accuracy_score(all_targets, all_predictions)
+            epoch_label = "?"
+            if epoch_index is not None and total_epochs is not None:
+                epoch_label = f"{epoch_index:03d}/{total_epochs:03d}"
+            print(
+                f"[{phase_name}] epoch {epoch_label} | "
+                f"batch {batch_index:04d}/{total_batches:04d} | "
+                f"samples {samples_seen:06d}/{len(loader.dataset):06d} | "
+                f"loss={total_loss / max(1, samples_seen):.4f} | "
+                f"acc={running_accuracy:.4f}"
+            )
 
     return {
         "loss": total_loss / max(1, len(loader.dataset)),
@@ -250,6 +271,7 @@ def main() -> None:
     label_smoothing = float(training_cfg.get("label_smoothing", 0.0))
     mixup_alpha = float(training_cfg.get("mixup_alpha", 0.0))
     grad_clip_norm = float(training_cfg.get("grad_clip_norm", 0.0))
+    log_interval = int(args.log_interval)
 
     train_sampler = build_train_sampler(train_dataset, len(class_names)) if use_weighted_sampler else None
     train_loader = DataLoader(
@@ -264,6 +286,28 @@ def main() -> None:
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Training config: {args.config}")
+    print(f"Metadata CSV: {metadata_csv}")
+    print(f"Output dir: {output_dir}")
+    print(f"Device: {device}")
+    print(
+        "Dataset sizes | "
+        f"train={len(train_dataset)} | val={len(val_dataset)} | test={len(test_dataset)} | "
+        f"classes={len(class_names)}"
+    )
+    print(
+        "Run settings | "
+        f"seed={seed} | epochs={int(args.epochs or training_cfg['epochs'])} | "
+        f"batch_size={batch_size} | weighted_sampler={use_weighted_sampler} | "
+        f"class_weights={use_class_weights} | checkpoint_metric={checkpoint_metric}"
+    )
+    print("Train class distribution:")
+    print(
+        train_dataset.metadata["label_name"]
+        .value_counts()
+        .sort_index()
+        .to_string()
+    )
     model = WaferClassifier(
         num_classes=len(class_names),
         base_channels=int(model_cfg["base_channels"]),
@@ -297,6 +341,7 @@ def main() -> None:
     best_checkpoint_path = output_dir / "best_model.pt"
 
     for epoch in range(1, epochs + 1):
+        print(f"Starting epoch {epoch:03d}/{epochs:03d}")
         train_metrics = run_epoch(
             model,
             train_loader,
@@ -305,6 +350,10 @@ def main() -> None:
             optimizer=optimizer,
             mixup_alpha=mixup_alpha,
             grad_clip_norm=grad_clip_norm if grad_clip_norm > 0 else None,
+            log_interval=log_interval,
+            phase_name="train",
+            epoch_index=epoch,
+            total_epochs=epochs,
         )
         train_eval_metrics = evaluate_loader(model, train_eval_loader, criterion, device)
         val_metrics = run_epoch(model, val_loader, criterion, device, optimizer=None)
@@ -348,6 +397,11 @@ def main() -> None:
                     "checkpoint_metric_name": checkpoint_metric,
                 },
                 best_checkpoint_path,
+            )
+            print(
+                f"New best checkpoint at epoch {epoch:03d} | "
+                f"{checkpoint_metric}={best_checkpoint_metric:.4f} | "
+                f"saved to {best_checkpoint_path}"
             )
         else:
             epochs_without_improvement += 1

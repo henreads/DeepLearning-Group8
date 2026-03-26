@@ -9,3 +9,4 @@ Files here cover:
 - classifier showcase / presentation views
 - final pseudo-label generation
 - ensemble workflow
+- Kaggle retraining on the full labeled `80 / 10 / 10` split
