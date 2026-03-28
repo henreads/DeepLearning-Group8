@@ -1,10 +1,10 @@
 [run]
-output_dir = "artifacts/x64/wideresnet50_embedding_baseline"
+output_dir = "artifacts/x64/wideresnet50A_embedding_baseline"
 seed = 42
 
 [data]
-metadata_csv = "data/processed/x64/wm811k/metadata_50k_5pct.csv"
-image_size = 64
+metadata_csv = "data/processed/x64/wm811k/metadata_50k_5pct_holdout70k_3p5k.csv"
+image_size = 224
 batch_size = 64
 num_workers = 4
 

@@ -126,6 +126,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--config", default="configs/train_autoencoder.toml")
+    parser.add_argument("--metadata-csv", default="")
     parser.add_argument("--device", default="auto")
     parser.add_argument("--batch-size", type=int, default=0)
     parser.add_argument("--threshold-quantile", type=float, default=0.95)
@@ -140,6 +141,8 @@ def main() -> None:
     config = load_toml(args.config) if args.config else checkpoint.get("config")
     if not config:
         raise ValueError("Could not load config from args or checkpoint.")
+    if args.metadata_csv:
+        config.setdefault("data", {})["metadata_csv"] = args.metadata_csv
 
     image_size = infer_image_size(config, checkpoint_path)
     device = resolve_device(args.device or config["training"].get("device", "auto"))

@@ -6,7 +6,7 @@ Scope:
 
 - dataset family: `data/processed/x64/wm811k`
 - default benchmark metadata: `data/processed/x64/wm811k/metadata_50k_5pct.csv`
-- notebook sequence: `01` through `21`
+- notebook sequence: `01` through `22`
 
 Why this folder exists:
 

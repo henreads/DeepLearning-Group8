@@ -7,7 +7,9 @@ import json
 from pathlib import Path
 import re
 from typing import Any
+from xml.parsers.expat import model
 
+import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import DataLoader
@@ -171,10 +173,58 @@ def collect_embeddings(
     return pd.DataFrame(rows)
 
 
+def collect_features(
+    model: torch.nn.Module,
+    dataloader: DataLoader,
+    device: torch.device,
+    model_type: str,
+) -> tuple[np.ndarray, np.ndarray]:
+
+    import numpy as np
+
+    features = []
+    labels_all = []
+
+    model.eval()
+
+    with torch.inference_mode():
+        for inputs, labels in dataloader:
+            inputs = inputs.to(device)
+
+            if model_type == "autoencoder":
+                recon = model(inputs)
+                feat = (inputs - recon).view(inputs.size(0), -1)
+
+            elif model_type == "ts_distillation":
+                outputs = model(inputs)
+
+                if isinstance(outputs, tuple):
+                    feat = outputs[0]
+                else:
+                    feat = outputs
+
+                feat = feat.view(feat.size(0), -1)
+
+            elif model_type == "patchcore":
+                feat = model.embed(inputs)  
+                feat = feat.view(feat.size(0), -1)
+
+            else:
+
+                feat = model(inputs)
+                feat = feat.view(feat.size(0), -1)
+
+            features.append(feat.cpu().numpy())
+            labels_all.extend(labels.tolist())
+
+    return np.concatenate(features, axis=0), np.array(labels_all)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoint", required=True)
     parser.add_argument("--config", default="")
+    parser.add_argument("--metadata-csv", default="")
     parser.add_argument("--model-type", default="")
     parser.add_argument("--device", default="auto")
     parser.add_argument("--batch-size", type=int, default=0)
@@ -200,6 +250,9 @@ def main() -> None:
 
     model_type = infer_model_type(config, args.model_type)
     model_config = config.setdefault("model", {})
+    data_config = config.setdefault("data", {})
+    if args.metadata_csv:
+        data_config["metadata_csv"] = args.metadata_csv
     if args.reduction:
         model_config["reduction"] = args.reduction
     if args.topk_ratio >= 0.0:
@@ -211,7 +264,7 @@ def main() -> None:
 
     beta = float(config["model"].get("beta", 0.01))
     device = resolve_device(args.device or config["training"].get("device", "auto"))
-    batch_size = args.batch_size or int(config["data"].get("batch_size", 64))
+    batch_size = args.batch_size or int(data_config.get("batch_size", 64))
     image_size = infer_image_size(config, checkpoint_path)
 
     model = build_model(config, model_type, image_size=image_size)
@@ -222,10 +275,12 @@ def main() -> None:
         model.load_state_dict(checkpoint["model_state_dict"])
     model.to(device)
 
-    val_dataset = WaferMapDataset(config["data"]["metadata_csv"], split="val", image_size=image_size)
-    test_dataset = WaferMapDataset(config["data"]["metadata_csv"], split="test", image_size=image_size)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=int(config["data"].get("num_workers", 0)))
-    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=int(config["data"].get("num_workers", 0)))
+    metadata_csv = data_config["metadata_csv"]
+    num_workers = int(data_config.get("num_workers", 0))
+    val_dataset = WaferMapDataset(metadata_csv, split="val", image_size=image_size)
+    test_dataset = WaferMapDataset(metadata_csv, split="test", image_size=image_size)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
 
     if model_type in {"resnet18_backbone", "wideresnet50_backbone"}:
         val_embeddings_df = collect_embeddings(model, val_loader, device)
@@ -255,6 +310,8 @@ def main() -> None:
             ],
             "is_anomaly": test_embeddings_df["is_anomaly"].astype(int),
         })
+        test_features = np.stack(test_embeddings_df["embedding"].to_list(), axis=0)
+        test_labels = test_embeddings_df["is_anomaly"].to_numpy(dtype=np.int64)
     else:
         val_scores_df = collect_scores(model, val_loader, device, model_type, beta=beta)
         val_normal_scores = val_scores_df.loc[val_scores_df["is_anomaly"] == 0, "score"]
@@ -263,6 +320,19 @@ def main() -> None:
         threshold = float(val_normal_scores.quantile(args.threshold_quantile))
 
         test_scores_df = collect_scores(model, test_loader, device, model_type, beta=beta)
+        print("[INFO] Extracting features for UMAP...")
+
+        test_features, test_labels = collect_features(
+            model,
+            test_loader,
+            device,
+            model_type,
+        )
+
+        np.save(output_dir / "test_features.npy", test_features)
+        np.save(output_dir / "test_labels.npy", test_labels)
+
+        print(f"[INFO] Saved features: {test_features.shape}")
 
     labels = test_scores_df["is_anomaly"].to_numpy()
     scores = test_scores_df["score"].to_numpy()
@@ -276,10 +346,13 @@ def main() -> None:
     val_scores_df.to_csv(output_dir / "val_scores.csv", index=False)
     test_scores_df.to_csv(output_dir / "test_scores.csv", index=False)
     threshold_sweep_df.to_csv(output_dir / "threshold_sweep.csv", index=False)
+    np.save(output_dir / "test_features.npy", test_features)
+    np.save(output_dir / "test_labels.npy", test_labels)
 
     summary = {
         "model_type": model_type,
         "checkpoint": str(checkpoint_path),
+        "metadata_csv": str(metadata_csv),
         "threshold_quantile": float(args.threshold_quantile),
         "threshold": threshold,
         "metrics_at_validation_threshold": metrics,
