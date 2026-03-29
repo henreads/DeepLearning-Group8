@@ -1,0 +1,25 @@
+[run]
+output_dir = "experiments/anomaly_detection/patchcore/resnet50/x64/main/artifacts/patchcore_resnet50"
+seed = 42
+
+[data]
+metadata_csv = "data/processed/x64/wm811k/metadata_50k_5pct.csv"
+image_size = 64
+batch_size = 32
+num_workers = 0
+
+[training]
+device = "auto"
+
+[model]
+type = "patchcore"
+backbone_type = "resnet50"
+pretrained = true
+freeze_backbone = true
+backbone_input_size = 224
+normalize_imagenet = true
+memory_bank_size = 50000
+reduction = "mean"
+topk_ratio = 0.1
+query_chunk_size = 1024
+memory_chunk_size = 4096

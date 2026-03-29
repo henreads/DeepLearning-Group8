@@ -1,0 +1,8 @@
+[holdout]
+raw_pickle = "data/raw/LSWMD.pkl"
+base_metadata_csv = "data/processed/x64/wm811k/metadata_50k_5pct.csv"
+output_metadata_csv = "data/processed/x64/wm811k/metadata_50k_5pct_holdout70k_3p5k.csv"
+image_size = 64
+test_normal_count = 70000
+test_defect_count = 3500
+random_seed = 42

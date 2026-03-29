@@ -1,0 +1,32 @@
+[dataset]
+name = "wm811k_patchcore_custom"
+raw_pickle = "data/raw/LSWMD.pkl"
+processed_root = "data/processed/x64/wm811k_patchcore_custom"
+metadata_csv = "data/processed/x64/wm811k_patchcore_custom/metadata_train120000_a6000_val10000_a500_test20000_a1000.csv"
+image_size = 64
+normal_label = "none"
+defect_label = "pattern"
+
+[split_generation]
+mode = "labeled_custom"
+
+[splits]
+random_seed = 42
+
+[dev_subset]
+enabled = false
+normal_count = 2000
+defect_count = 400
+
+[train_subset]
+normal_count = 50000
+use_all_defects_for_test = false
+test_defect_fraction_of_test_normals = 0.05
+
+[labeled_split]
+train_total = 120000
+train_anomalies = 6000
+val_total = 10000
+val_anomalies = 500
+test_total = 20000
+test_anomalies = 1000

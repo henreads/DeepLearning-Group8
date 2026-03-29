@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import numpy as np
@@ -71,8 +72,20 @@ class WaferMapDataset(Dataset):
 
     @staticmethod
     def _find_repo_root(metadata_path: Path) -> Path:
+        env_root = os.environ.get("WM811K_REPO_ROOT")
+        if env_root:
+            return Path(env_root).resolve()
+
+        for candidate in WaferMapDataset._candidate_repo_roots():
+            if (candidate / "data").exists() and (
+                (candidate / "src" / "wafer_defect").exists() or (candidate / "experiments").exists()
+            ):
+                return candidate
+
         for candidate in [metadata_path.parent, *metadata_path.parents]:
-            if (candidate / "src" / "wafer_defect").exists() and (candidate / "configs").exists():
+            if (candidate / "data").exists() and (
+                (candidate / "src" / "wafer_defect").exists() or (candidate / "experiments").exists()
+            ):
                 return candidate
         raise FileNotFoundError(
             f"Could not determine repo root from metadata path: {metadata_path}"

@@ -1,0 +1,21 @@
+[training]
+metadata_csv = "data/processed/x64/wm811k_multiclass_50k/metadata_labeled_50k.csv"
+output_dir = "experiments/classifier/multiclass/x64/training/artifacts/multiclass_classifier_50k_seed13"
+epochs = 80
+batch_size = 256
+learning_rate = 0.0005
+weight_decay = 0.0001
+num_workers = 4
+use_weighted_sampler = true
+use_class_weights = false
+random_seed = 13
+lr_patience = 5
+lr_decay_factor = 0.5
+early_stopping_patience = 15
+checkpoint_metric = "balanced_accuracy"
+label_smoothing = 0.05
+
+[model]
+base_channels = 48
+hidden_dim = 512
+dropout = 0.15

@@ -1,0 +1,26 @@
+[training]
+metadata_csv = "data/processed/x64/wm811k_multiclass_50k/metadata_labeled_50k.csv"
+output_dir = "experiments/classifier/multiclass/x64/training/artifacts/multiclass_classifier_50k"
+epochs = 80
+batch_size = 256
+learning_rate = 0.0005
+weight_decay = 0.0001
+num_workers = 4
+use_weighted_sampler = true
+use_class_weights = false
+random_seed = 42
+lr_patience = 5
+lr_decay_factor = 0.5
+early_stopping_patience = 15
+checkpoint_metric = "balanced_accuracy"
+label_smoothing = 0.05
+mixup_alpha = 0.2
+grad_clip_norm = 1.0
+
+[model]
+variant = "enhanced"
+base_channels = 48
+hidden_dim = 512
+dropout = 0.15
+block_dropout = 0.05
+se_reduction = 8

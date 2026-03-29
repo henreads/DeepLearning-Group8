@@ -2,74 +2,76 @@
 
 ## Scope
 
-This report summarizes the anomaly-detection experiments run so far for the WM-811K / LSWMD wafer map project.
+This report summarizes the anomaly-detection experiments for the WM-811K wafer map project.
 
-The current repo workflow is notebook-first. Older standalone experiment-runner scripts were removed during cleanup, so the main entry points are now the notebooks, configs, and reusable package code under `src/wafer_defect/`.
+The cleaned repository is notebook-first and uses PyTorch throughout. The canonical execution path is:
 
-Shared goal across experiments:
+1. build or validate a dataset branch from `data/dataset/`
+2. run the corresponding experiment notebook from `experiments/anomaly_detection/`
+3. inspect saved checkpoints, plots, and result files under the local `artifacts/` folder of that branch
 
-- train only on normal wafers (`failureType == none`)
-- treat labeled defect wafers as anomalies at test time
-- compare anomaly-scoring approaches under one consistent split and evaluation protocol
+Historical experiment numbers are still used in the narrative below because they reflect the actual order in which the work progressed, but the runnable notebooks now live under `experiments/` rather than the older `notebooks/anomaly_50k/` tree.
 
-Note:
+## Team
 
-- this report still includes historical `128x128` baseline results where they were part of the experiment record
-- the current specialized notebooks only expose config options that still match valid intended variants
+- Henry Lee Jun, 1004219
+- Chia Tang, 1007200
+- Genson Low, 1006931
 
-## Shared Setup
+## Shared Goal
 
-Relevant files:
+All anomaly branches in this report aim to:
 
-- [configs/data/data.toml](configs/data/data.toml)
-- [configs/training/train_autoencoder.toml](configs/training/train_autoencoder.toml)
-- [configs/training/train_autoencoder_batchnorm.toml](configs/training/train_autoencoder_batchnorm.toml)
-- [configs/training/train_autoencoder_batchnorm_dropout.toml](configs/training/train_autoencoder_batchnorm_dropout.toml)
-- [configs/training/train_autoencoder_residual.toml](configs/training/train_autoencoder_residual.toml)
-- [configs/training/train_resnet18_backbone.toml](configs/training/train_resnet18_backbone.toml)
-- [configs/training/train_patchcore.toml](configs/training/train_patchcore.toml)
-- [configs/training/train_patchcore_resnet18.toml](configs/training/train_patchcore_resnet18.toml)
-- [configs/training/train_patchcore_resnet50.toml](configs/training/train_patchcore_resnet50.toml)
-- [configs/training/train_ts_resnet18.toml](configs/training/train_ts_resnet18.toml)
-- [configs/training/train_ts_resnet50.toml](configs/training/train_ts_resnet50.toml)
-- [configs/training/train_vae.toml](configs/training/train_vae.toml)
-- [configs/training/train_svdd.toml](configs/training/train_svdd.toml)
+- train only on normal wafers when the method is unsupervised or one-class
+- treat labeled defect wafers as anomalies at evaluation time
+- compare anomaly-scoring approaches under a consistent train / validation / test protocol
+
+## Reproducibility And Dependencies
+
+Main reproducibility surface:
+
+- [README.md](README.md)
+- [data/dataset/](data/dataset/)
+- [experiments/anomaly_detection/](experiments/anomaly_detection/)
+- [src/wafer_defect/](src/wafer_defect/)
+- [scripts/](scripts/)
+
+Key shared implementation files:
+
 - [scripts/prepare_wm811k.py](scripts/prepare_wm811k.py)
 - [scripts/evaluate_autoencoder_scores.py](scripts/evaluate_autoencoder_scores.py)
-- [scripts/train_ts_distillation.py](scripts/train_ts_distillation.py)
-- [scripts/train_vae.py](scripts/train_vae.py)
 - [scripts/evaluate_reconstruction_model.py](scripts/evaluate_reconstruction_model.py)
+- [scripts/train_vae.py](scripts/train_vae.py)
+- [scripts/train_svdd.py](scripts/train_svdd.py)
+- [scripts/train_ts_distillation.py](scripts/train_ts_distillation.py)
 - [src/wafer_defect/models/autoencoder.py](src/wafer_defect/models/autoencoder.py)
-- [src/wafer_defect/models/ts_distillation.py](src/wafer_defect/models/ts_distillation.py)
 - [src/wafer_defect/models/patchcore.py](src/wafer_defect/models/patchcore.py)
-- [src/wafer_defect/models/resnet.py](src/wafer_defect/models/resnet.py)
+- [src/wafer_defect/models/ts_distillation.py](src/wafer_defect/models/ts_distillation.py)
 - [src/wafer_defect/models/vae.py](src/wafer_defect/models/vae.py)
 - [src/wafer_defect/models/svdd.py](src/wafer_defect/models/svdd.py)
-- [src/wafer_defect/scoring.py](src/wafer_defect/scoring.py)
-- [src/wafer_defect/evaluation/reconstruction_metrics.py](src/wafer_defect/evaluation/reconstruction_metrics.py)
 - [src/wafer_defect/training/autoencoder.py](src/wafer_defect/training/autoencoder.py)
-- [src/wafer_defect/training/ts_distillation.py](src/wafer_defect/training/ts_distillation.py)
 - [src/wafer_defect/training/patchcore.py](src/wafer_defect/training/patchcore.py)
+- [src/wafer_defect/training/ts_distillation.py](src/wafer_defect/training/ts_distillation.py)
 - [src/wafer_defect/training/vae.py](src/wafer_defect/training/vae.py)
 - [src/wafer_defect/training/svdd.py](src/wafer_defect/training/svdd.py)
-- [notebooks/anomaly_50k/02_autoencoder_training.ipynb](notebooks/anomaly_50k/02_autoencoder_training.ipynb)
-- [notebooks/anomaly_50k/05_autoencoder_batchnorm_training.ipynb](notebooks/anomaly_50k/05_autoencoder_batchnorm_training.ipynb)
-- [notebooks/anomaly_50k/06_autoencoder_batchnorm_dropout_training.ipynb](notebooks/anomaly_50k/06_autoencoder_batchnorm_dropout_training.ipynb)
-- [notebooks/anomaly_50k/07_patchcore_training.ipynb](notebooks/anomaly_50k/07_patchcore_training.ipynb)
-- [notebooks/anomaly_50k/08_autoencoder_residual_training.ipynb](notebooks/anomaly_50k/08_autoencoder_residual_training.ipynb)
-- [notebooks/anomaly_50k/09_resnet18_backbone_baseline.ipynb](notebooks/anomaly_50k/09_resnet18_backbone_baseline.ipynb)
-- [notebooks/anomaly_50k/10_patchcore_resnet18_training.ipynb](notebooks/anomaly_50k/10_patchcore_resnet18_training.ipynb)
-- [notebooks/anomaly_50k/11_patchcore_resnet50_training.ipynb](notebooks/anomaly_50k/11_patchcore_resnet50_training.ipynb)
-- [notebooks/anomaly_50k/12_ts_distillation_training.ipynb](notebooks/anomaly_50k/12_ts_distillation_training.ipynb)
-- [notebooks/anomaly_50k/15A_wideresnet50_2_backbone_baseline.ipynb](notebooks/anomaly_50k/15A_wideresnet50_2_backbone_baseline.ipynb)
-- [notebooks/anomaly_50k/18A-patchcore-wideresnet50-multilayer-x224.ipynb](notebooks/anomaly_50k/18A-patchcore-wideresnet50-multilayer-x224.ipynb)
-- [notebooks/anomaly_50k/18A2-patchcore-wideresnet50-multilayer-x224_with_umap.ipynb](notebooks/anomaly_50k/18A2-patchcore-wideresnet50-multilayer-x224_with_umap.ipynb)
-- [notebooks/anomaly_50k/21A_patchcore_efficientnet_b0_all-in-one.ipynb](notebooks/anomaly_50k/21A_patchcore_efficientnet_b0_all-in-one.ipynb)
-- [notebooks/anomaly_50k/21B_patchcore_efficientnet_b0_all-in-one_224.ipynb](notebooks/anomaly_50k/21B_patchcore_efficientnet_b0_all-in-one_224.ipynb)
-- [notebooks/anomaly_50k/03_vae_training.ipynb](notebooks/anomaly_50k/03_vae_training.ipynb)
-- [notebooks/anomaly_50k/04_svdd_training.ipynb](notebooks/anomaly_50k/04_svdd_training.ipynb)
+- [src/wafer_defect/scoring.py](src/wafer_defect/scoring.py)
+- [src/wafer_defect/evaluation/reconstruction_metrics.py](src/wafer_defect/evaluation/reconstruction_metrics.py)
 
-Data preparation:
+The project uses PyTorch for all model development. Environment and package installation are documented in [README.md](README.md), with the package installed in editable mode through `pip install -e .`.
+
+## Dataset Protocol
+
+Dataset creation and validation now live under `data/dataset/`.
+
+Canonical dataset notebooks:
+
+- [data/dataset/x64/benchmark_50k_5pct/notebook.ipynb](data/dataset/x64/benchmark_50k_5pct/notebook.ipynb)
+- [data/dataset/x64/holdout70k_3p5k/notebook.ipynb](data/dataset/x64/holdout70k_3p5k/notebook.ipynb)
+- [data/dataset/x128/benchmark_50k_5pct/notebook.ipynb](data/dataset/x128/benchmark_50k_5pct/notebook.ipynb)
+- [data/dataset/x224/benchmark_50k_5pct/notebook.ipynb](data/dataset/x224/benchmark_50k_5pct/notebook.ipynb)
+- [data/dataset/x240/benchmark_50k_5pct/notebook.ipynb](data/dataset/x240/benchmark_50k_5pct/notebook.ipynb)
+
+Data preparation follows the same core rule across the report:
 
 - [prepare_wm811k.py](scripts/prepare_wm811k.py) reads the legacy `LSWMD.pkl` file
 - only explicitly labeled rows are kept
@@ -78,24 +80,56 @@ Data preparation:
 - wafer maps are resized and saved as `.npy`
 - metadata CSV files store repo-relative array paths
 
-Primary metadata used by the main experiments:
+Primary metadata used by the main benchmark experiments:
 
 - [metadata_50k_5pct.csv](data/processed/x64/wm811k/metadata_50k_5pct.csv)
 
-Effective split for the main `64x64` experiments:
+Effective split for the main `64x64` benchmark:
 
 - train: `40,000` normal
-- val: `5,000` normal
+- validation: `5,000` normal
 - test: `5,000` normal
 - test: `250` anomaly
 
 Split rule:
 
 - normals are split `80 / 10 / 10`
-- defects are added only to the test split
+- defects are excluded from training and validation for the main anomaly benchmark
 - test anomalies are capped at `5%` of the number of test-normal wafers
 
+## Canonical Experiment Branches
+
+The narrative below still uses historical experiment numbering, but the current runnable notebooks are organized by family:
+
+- [experiments/anomaly_detection/autoencoder/README.md](experiments/anomaly_detection/autoencoder/README.md)
+- [experiments/anomaly_detection/vae/README.md](experiments/anomaly_detection/vae/README.md)
+- [experiments/anomaly_detection/svdd/README.md](experiments/anomaly_detection/svdd/README.md)
+- [experiments/anomaly_detection/backbone_embedding/README.md](experiments/anomaly_detection/backbone_embedding/README.md)
+- [experiments/anomaly_detection/teacher_student/README.md](experiments/anomaly_detection/teacher_student/README.md)
+- [experiments/anomaly_detection/patchcore/README.md](experiments/anomaly_detection/patchcore/README.md)
+- [experiments/anomaly_detection/fastflow/README.md](experiments/anomaly_detection/fastflow/README.md)
+- [experiments/anomaly_detection/ensemble/README.md](experiments/anomaly_detection/ensemble/README.md)
+
+Representative notebooks used by the cleaned repo structure:
+
+- [experiments/anomaly_detection/autoencoder/x64/baseline/notebook.ipynb](experiments/anomaly_detection/autoencoder/x64/baseline/notebook.ipynb)
+- [experiments/anomaly_detection/vae/x64/baseline/notebook.ipynb](experiments/anomaly_detection/vae/x64/baseline/notebook.ipynb)
+- [experiments/anomaly_detection/svdd/x64/baseline/notebook.ipynb](experiments/anomaly_detection/svdd/x64/baseline/notebook.ipynb)
+- [experiments/anomaly_detection/backbone_embedding/resnet18/x64/baseline/notebook.ipynb](experiments/anomaly_detection/backbone_embedding/resnet18/x64/baseline/notebook.ipynb)
+- [experiments/anomaly_detection/teacher_student/resnet18/x64/main/notebook.ipynb](experiments/anomaly_detection/teacher_student/resnet18/x64/main/notebook.ipynb)
+- [experiments/anomaly_detection/teacher_student/resnet50/x64/main/notebook.ipynb](experiments/anomaly_detection/teacher_student/resnet50/x64/main/notebook.ipynb)
+- [experiments/anomaly_detection/patchcore/resnet18/x64/main/notebook.ipynb](experiments/anomaly_detection/patchcore/resnet18/x64/main/notebook.ipynb)
+- [experiments/anomaly_detection/patchcore/resnet50/x64/main/notebook.ipynb](experiments/anomaly_detection/patchcore/resnet50/x64/main/notebook.ipynb)
+- [experiments/anomaly_detection/patchcore/wideresnet50/x224/multilayer/notebook.ipynb](experiments/anomaly_detection/patchcore/wideresnet50/x224/multilayer/notebook.ipynb)
+- [experiments/anomaly_detection/patchcore/efficientnet_b0/x224/main/notebook.ipynb](experiments/anomaly_detection/patchcore/efficientnet_b0/x224/main/notebook.ipynb)
+- [experiments/anomaly_detection/patchcore/vit_b16/x224/main/notebook.ipynb](experiments/anomaly_detection/patchcore/vit_b16/x224/main/notebook.ipynb)
+- [experiments/anomaly_detection/fastflow/x64/main/notebook.ipynb](experiments/anomaly_detection/fastflow/x64/main/notebook.ipynb)
+
+Each branch now keeps its own documentation, notebook, config snapshots, and local `artifacts/` folder for reproducibility.
+
 ## Experiment Progression
+
+The report narrative below keeps the original experiment numbering because that numbering reflects the real order in which the work developed. Where a section still names an older notebook path, the current canonical runnable version should be understood as the matching branch under `experiments/anomaly_detection/`.
 
 The experiment sequence was intentionally staged rather than random. We started with the simplest reconstruction baseline in `Experiment 1` to establish a shared `64x64` protocol, a fair validation-threshold rule, and a first realistic failure pattern. Once that baseline showed that the model could detect broad defects but still struggled on smaller local patterns, the next steps stayed close to the same family first: `Experiment 2` tested whether BatchNorm changed feature stability, `Experiment 3` checked whether dropout improved generalization, and the residual / resolution variants tested whether the bottleneck was architecture depth or image scale. In parallel, `Experiments 4` and `5` asked whether a probabilistic reconstruction model could beat the plain autoencoder, while `Experiment 6` tested a one-class distance model to see whether reconstruction itself was the main advantage.
 
