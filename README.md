@@ -279,6 +279,57 @@ Per-class test metrics for that `seed07` run:
 
 This checkpoint is currently the strongest fully exported artifact from the interrupted all-labeled Kaggle run. The main remaining weakness is precision on the local defect families such as `Loc`, `Scratch`, and `Edge-Loc`, with most large-support mistakes still coming from normal wafers being predicted as local defects.
 
+<!-- BEGIN: NOTEBOOK6_KAGGLE_SYNC -->
+Notebook `6` Kaggle pseudo-label snapshot from `jikutopepega/notebook6010fb082e`:
+
+- synced output folder: `outputs\seed07_pseudolabel_bundle_kaggle_outputs`
+- summary file: `outputs\seed07_pseudolabel_bundle_kaggle_outputs\unlabeled_predictions.seed07.symmary.json`
+- rows scored: `638,507`
+- confidence threshold: `0.90`
+- accepted pseudo-labels: `417,831` (65.44%)
+- predicted defect fraction: `36.12%`
+- accepted defect fraction: `30.61%`
+- mean confidence: `0.8637`
+- mean accepted confidence: `0.9475`
+
+Confidence bucket review:
+
+| Threshold | Accepted Rows | Accepted Fraction | Defect Rows | `none` Rows |
+| --- | --- | --- | --- | --- |
+| 50% | 609,690 | 95.49% | 211,426 | 398,264 |
+| 75% | 525,337 | 82.28% | 168,629 | 356,708 |
+| 90% | 417,831 | 65.44% | 127,918 | 289,913 |
+
+Standard classifier UMAP snapshot:
+
+- labeled reference points: `3,349`
+- pseudo-labeled points plotted: `6,865`
+- mean plotted pseudo confidence: `0.9139`
+- UMAP settings: `n_neighbors = 30`, `min_dist = 0.1`, `metric = cosine`
+
+10A-style classifier UMAP snapshot:
+
+- labeled normal points: `4,000`
+- labeled defect points: `4,000`
+- pseudo-labeled points plotted: `8,000`
+- PCA dimension before UMAP: `50`
+- UMAP settings: `n_neighbors = 15`, `min_dist = 0.1`, `metric = euclidean`
+
+Label distribution across the full pseudo-label export, accepted subset, and both UMAP views:
+
+| Label | All Scored | Accepted | Std UMAP | 10A UMAP |
+| --- | --- | --- | --- | --- |
+| `none` | 407,882 | 289,913 | 800 | 5,405 |
+| `Center` | 21,294 | 13,825 | 800 | 285 |
+| `Donut` | 613 | 364 | 465 | 12 |
+| `Edge-Loc` | 33,053 | 10,958 | 800 | 304 |
+| `Edge-Ring` | 15,074 | 6,254 | 800 | 147 |
+| `Loc` | 25,583 | 7,248 | 800 | 233 |
+| `Near-full` | 90,485 | 72,101 | 800 | 1,164 |
+| `Random` | 13,223 | 9,486 | 800 | 182 |
+| `Scratch` | 31,300 | 7,682 | 800 | 268 |
+<!-- END: NOTEBOOK6_KAGGLE_SYNC -->
+
 Recommended run order for a fresh setup:
 
 1. Run `notebooks/anomaly_50k/01_data_exploration.ipynb` to confirm the processed dataset looks correct.

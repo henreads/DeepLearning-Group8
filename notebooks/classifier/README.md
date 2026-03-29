@@ -11,3 +11,5 @@ Files here cover:
 - ensemble workflow
 - Kaggle retraining on the full labeled `80 / 10 / 10` split
 - seed07-based pseudo-label export on the unlabeled WM-811K rows
+
+Use `scripts/classifier/sync_notebook6_kaggle_outputs.py` after downloading notebook `6` Kaggle outputs into `outputs/kaggle_notebook6010fb082e` to sync the pseudo-label and UMAP summaries into the local classifier docs.

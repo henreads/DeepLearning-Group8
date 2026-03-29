@@ -192,6 +192,66 @@ Interpretation:
 - it is not yet showing strong confident capture of defect pseudo-labels
 - if the goal is to expand rare defect classes, the acceptance rule will likely need class-aware tuning or manual review support
 
+<!-- BEGIN: NOTEBOOK6_KAGGLE_SYNC -->
+### All-Labeled `seed07` Kaggle Pseudo-Label Run
+
+Synced from `jikutopepega/notebook6010fb082e` into `outputs\seed07_pseudolabel_bundle_kaggle_outputs`.
+
+- pseudo-label summary: `outputs\seed07_pseudolabel_bundle_kaggle_outputs\unlabeled_predictions.seed07.symmary.json`
+- rows scored: `638,507`
+- configured confidence threshold: `0.90`
+- accepted pseudo-labels: `417,831` (65.44%)
+- predicted defect fraction across all scored unlabeled rows: `36.12%`
+- predicted defect fraction inside the accepted subset: `30.61%`
+- mean confidence across all pseudo labels: `0.8637`
+- mean confidence inside the accepted subset: `0.9475`
+
+Confidence bucket review from the saved pseudo-label CSV:
+
+| Threshold | Accepted Rows | Accepted Fraction | Defect Rows | `none` Rows |
+| --- | --- | --- | --- | --- |
+| 50% | 609,690 | 95.49% | 211,426 | 398,264 |
+| 75% | 525,337 | 82.28% | 168,629 | 356,708 |
+| 90% | 417,831 | 65.44% | 127,918 | 289,913 |
+
+Per-label coverage across the saved pseudo-label export and both UMAP summaries:
+
+| Label | All Scored | Accepted | Std UMAP | 10A UMAP |
+| --- | --- | --- | --- | --- |
+| `none` | 407,882 | 289,913 | 800 | 5,405 |
+| `Center` | 21,294 | 13,825 | 800 | 285 |
+| `Donut` | 613 | 364 | 465 | 12 |
+| `Edge-Loc` | 33,053 | 10,958 | 800 | 304 |
+| `Edge-Ring` | 15,074 | 6,254 | 800 | 147 |
+| `Loc` | 25,583 | 7,248 | 800 | 233 |
+| `Near-full` | 90,485 | 72,101 | 800 | 1,164 |
+| `Random` | 13,223 | 9,486 | 800 | 182 |
+| `Scratch` | 31,300 | 7,682 | 800 | 268 |
+
+Standard classifier embedding UMAP:
+
+- summary file: `outputs\seed07_pseudolabel_bundle_kaggle_outputs\umap_visualization\seed07_pseudolabel_umap.summary.json`
+- labeled reference points: `3,349`
+- pseudo-labeled points plotted: `6,865`
+- mean plotted pseudo confidence: `0.9139`
+- UMAP settings: `n_neighbors = 30`, `min_dist = 0.1`, `metric = cosine`
+
+10A-style classifier UMAP:
+
+- summary file: `outputs\seed07_pseudolabel_bundle_kaggle_outputs\umap_10a_style\umap_10a_style.summary.json`
+- labeled normal points: `4,000`
+- labeled defect points: `4,000`
+- pseudo-labeled points plotted: `8,000`
+- PCA dimension before UMAP: `50`
+- UMAP settings: `n_neighbors = 15`, `min_dist = 0.1`, `metric = euclidean`
+
+Interpretation:
+
+- this notebook `6` export is the main artifact path for reviewing the unlabeled WM-811K pseudo-label distribution from the all-labeled `seed07` classifier
+- the threshold table shows how much unlabeled coverage remains available at `50%`, `75%`, and the configured acceptance threshold
+- the two UMAP summaries make it easier to compare broad classifier-space coverage against the stricter 10A-style PCA -> UMAP view
+<!-- END: NOTEBOOK6_KAGGLE_SYNC -->
+
 ## Current Recommendation
 
 Based on the saved development evidence in the repository:
@@ -199,8 +259,9 @@ Based on the saved development evidence in the repository:
 1. Report the averaged three-model ensemble as the main classifier result.
 2. Keep stacking as an optional accuracy-oriented variant rather than the primary balanced-performance result.
 3. Treat the enhanced classifier branch as implemented but not yet fully benchmarked.
-4. Before large-scale pseudo-labeling, validate a reviewed sample because the current high-confidence gate appears to favor `none` almost exclusively.
-5. If a true external multiclass validation is required, rebuild the training subset so some labeled defect rows are intentionally held out instead of using all labeled defects inside the `50k`.
+4. Use the all-labeled `seed07` pseudo-label export as the working unlabeled annotation source for downstream anomaly-threshold tuning, with the `0.90` accepted subset as the safer starting slice.
+5. Review accepted defect-heavy classes such as `Near-full`, `Center`, `Edge-Loc`, and `Scratch` before promoting them to automatic downstream supervision, because the accepted subset now contains substantial non-`none` volume rather than only normal wafers.
+6. If a true external multiclass validation is required, rebuild the training subset so some labeled defect rows are intentionally held out instead of using all labeled defects inside the `50k`.
 
 ## Relevant Files
 
@@ -208,6 +269,7 @@ Based on the saved development evidence in the repository:
 - `scripts/train_multiclass_classifier.py`
 - `scripts/ensemble_multiclass_classifier.py`
 - `scripts/predict_unlabeled_multiclass_ensemble.py`
+- `scripts/classifier/sync_notebook6_kaggle_outputs.py`
 - `configs/data/data_multiclass_50k.toml`
 - `configs/training/train_multiclass_classifier_50k.toml`
 - `configs/training/train_multiclass_classifier_50k_seed07.toml`
@@ -223,3 +285,7 @@ Based on the saved development evidence in the repository:
 - `artifacts/multiclass_classifier_50k_stacking_accuracy_eval/metrics.json`
 - `artifacts/external_unseen_labeled_normal_sample10k_eval_20260318/metrics.json`
 - `artifacts/multiclass_classifier_50k_stacking_eval/smoke_unlabeled_predictions.summary.json`
+- `outputs/seed07_pseudolabel_bundle_kaggle_outputs/unlabeled_predictions.seed07.symmary.json`
+- `outputs/seed07_pseudolabel_bundle_kaggle_outputs/unlabeled_predictions.seed07.pseudolabels.csv`
+- `outputs/seed07_pseudolabel_bundle_kaggle_outputs/umap_visualization/seed07_pseudolabel_umap.summary.json`
+- `outputs/seed07_pseudolabel_bundle_kaggle_outputs/umap_10a_style/umap_10a_style.summary.json`
