@@ -310,6 +310,14 @@ def main() -> None:
 
     records: list[dict[str, object]] = []
     repo_root = Path(__file__).resolve().parents[1]
+    configured_processed_root = Path(dataset_cfg["processed_root"])
+    if configured_processed_root.is_absolute():
+        try:
+            relative_processed_root = configured_processed_root.relative_to(repo_root)
+        except ValueError:
+            relative_processed_root = Path(configured_processed_root.name)
+    else:
+        relative_processed_root = configured_processed_root
 
     for row_index, row in export_df.iterrows():
         file_name = f"wafer_{row_index:07d}.npy"
@@ -317,7 +325,7 @@ def main() -> None:
         raw_map = np.asarray(row["waferMap"])
         wafer_map = normalize_map(raw_map, image_size=image_size)
         np.save(array_path, wafer_map)
-        relative_array_path = array_path.resolve().relative_to(repo_root).as_posix()
+        relative_array_path = (relative_processed_root / arrays_dir.name / file_name).as_posix()
         records.append(
             {
                 "array_path": relative_array_path,

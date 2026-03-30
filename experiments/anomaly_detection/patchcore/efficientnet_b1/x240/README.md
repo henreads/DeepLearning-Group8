@@ -4,17 +4,17 @@ This resolution folder groups the EfficientNet-B1 PatchCore branches that share 
 
 ## Why `x240`
 
-EfficientNet-B1 is closer to its native pretrained scale at `x240`, so this folder collects the runs that study whether that larger input resolution improves feature-memory anomaly detection on wafer maps.
+EfficientNet-B1 is closest to its pretrained operating scale at `x240`, so these branches test whether a larger input resolution improves feature-memory anomaly detection on wafer maps.
 
 ## Branches
 
 - `main/`
-  Existing reference branch for this backbone-resolution pair.
+  Local one-layer benchmark run with checkpoint, benchmark metrics, holdout evaluation, and UMAP exports.
 - `one_layer/`
-  Single-layer feature extraction branch.
+  Imported single-layer source notebook awaiting a full local training run.
 - `layer3_5/`
-  Multi-layer feature extraction branch using two EfficientNet stages.
+  Imported two-stage follow-up notebook awaiting a full local training run.
 - `layer3_5_no_defect_tuning/`
-  Multi-layer branch without defect-aware threshold tuning.
+  Imported two-stage follow-up without defect-aware tuning.
 - `umap_followup/`
-  UMAP-oriented follow-up analysis branch.
+  Review-oriented UMAP branch that builds on the saved artifacts from `main/`.

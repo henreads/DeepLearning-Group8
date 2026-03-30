@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 from typing import Any
+import zipfile
 
 import pandas as pd
 import torch
@@ -37,6 +38,19 @@ def resolve_repo_root() -> Path:
 
 def display(obj: object) -> None:
     print(obj, flush=True)
+
+
+def _cleanup_corrupt_dataset_cache(output_dir_path: Path) -> None:
+    cache_path = output_dir_path / "dataset_cache.npz"
+    if not cache_path.exists():
+        return
+    if zipfile.is_zipfile(cache_path):
+        return
+    print(
+        f"[patchcore-effb1-x240] removing corrupt dataset cache before run: {cache_path}",
+        flush=True,
+    )
+    cache_path.unlink()
 
 
 def _load_saved_main_result(output_dir_path: Path, variant_name: str) -> dict[str, Any]:
@@ -72,6 +86,8 @@ def execute_phase(
 ) -> dict[str, Any]:
     notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
     globals_dict: dict[str, Any] = {"__name__": "__main__", "display": display}
+    output_dir_path = Path(output_dir).resolve()
+    _cleanup_corrupt_dataset_cache(output_dir_path)
     phase_cells = MAIN_CELL_INDICES if phase == "main" else [2, 3, *EXTRA_CELL_INDICES]
     print(
         f"[patchcore-effb1-x240] executing {len(phase_cells)} code cells for phase={phase} from {notebook_path}",
@@ -96,7 +112,6 @@ def execute_phase(
             config["model"]["num_workers"] = int(num_workers)
             config["model"]["persistent_workers"] = bool(num_workers > 0)
             if phase != "main":
-                output_dir_path = Path(output_dir).resolve()
                 variant_name = str(config["run"]["variant_name"])
                 globals_dict["result"] = _load_saved_main_result(output_dir_path, variant_name)
 

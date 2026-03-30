@@ -9,9 +9,9 @@ from typing import Any
 import modal
 
 
-APP_NAME = "wafer-defect-patchcore-effb1-x240"
+APP_NAME = "wafer-defect-ts-wrn50-x64-multilayer"
 RAW_VOLUME_NAME = "wafer-defect-lswmd-raw"
-ARTIFACT_VOLUME_NAME = "wafer-defect-patchcore-effb1-x240-artifacts"
+ARTIFACT_VOLUME_NAME = "wafer-defect-ts-wrn50-x64-multilayer-artifacts"
 
 
 def _resolve_local_repo_root() -> Path:
@@ -34,28 +34,28 @@ LOCAL_ARTIFACT_DIR = (
     LOCAL_REPO_ROOT
     / "experiments"
     / "anomaly_detection"
-    / "patchcore"
-    / "efficientnet_b1"
-    / "x240"
-    / "main"
+    / "teacher_student"
+    / "wideresnet50_2"
+    / "x64"
+    / "multilayer_self_contained"
     / "artifacts"
 )
 
 REMOTE_PROJECT_ROOT = "/root/project"
 REMOTE_RAW_DIR = f"{REMOTE_PROJECT_ROOT}/data/raw"
 REMOTE_ARTIFACT_DIR = (
-    f"{REMOTE_PROJECT_ROOT}/experiments/anomaly_detection/patchcore/efficientnet_b1/x240/main/artifacts"
+    f"{REMOTE_PROJECT_ROOT}/experiments/anomaly_detection/teacher_student/wideresnet50_2/x64/multilayer_self_contained/artifacts"
 )
-REMOTE_RUNNER = f"{REMOTE_PROJECT_ROOT}/scripts/run_patchcore_effb1_x240_notebook.py"
+REMOTE_RUNNER = f"{REMOTE_PROJECT_ROOT}/scripts/run_ts_wrn50_x64_multilayer_notebook.py"
 
 image = (
     modal.Image.debian_slim(python_version="3.11")
     .pip_install(
+        "ipython>=8.18",
         "numpy>=1.26",
         "pandas>=2.2",
         "scikit-learn>=1.5",
         "matplotlib>=3.9",
-        "umap-learn>=0.5.6",
         "torch>=2.2",
         "torchvision>=0.17",
         "tqdm>=4.66",
@@ -63,8 +63,8 @@ image = (
     .add_local_python_source("wafer_defect", copy=True)
     .add_local_dir("scripts", remote_path=f"{REMOTE_PROJECT_ROOT}/scripts", copy=True)
     .add_local_dir(
-        "experiments/anomaly_detection/patchcore/efficientnet_b1/x240/main",
-        remote_path=f"{REMOTE_PROJECT_ROOT}/experiments/anomaly_detection/patchcore/efficientnet_b1/x240/main",
+        "experiments/anomaly_detection/teacher_student/wideresnet50_2/x64/multilayer_self_contained",
+        remote_path=f"{REMOTE_PROJECT_ROOT}/experiments/anomaly_detection/teacher_student/wideresnet50_2/x64/multilayer_self_contained",
         copy=True,
         ignore=["artifacts", "artifacts/**"],
     )
@@ -85,16 +85,10 @@ def _run_modal_cli(args: list[str], *, capture_output: bool = False) -> subproce
     )
 
 
-def _download_artifacts(local_artifact_dir: str) -> None:
+def _download_artifacts(local_artifact_dir: str, remote_subdir: str) -> None:
     local_dir = Path(local_artifact_dir).resolve()
     local_dir.mkdir(parents=True, exist_ok=True)
-    remote_base = "/patchcore_efficientnet_b1_one_layer"
-    local_base = local_dir / "patchcore_efficientnet_b1_one_layer"
-    local_base.mkdir(parents=True, exist_ok=True)
-    listing = _run_modal_cli(
-        ["volume", "ls", ARTIFACT_VOLUME_NAME, remote_base, "--json"],
-        capture_output=True,
-    )
+    listing = _run_modal_cli(["volume", "ls", ARTIFACT_VOLUME_NAME, remote_subdir, "--json"], capture_output=True)
     entries = json.loads(listing.stdout)
     for entry in entries:
         remote_name = str(entry["Filename"])
@@ -108,63 +102,47 @@ def _download_artifacts(local_artifact_dir: str) -> None:
         _run_modal_cli(["volume", "get", ARTIFACT_VOLUME_NAME, f"/{remote_name}", str(local_target), "--force"])
 
 
-def _build_runner_command(*, num_workers: int, phase: str) -> list[str]:
-    return [
-        "python",
-        "-u",
-        REMOTE_RUNNER,
-        "--raw-pickle",
-        f"{REMOTE_RAW_DIR}/LSWMD.pkl",
-        "--output-dir",
-        "experiments/anomaly_detection/patchcore/efficientnet_b1/x240/main/artifacts/patchcore_efficientnet_b1_one_layer",
-        "--num-workers",
-        str(num_workers),
-        "--phase",
-        phase,
-    ]
-
-
 @app.function(
     gpu="A10G",
-    timeout=60 * 60 * 8,
+    timeout=60 * 60 * 10,
     volumes={
         REMOTE_RAW_DIR: raw_volume,
         REMOTE_ARTIFACT_DIR: artifact_volume,
     },
 )
-def run_patchcore_remote(num_workers: int = 4, run_extras: bool = False) -> dict[str, Any]:
-    main_command = _build_runner_command(num_workers=num_workers, phase="main")
-    print(f"[patchcore-effb1-x240] launching main phase: {' '.join(main_command)}", flush=True)
-    subprocess.run(main_command, check=True, cwd=REMOTE_PROJECT_ROOT)
-    artifact_volume.commit()
-    print(
-        "[patchcore-effb1-x240] main benchmark artifacts committed; "
-        "you can download them now from another terminal if you want.",
-        flush=True,
-    )
-
-    if run_extras:
-        extras_command = _build_runner_command(num_workers=num_workers, phase="extras")
-        print(f"[patchcore-effb1-x240] launching extras phase: {' '.join(extras_command)}", flush=True)
-        subprocess.run(extras_command, check=True, cwd=REMOTE_PROJECT_ROOT)
-
-    artifact_volume.commit()
-    print("[patchcore-effb1-x240] artifact volume committed", flush=True)
-
-    manifest_path = Path(REMOTE_ARTIFACT_DIR) / "patchcore_efficientnet_b1_one_layer" / "run_manifest.json"
-    if not manifest_path.exists():
-        manifest_path = Path(REMOTE_ARTIFACT_DIR) / "patchcore_efficientnet_b1_one_layer" / "main_phase_manifest.json"
-    if manifest_path.exists():
-        return json.loads(manifest_path.read_text(encoding="utf-8"))
-    return {"output_dir": REMOTE_ARTIFACT_DIR}
+def run_ts_remote(num_workers: int = 8) -> dict[str, Any]:
+    manifests: dict[str, Any] = {}
+    for phase in ["train", "eval", "sweep"]:
+        command = [
+            "python",
+            "-u",
+            REMOTE_RUNNER,
+            "--output-dir",
+            "experiments/anomaly_detection/teacher_student/wideresnet50_2/x64/multilayer_self_contained/artifacts/ts_wideresnet50_multilayer",
+            "--phase",
+            phase,
+            "--num-workers",
+            str(num_workers),
+        ]
+        print(f"[ts-wrn50-x64-multilayer] launching phase={phase}: {' '.join(command)}", flush=True)
+        subprocess.run(command, check=True, cwd=REMOTE_PROJECT_ROOT)
+        artifact_volume.commit()
+        print(f"[ts-wrn50-x64-multilayer] artifact volume committed after phase={phase}", flush=True)
+        manifest_path = Path(REMOTE_ARTIFACT_DIR) / "ts_wideresnet50_multilayer" / f"{phase}_phase_manifest.json"
+        if manifest_path.exists():
+            manifests[phase] = json.loads(manifest_path.read_text(encoding="utf-8"))
+    final_manifest = Path(REMOTE_ARTIFACT_DIR) / "ts_wideresnet50_multilayer" / "run_manifest.json"
+    if final_manifest.exists():
+        manifests["final"] = json.loads(final_manifest.read_text(encoding="utf-8"))
+    return manifests
 
 
 @app.local_entrypoint()
-def main(num_workers: int = 4, run_extras: bool = False, sync_back: bool = True) -> None:
-    result = run_patchcore_remote.remote(num_workers=num_workers, run_extras=run_extras)
+def main(num_workers: int = 8, sync_back: bool = True) -> None:
+    result = run_ts_remote.remote(num_workers=num_workers)
     print(json.dumps(result, indent=2))
     if sync_back:
-        _download_artifacts(str(LOCAL_ARTIFACT_DIR))
+        _download_artifacts(str(LOCAL_ARTIFACT_DIR), "/ts_wideresnet50_multilayer")
 
 
 @app.local_entrypoint()
@@ -177,4 +155,4 @@ def upload_raw_data(local_raw_pickle: str = str(LOCAL_RAW_PICKLE)) -> None:
 
 @app.local_entrypoint()
 def download_artifacts(local_artifact_dir: str = str(LOCAL_ARTIFACT_DIR)) -> None:
-    _download_artifacts(local_artifact_dir)
+    _download_artifacts(local_artifact_dir, "/ts_wideresnet50_multilayer")

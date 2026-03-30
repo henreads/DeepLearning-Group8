@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import subprocess
+import sys
 from typing import Any
 
 import modal
@@ -73,14 +74,37 @@ artifact_volume = modal.Volume.from_name(ARTIFACT_VOLUME_NAME, create_if_missing
 app = modal.App(APP_NAME, image=image)
 
 
-def _run_modal_cli(args: list[str]) -> None:
-    subprocess.run(["modal", *args], check=True, cwd=LOCAL_REPO_ROOT)
+def _run_modal_cli(args: list[str], *, capture_output: bool = False) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, "-m", "modal", *args],
+        check=True,
+        cwd=LOCAL_REPO_ROOT,
+        text=True,
+        capture_output=capture_output,
+    )
 
 
 def _download_artifacts(local_artifact_dir: str) -> None:
     local_dir = Path(local_artifact_dir).resolve()
     local_dir.mkdir(parents=True, exist_ok=True)
-    _run_modal_cli(["volume", "get", ARTIFACT_VOLUME_NAME, "/", str(local_dir), "--force"])
+    remote_base = "/patchcore_wideresnet50_multilayer"
+    local_base = local_dir / "patchcore_wideresnet50_multilayer"
+    local_base.mkdir(parents=True, exist_ok=True)
+    listing = _run_modal_cli(
+        ["volume", "ls", ARTIFACT_VOLUME_NAME, remote_base, "--json"],
+        capture_output=True,
+    )
+    entries = json.loads(listing.stdout)
+    for entry in entries:
+        remote_name = str(entry["Filename"])
+        if Path(remote_name).name == "processed":
+            continue
+        local_target = local_dir / Path(remote_name)
+        if str(entry.get("Type", "")).lower() == "dir":
+            local_target.mkdir(parents=True, exist_ok=True)
+        else:
+            local_target.parent.mkdir(parents=True, exist_ok=True)
+        _run_modal_cli(["volume", "get", ARTIFACT_VOLUME_NAME, f"/{remote_name}", str(local_target), "--force"])
 
 
 @app.function(

@@ -1,9 +1,5 @@
 # EfficientNet-B1 PatchCore UMAP Follow-up (`x240`)
 
-This folder is kept as a follow-up analysis branch.
+This branch is a UMAP-oriented follow-up for the local EfficientNet-B1 `x240` main run.
 
-Current status:
-- it depends on the missing `x240` run artifacts from the main EfficientNet-B1 branch
-- it has not been curated into the standardized review-notebook format
-
-Treat this as exploratory reference until the main `x240` artifacts are restored locally.
+It is meant for additional manifold inspection after the main checkpoint and benchmark results have already been generated in `main/`.
