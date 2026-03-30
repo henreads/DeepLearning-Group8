@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import csv
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 from typing import Any
@@ -11,6 +13,7 @@ import modal
 
 APP_NAME = "wafer-defect-ts-wrn50-x64-multilayer"
 RAW_VOLUME_NAME = "wafer-defect-lswmd-raw"
+PROCESSED_VOLUME_NAME = "wafer-defect-wm811k-x64-processed"
 ARTIFACT_VOLUME_NAME = "wafer-defect-ts-wrn50-x64-multilayer-artifacts"
 
 
@@ -43,10 +46,12 @@ LOCAL_ARTIFACT_DIR = (
 
 REMOTE_PROJECT_ROOT = "/root/project"
 REMOTE_RAW_DIR = f"{REMOTE_PROJECT_ROOT}/data/raw"
+REMOTE_PROCESSED_DIR = f"{REMOTE_PROJECT_ROOT}/data/processed/x64/wm811k"
 REMOTE_ARTIFACT_DIR = (
     f"{REMOTE_PROJECT_ROOT}/experiments/anomaly_detection/teacher_student/wideresnet50_2/x64/multilayer_self_contained/artifacts"
 )
 REMOTE_RUNNER = f"{REMOTE_PROJECT_ROOT}/scripts/run_ts_wrn50_x64_multilayer_notebook.py"
+REMOTE_PREPARE_SCRIPT = f"{REMOTE_PROJECT_ROOT}/scripts/prepare_wm811k.py"
 
 image = (
     modal.Image.debian_slim(python_version="3.11")
@@ -71,6 +76,7 @@ image = (
 )
 
 raw_volume = modal.Volume.from_name(RAW_VOLUME_NAME, create_if_missing=True)
+processed_volume = modal.Volume.from_name(PROCESSED_VOLUME_NAME, create_if_missing=True)
 artifact_volume = modal.Volume.from_name(ARTIFACT_VOLUME_NAME, create_if_missing=True)
 app = modal.App(APP_NAME, image=image)
 
@@ -102,15 +108,112 @@ def _download_artifacts(local_artifact_dir: str, remote_subdir: str) -> None:
         _run_modal_cli(["volume", "get", ARTIFACT_VOLUME_NAME, f"/{remote_name}", str(local_target), "--force"])
 
 
+def _cached_dataset_is_valid(metadata_path: Path, arrays_dir: Path) -> bool:
+    if not metadata_path.exists() or not arrays_dir.exists():
+        return False
+
+    expected_prefix = f"data/processed/x64/wm811k/{arrays_dir.name}/"
+    with metadata_path.open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        first_row = next(reader, None)
+
+    if not first_row:
+        return False
+
+    sample_path = str(first_row.get("array_path", "")).strip()
+    if not sample_path:
+        return False
+    if ":\\" in sample_path or sample_path.startswith("C:/") or "\\" in sample_path:
+        return False
+    if not sample_path.startswith(expected_prefix):
+        return False
+    return (Path(REMOTE_PROJECT_ROOT) / sample_path).exists()
+
+
+def _clear_processed_cache(metadata_path: Path, arrays_dir: Path) -> None:
+    for candidate in metadata_path.parent.glob("metadata*.csv"):
+        if candidate.exists():
+            candidate.unlink()
+    if arrays_dir.exists():
+        shutil.rmtree(arrays_dir)
+
+
+def _prepare_processed_dataset() -> None:
+    metadata_path = Path(REMOTE_PROCESSED_DIR) / "metadata_50k_5pct.csv"
+    arrays_dir = Path(REMOTE_PROCESSED_DIR) / "arrays_50k_5pct"
+    if _cached_dataset_is_valid(metadata_path, arrays_dir):
+        print(
+            f"[ts-wrn50-x64-multilayer] reusing cached processed dataset: {metadata_path}",
+            flush=True,
+        )
+        return
+    if metadata_path.exists() or arrays_dir.exists():
+        print("[ts-wrn50-x64-multilayer] cached processed dataset is stale; rebuilding", flush=True)
+        _clear_processed_cache(metadata_path, arrays_dir)
+
+    config_path = Path("/tmp/ts_wrn50_x64_prepare_wm811k.toml")
+    config_path.write_text(
+        "\n".join(
+            [
+                "[dataset]",
+                'name = "wm811k"',
+                f'raw_pickle = "{REMOTE_RAW_DIR}/LSWMD.pkl"',
+                f'processed_root = "{REMOTE_PROCESSED_DIR}"',
+                f'metadata_csv = "{REMOTE_PROCESSED_DIR}/metadata.csv"',
+                f'metadata_50k_csv = "{REMOTE_PROCESSED_DIR}/metadata_50k.csv"',
+                f'metadata_50k_5pct_csv = "{REMOTE_PROCESSED_DIR}/metadata_50k_5pct.csv"',
+                f'dev_metadata_csv = "{REMOTE_PROCESSED_DIR}/metadata_dev.csv"',
+                "image_size = 64",
+                'normal_label = "none"',
+                'defect_label = "pattern"',
+                "",
+                "[split_generation]",
+                'mode = "normal_only_test_defects"',
+                "",
+                "[splits]",
+                "train_normal_fraction = 0.8",
+                "val_normal_fraction = 0.1",
+                "test_normal_fraction = 0.1",
+                "random_seed = 42",
+                "",
+                "[dev_subset]",
+                "enabled = true",
+                "normal_count = 2000",
+                "defect_count = 400",
+                "",
+                "[train_subset]",
+                "normal_count = 50000",
+                "use_all_defects_for_test = false",
+                "test_defect_fraction_of_test_normals = 0.05",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    command = [
+        "python",
+        "-u",
+        REMOTE_PREPARE_SCRIPT,
+        "--config",
+        str(config_path),
+    ]
+    print(f"[ts-wrn50-x64-multilayer] preparing processed dataset: {' '.join(command)}", flush=True)
+    subprocess.run(command, check=True, cwd=REMOTE_PROJECT_ROOT)
+    processed_volume.commit()
+    print("[ts-wrn50-x64-multilayer] processed dataset volume committed", flush=True)
+
+
 @app.function(
     gpu="A10G",
     timeout=60 * 60 * 10,
     volumes={
         REMOTE_RAW_DIR: raw_volume,
+        REMOTE_PROCESSED_DIR: processed_volume,
         REMOTE_ARTIFACT_DIR: artifact_volume,
     },
 )
 def run_ts_remote(num_workers: int = 8) -> dict[str, Any]:
+    _prepare_processed_dataset()
     manifests: dict[str, Any] = {}
     for phase in ["train", "eval", "sweep"]:
         command = [

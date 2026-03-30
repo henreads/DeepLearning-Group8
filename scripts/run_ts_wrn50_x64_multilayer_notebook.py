@@ -17,9 +17,9 @@ ARTIFACT_OUTPUT_DIR = Path(
 )
 
 PHASE_CELLS = {
-    "train": [1, 2, 4, 5, 6, 7, 8, 9, 10],
-    "eval": [1, 2, 4, 5, 6, 7, 8, 11, 12, 13],
-    "sweep": [1, 2, 4, 5, 6, 7, 8, 11, 15, 16, 18],
+    "train": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    "eval": [1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 13],
+    "sweep": [1, 2, 3, 4, 5, 6, 7, 8, 11, 15, 16, 18],
 }
 
 
@@ -43,6 +43,7 @@ def display(obj: object) -> None:
 def execute_phase(notebook_path: Path, *, phase: str, output_dir: str, num_workers: int) -> dict[str, Any]:
     notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
     globals_dict: dict[str, Any] = {"__name__": "__main__", "display": display}
+    repo_root = Path.cwd().resolve()
     phase_cells = PHASE_CELLS[phase]
     print(
         f"[ts-wrn50-x64-multilayer] executing {len(phase_cells)} code cells for phase={phase} from {notebook_path}",
@@ -52,6 +53,43 @@ def execute_phase(notebook_path: Path, *, phase: str, output_dir: str, num_worke
     for step, cell_index in enumerate(phase_cells, start=1):
         cell = notebook["cells"][cell_index]
         source = "".join(cell.get("source", []))
+        if cell_index == 2:
+            source = source.replace(
+                """cwd = Path.cwd().resolve()
+candidate_roots = [cwd, *cwd.parents]
+REPO_ROOT = None
+for candidate in candidate_roots:
+    if (candidate / "src" / "wafer_defect").exists() and (candidate / "configs").exists():
+        REPO_ROOT = candidate
+        break
+
+if REPO_ROOT is None:
+    raise RuntimeError("Could not locate repo root containing src/wafer_defect and configs/")
+""",
+                f'REPO_ROOT = Path(r"{repo_root.as_posix()}")\n',
+            )
+        if cell_index == 5:
+            source = source.replace(
+                "self.metadata_path = self._resolve_metadata_path(Path(metadata_csv), image_size).resolve()",
+                "self.metadata_path = self._resolve_metadata_path(Path(metadata_csv), image_size)",
+            )
+            source = source.replace(
+                """    @staticmethod
+    def _find_repo_root(metadata_path: Path) -> Path:
+        for parent in [metadata_path.parent, *metadata_path.parents]:
+            if (parent / "data").exists():
+                return parent
+        return metadata_path.parent
+""",
+                f"""    @staticmethod
+    def _find_repo_root(metadata_path: Path) -> Path:
+        return Path(r"{repo_root.as_posix()}")
+""",
+            )
+            source = source.replace(
+                "array_path = (self.repo_root / array_rel).resolve()",
+                "array_path = self.repo_root / array_rel",
+            )
         print(
             f"[ts-wrn50-x64-multilayer] starting code cell {step}/{len(phase_cells)} "
             f"(phase={phase}, notebook index {cell_index})",

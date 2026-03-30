@@ -10,4 +10,4 @@ Files:
 
 Notes:
 - The notebook uses repo-local dataset paths and writes outputs back into the local artifact folders.
-- Extracted outputs from the earlier saved run are preserved under `[experiments/anomaly_detection/patchcore/vit_b16/x224/one_layer_defect_tuning/artifacts/results/extracted_notebook_outputs](experiments/anomaly_detection/patchcore/vit_b16/x224/one_layer_defect_tuning/artifacts/results/extracted_notebook_outputs)`.
+- The notebook supports two modes: reuse the saved local checkpoint and result files by default, or recompute the score artifacts and UMAP outputs by setting the force flags in the configuration cell.

@@ -36,7 +36,7 @@ Most experiment branches contain:
 - `README.md`
   Method and branch description.
 - `notebook.ipynb`
-  Canonical training, evaluation, or review notebook for the branch.
+  Canonical notebook for the branch. It should support a train-or-reuse workflow so saved local checkpoints and result files can be reused when retraining is skipped.
 - `train_config.toml` and/or `data_config.toml`
   Local config snapshots when the workflow uses them.
 - `artifacts/`

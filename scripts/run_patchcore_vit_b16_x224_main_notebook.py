@@ -264,11 +264,27 @@ def execute_notebook(
 ) -> dict[str, Any]:
     notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
     globals_dict: dict[str, Any] = {"__name__": "__main__", "display": display}
+    repo_root = Path.cwd().resolve()
     print(f"[patchcore-vit-b16-x224-main] executing {len(CODE_CELL_INDICES)} code cells from {notebook_path}", flush=True)
 
     for step, cell_index in enumerate(CODE_CELL_INDICES, start=1):
         cell = notebook["cells"][cell_index]
         source = "".join(cell.get("source", []))
+        if cell_index == 6:
+            source = source.replace(
+                """cwd = Path.cwd().resolve()
+candidate_roots = [cwd, *cwd.parents]
+PROJECT_ROOT = None
+for candidate in candidate_roots:
+    if (candidate / 'src' / 'wafer_defect').exists() and (candidate / 'configs').exists():
+        PROJECT_ROOT = candidate
+        break
+
+if PROJECT_ROOT is None:
+    raise RuntimeError('Could not locate repo root containing src/wafer_defect and configs/')
+""",
+                f'PROJECT_ROOT = Path(r"{repo_root.as_posix()}")\n',
+            )
         print(
             f"[patchcore-vit-b16-x224-main] starting code cell {step}/{len(CODE_CELL_INDICES)} "
             f"(notebook index {cell_index})",

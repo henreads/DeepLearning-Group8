@@ -1,0 +1,36 @@
+[run]
+output_dir = "experiments/anomaly_detection/teacher_student/wideresnet50_2/x224/multilayer_self_contained/artifacts/ts_wideresnet50_multilayer_x224"
+seed = 42
+
+[data]
+metadata_csv = "data/processed/x224/wm811k/metadata_50k_5pct.csv"
+image_size = 224
+batch_size = 8
+num_workers = 0
+
+[training]
+epochs = 30
+learning_rate = 0.0003
+weight_decay = 0.00001
+device = "auto"
+early_stopping_patience = 5
+early_stopping_min_delta = 0.0001
+checkpoint_every = 5
+
+[model]
+type = "ts_distillation"
+teacher_backbone = "wideresnet50_2"
+teacher_layers = ["layer2", "layer3"]
+teacher_pretrained = true
+teacher_input_size = 224
+normalize_teacher_input = true
+feature_autoencoder_hidden_dim = 128
+student_weight = 1.0
+autoencoder_weight = 1.0
+score_student_weight = 2.0
+score_autoencoder_weight = 1.0
+reduction = "topk_mean"
+topk_ratio = 0.25
+
+[scoring]
+threshold_quantile = 0.95

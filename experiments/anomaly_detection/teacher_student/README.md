@@ -26,6 +26,8 @@ It provides a middle ground between plain reconstruction and nearest-neighbor me
   Single-layer Wide ResNet50-2 branch.
 - `wideresnet50_2/x64/multilayer_self_contained/`
   Multilayer Wide ResNet50-2 branch.
+- `wideresnet50_2/x224/multilayer_self_contained/`
+  x224 multilayer Wide ResNet50-2 branch.
 
 ## Common Files In A Branch
 

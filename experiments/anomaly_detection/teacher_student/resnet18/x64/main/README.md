@@ -16,6 +16,7 @@ The notebook is configured to reuse saved artifacts unless you explicitly enable
 
 - checkpoint root: `artifacts/ts_resnet18/checkpoints/`
 - results root: `artifacts/ts_resnet18/results/`
+- plots root: `artifacts/ts_resnet18/plots/`
 
 ## Main Files
 

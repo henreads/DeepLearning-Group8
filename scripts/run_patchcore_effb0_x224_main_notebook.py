@@ -38,6 +38,16 @@ def display(obj: object) -> None:
     print(obj, flush=True)
 
 
+def _repo_relative(path: str | Path, repo_root: Path) -> str:
+    candidate = Path(path)
+    if candidate.is_absolute():
+        try:
+            return candidate.relative_to(repo_root).as_posix()
+        except ValueError:
+            return candidate.as_posix()
+    return candidate.as_posix()
+
+
 def _plot_score_distribution(test_scores_df: pd.DataFrame, threshold: float, plot_path: Path) -> None:
     fig, ax = plt.subplots(figsize=(8, 4.5))
     ax.hist(
@@ -152,7 +162,7 @@ def _standardize_outputs(globals_dict: dict[str, Any], output_dir: Path, repo_ro
     (evaluation_dir / "summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
 
     config_snapshot = dict(summary.get("config", {}))
-    config_snapshot["metadata_csv"] = str(Path(globals_dict["METADATA_PATH"]).resolve().relative_to(repo_root).as_posix())
+    config_snapshot["metadata_csv"] = _repo_relative(globals_dict["METADATA_PATH"], repo_root)
     (results_dir / "config_snapshot.json").write_text(json.dumps(config_snapshot, indent=2), encoding="utf-8")
 
     _plot_score_distribution(test_scores_df, threshold, plots_dir / "score_distribution.png")
@@ -175,7 +185,11 @@ def execute_notebook(
     batch_size: int,
 ) -> dict[str, Any]:
     notebook = json.loads(notebook_path.read_text(encoding="utf-8"))
-    globals_dict: dict[str, Any] = {"__name__": "__main__", "display": display}
+    globals_dict: dict[str, Any] = {
+        "__name__": "__main__",
+        "display": display,
+        "_repo_relative": _repo_relative,
+    }
     repo_root = Path.cwd().resolve()
     print(f"[patchcore-effb0-x224-main] executing {len(CODE_CELL_INDICES)} code cells from {notebook_path}", flush=True)
 
@@ -197,6 +211,11 @@ if REPO_ROOT is None:
 """,
                 f'REPO_ROOT = Path(r"{repo_root.as_posix()}")\n',
             )
+        if cell_index == 9:
+            source = source.replace(
+                'print(f"Saved outputs to: {OUTPUT_DIR.relative_to(REPO_ROOT)}")',
+                'print(f"Saved outputs to: {_repo_relative(OUTPUT_DIR, REPO_ROOT)}")',
+            )
         print(
             f"[patchcore-effb0-x224-main] starting code cell {step}/{len(CODE_CELL_INDICES)} "
             f"(notebook index {cell_index})",
@@ -216,8 +235,8 @@ if REPO_ROOT is None:
 
         print(f"[patchcore-effb0-x224-main] finished code cell {step}/{len(CODE_CELL_INDICES)}", flush=True)
 
-    output_dir_path = Path(globals_dict["OUTPUT_DIR"]).resolve()
-    repo_root = Path(globals_dict["REPO_ROOT"]).resolve()
+    output_dir_path = Path(globals_dict["OUTPUT_DIR"])
+    repo_root = Path(globals_dict["REPO_ROOT"])
     manifest = _standardize_outputs(globals_dict, output_dir_path, repo_root)
     (output_dir_path / "run_manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     return manifest
