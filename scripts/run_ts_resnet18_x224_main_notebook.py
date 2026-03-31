@@ -59,6 +59,9 @@ def execute_phase(notebook_path: Path, *, phase: str, output_dir: str) -> dict[s
             )
             continue
         source = "".join(cell.get("source", []))
+        # Restore newlines if they were stripped (common notebook corruption)
+        if "\n" not in source and "import" in source and len(source) > 200:
+            source = source.replace("import ", "\nimport ").replace("from ", "\nfrom ").replace("if ", "\nif ").lstrip()
         if cell_index == 2:
             source = source.replace(
                 """cwd = Path.cwd().resolve()
