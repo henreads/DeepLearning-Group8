@@ -1,0 +1,27 @@
+[run]
+output_dir = "experiments/anomaly_detection/vae/x64/latent_dim_sweep/artifacts/vae_latent_dim_sweep"
+seed = 42
+
+[data]
+metadata_csv = "data/processed/x64/wm811k/metadata_50k_5pct.csv"
+image_size = 64
+batch_size = 64
+num_workers = 0
+
+[training]
+epochs = 30
+learning_rate = 0.001
+weight_decay = 0.0001
+device = "auto"
+early_stopping_patience = 5
+early_stopping_min_delta = 0.00005
+checkpoint_every = 5
+resume_from = ""
+
+[model]
+type = "vae"
+latent_dim = 128
+beta = 0.005
+
+[sweep]
+latent_dims = [32, 64, 128, 256, 512]

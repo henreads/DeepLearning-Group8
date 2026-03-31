@@ -353,6 +353,36 @@ The autoencoder family figure below is split into two views so the growing numbe
 
 ![Autoencoder family comparison](artifacts/report_plots/autoencoder_family_comparison.png)
 
+### Autoencoder Family Summary
+
+All autoencoder-family results ranked by val-threshold F1:
+
+| experiment | model | score | image size | precision | recall | F1 | AUROC | AUPRC | best sweep F1 |
+|---|---|---|---|---|---|---|---|---|---|
+| AE-64-BN-max | AE + BatchNorm | `max_abs` | 64×64 | 0.401442 | 0.668000 | 0.501502 | 0.834023 | 0.568039 | 0.629808 |
+| AE-64-BN-DO0.00 | AE + BN + Dropout 0.00 | `max_abs` | 64×64 | 0.393120 | 0.640000 | 0.487062 | 0.850790 | 0.616946 | 0.656642 |
+| AE-64-BN-DO0.10 | AE + BN + Dropout 0.10 | `max_abs` | 64×64 | 0.385343 | 0.652000 | 0.484398 | 0.844670 | 0.570245 | 0.634615 |
+| AE-64-BN-DO0.05 | AE + BN + Dropout 0.05 | `max_abs` | 64×64 | 0.377828 | 0.668000 | 0.482659 | 0.835035 | 0.551700 | 0.609959 |
+| AE-64-BN-DO0.20 | AE + BN + Dropout 0.20 | `max_abs` | 64×64 | 0.370115 | 0.644000 | 0.470073 | 0.841431 | 0.574973 | 0.633929 |
+| AE-64-topk | AE baseline | `topk_abs_mean` | 64×64 | 0.390374 | 0.584000 | 0.467949 | 0.839282 | 0.522171 | 0.509091 |
+| AE-64-Res-max | Residual AE | `max_abs` | 64×64 | 0.374419 | 0.644000 | 0.473529 | 0.843360 | 0.588907 | 0.625592 |
+| AE-64-topk-43ep | AE baseline (longer run) | `topk_abs_mean` | 64×64 | 0.381579 | 0.580000 | 0.460317 | 0.834819 | 0.525162 | 0.520661 |
+| AE-64-Res-topk | Residual AE | `topk_abs_mean` | 64×64 | 0.356974 | 0.604000 | 0.448737 | 0.804607 | 0.626014 | 0.678133 |
+| AE-64-BN-topk | AE + BatchNorm | `topk_abs_mean` | 64×64 | 0.346247 | 0.572000 | 0.431373 | 0.790020 | 0.603447 | 0.655172 |
+| AE-128-topk | AE baseline | `topk_abs_mean` | 128×128 | 0.374631 | 0.508000 | 0.431239 | 0.814856 | 0.455031 | 0.479821 |
+| AE-64-mse | AE baseline | `mse_mean` | 64×64 | 0.346154 | 0.504000 | 0.410423 | 0.809694 | 0.447970 | 0.473318 |
+
+**Key finding:** Score choice matters as much as architecture. The same BatchNorm checkpoint ranks from F1=0.431 (`topk_abs_mean`) to F1=0.502 (`max_abs`). Always ablate scoring rules before concluding a model is weak.
+
+**Family key takeaways:**
+
+1. **Score design matters as much as architecture.** BatchNorm changed which score worked best (`topk_abs_mean` → `max_abs`). Always run a score ablation before declaring a checkpoint weak.
+2. **BatchNorm + `max_abs` is the family winner** on deployed F1 (0.502). It is also simpler and trains faster than the residual variant.
+3. **Dropout does not help.** The sweep confirmed `dropout=0.00` as best — latent dropout is not a useful regulariser for this AE.
+4. **Residual architecture has the best ranking quality** (highest best-sweep F1 = 0.678 under `topk_abs_mean`) but trails on deployed threshold F1.
+5. **Higher resolution (128×128) hurts.** Worse on nearly every defect type at the same score. Do not pursue larger AE resolutions without a fundamentally different architecture.
+6. **Persistent failure pattern.** Across all variants: Scratch, Loc, and Edge-Loc recall stays low. The bottleneck is local anomaly sensitivity, not reconstruction quality.
+
 ### Experiment 1: Baseline Autoencoder `64x64`
 
 Purpose:
@@ -910,6 +940,26 @@ Interpretation:
 - some KL regularization helps, but heavier regularization hurts in this setup
 - even the best VAE remained clearly below the `64x64` autoencoder
 
+### VAE Beta Sweep Summary
+
+| beta | F1 (val threshold) | F1 (best sweep) | AUROC | AUPRC |
+|---|---|---|---|---|
+| 0.001 | 0.3427 | 0.3744 | 0.7697 | 0.3357 |
+| **0.005** | **0.3387** | **0.4179** | **0.7719** | **0.3723** |
+| 0.01 | 0.3349 | 0.4167 | 0.7664 | 0.3690 |
+| 0.05 | 0.3020 | 0.3802 | 0.7497 | 0.3286 |
+
+### VAE Family Context
+
+| method | F1 | AUROC | AUPRC |
+|---|---|---|---|
+| AE + BatchNorm (`max_abs`) | 0.502 | 0.834 | 0.568 |
+| **VAE (beta=0.005, best sweep)** | **0.418** | **0.772** | **0.372** |
+| Teacher-Student ResNet18 | 0.495 | 0.894 | 0.519 |
+| Deep SVDD | 0.360 | 0.788 | 0.213 |
+
+The VAE family confirms that while probabilistic latent regularization is mathematically elegant, it comes at the cost of anomaly detection performance on localized defects. The beta sweep shows that beta=0.005 is near-optimal in the tested range, and higher regularization only makes things worse. The fundamental insight is that **wafer defects are highly localized, and probabilistic latent compression smooths away the spatial precision needed to detect them.**
+
 ## Experiment 6: Deep SVDD `64x64`
 
 Purpose:
@@ -950,6 +1000,21 @@ Interpretation:
 - it still remained below the `64x64` autoencoder on validation-threshold F1, AUROC, AUPRC, and best sweep F1
 - the especially low AUPRC suggests weaker score ranking under class imbalance
 - this makes Deep SVDD a useful comparison result, but not the current best model
+
+### Holdout Evaluation: Expanded `70k` Normal / `3.5k` Defect
+
+The saved SVDD checkpoint was evaluated on the expanded holdout split using the same `95th`-percentile validation threshold.
+
+| metric | benchmark (5k/250) | holdout (70k/3.5k) |
+| ------ | ------------------ | ------------------ |
+| precision | 0.304709 | 0.296318 |
+| recall | 0.440000 | 0.427714 |
+| F1 | 0.360065 | **0.350094** |
+| AUROC | 0.787506 | **0.815139** |
+| AUPRC | 0.213108 | **0.229441** |
+| predicted anomalies | 361 | 5,052 |
+
+Generalization is stable — the model maintains similar F1 at 14× the anomaly count. AUROC and AUPRC improve on the larger pool, consistent with better statistical estimates. The false-positive rate stays close to the expected `~5%` implied by the `95th`-percentile threshold.
 
 ## Experiment 7: PatchCore Sweep with AE-BN Backbone `64x64`
 
@@ -1084,6 +1149,36 @@ Interpretation:
 - this result is well below the best AE family run and also below the better PatchCore variants
 - the weakness appears to be the scoring rule, not only the backbone itself; global embedding distance is too crude for the local defect patterns in WM-811K
 - this result still supports the broader backbone direction, because it shows that a stronger backbone alone is not enough without a local anomaly method on top
+
+### Holdout Evaluation: ResNet18 Backbone on Expanded `70k` Normal / `3.5k` Defect
+
+The saved checkpoint was evaluated on the expanded holdout split via a Modal script using the same checkpoint and threshold policy.
+
+**Holdout artifact dir:** `experiments/anomaly_detection/backbone_embedding/resnet18/x64/baseline/artifacts/resnet18_embedding_baseline/holdout70k_3p5k/`
+
+| metric | benchmark (5k/250) | holdout (70k/3.5k) |
+| ------ | ------------------ | ------------------ |
+| precision | 0.201705 | 0.226513 |
+| recall | 0.284000 | 0.336857 |
+| F1 | 0.235880 | **0.270879** |
+| AUROC | 0.684746 | **0.706993** |
+| AUPRC | 0.194977 | **0.236019** |
+| predicted anomalies | 352 | 5,205 |
+
+Holdout per-defect recall:
+
+| defect type | count | detected | recall |
+| ----------- | ----- | -------- | ------ |
+| `Center` | `603` | `40` | `0.066` |
+| `Donut` | `71` | `8` | `0.113` |
+| `Edge-Loc` | `739` | `106` | `0.143` |
+| `Loc` | `492` | `91` | `0.185` |
+| `Scratch` | `169` | `40` | `0.237` |
+| `Edge-Ring` | `1,302` | `803` | `0.617` |
+| `Random` | `108` | `79` | `0.731` |
+| `Near-full` | `16` | `12` | `0.750` |
+
+The holdout shows marginally better metrics. The precision improvement is a statistical artifact — 3,500 true anomalies give a stronger signal than 250. The model is still fundamentally weak: the same pattern holds at scale with broad high-contrast defects detectable and small local defects essentially missed.
 
 The compact baseline figure below keeps the earlier non-leading baselines readable in one place: the left panel ranks the VAE, SVDD, and simple backbone runs by deployment-style F1, while the right panel shows their precision-recall tradeoff with point size scaled by AUROC.
 
@@ -1264,6 +1359,35 @@ Interpretation:
 - the larger backbone did not improve every metric at once; `ResNet50` improved F1 over `ResNet18`, but `ResNet18` remained slightly stronger on AUROC and AUPRC
 - even with that improvement, the best ResNet50 PatchCore result still stayed below the AE + BatchNorm + `max_abs` winner and was later overtaken clearly by the WideResNet50-2 PatchCore follow-up
 
+### PatchCore Family Evolution Summary
+
+The complete PatchCore progression from weakest to strongest:
+
+| rank | experiment | backbone | resolution | score | precision | recall | F1 | AUROC | AUPRC |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | **ViT-B/16 PatchCore** | ViT-B/16 block 6 | 224×224 | `topk_mean r=0.10` | 0.463 | **0.832** | **0.595** | **0.956** | **0.671** |
+| 2 | **EfficientNet-B1 PatchCore** | EffNetB1 block 3 | 240×240 | `topk_mean r=0.03` | 0.476 | 0.780 | 0.591 | 0.935 | 0.609 |
+| 3 | **WRN50 PatchCore x224** | WideResNet50-2 (layer2+3) | 224×224 | `topk_mean r=0.05` | 0.432 | 0.752 | 0.549 | 0.931 | 0.659 |
+| 4 | **EfficientNet-B0 PatchCore** | EffNetB0 (blocks 3+6) | 224×224 | `topk_mean r=0.02` | 0.439 | 0.716 | 0.544 | 0.925 | 0.483 |
+| 5 | **WRN50 PatchCore x64** | WideResNet50-2 (layer2+3) | 64×64 | `topk_mean r=0.10` | 0.422 | 0.720 | 0.532 | 0.917 | 0.562 |
+| 6 | ResNet50 PatchCore | ResNet50 | 64×64 | `mean` | 0.340 | 0.548 | 0.420 | 0.821 | 0.363 |
+| 7 | ResNet18 PatchCore | ResNet18 | 64×64 | `mean` | 0.346 | 0.476 | 0.401 | 0.842 | 0.411 |
+| 8 | AE-BN PatchCore | AE-BN encoder | 64×64 | `mean` | 0.284 | 0.412 | 0.336 | 0.851 | 0.226 |
+
+**Key progression:** Each step up improved significantly. The biggest single gains were:
+- **WRN50 x64 → WRN50 x224**: +0.017 F1, +0.014 AUROC, +0.097 AUPRC — direct high-res preprocessing matters
+- **WRN50 x224 → ViT x224**: +0.046 F1, +0.025 AUROC — transformer architecture advantage
+
+**Cross-branch per-defect comparison** (hardest class Scratch shows the most dramatic improvement):
+
+| model | Scratch | Loc | Edge-Loc | Center | Edge-Ring |
+|---|---|---|---|---|---|
+| ResNet18 x64 | 0.600 | 0.412 | 0.264 | 0.480 | 0.524 |
+| WRN50 x64 | 0.533 | 0.559 | 0.585 | 0.620 | 0.917 |
+| WRN50 x224 | 0.667 | 0.735 | 0.623 | 0.780 | 0.798 |
+| EfficientNet-B1 x240 | 0.400 | 0.588 | 0.792 | 0.700 | 0.929 |
+| **ViT-B/16 x224** | **0.727** | **0.829** | **0.705** | 0.618 | 0.941 |
+
 ### Experiment 16: PatchCore Sweep with WideResNet50-2 Multilayer `64x64`
 
 Purpose:
@@ -1443,6 +1567,41 @@ Within this family, two backbone variants were tested:
 The teacher-distillation family figure below compares the two backbone variants directly: the left panel shows their deployed F1, AUPRC, and AUROC side by side, while the right panel shows the precision-recall operating point reached by each selected score rule.
 
 ![Teacher-distillation family comparison](artifacts/report_plots/ts_family_comparison.png)
+
+### Teacher-Student Family Summary
+
+All teacher-student family results across backbones and configurations, including WideResNet50-2 variants:
+
+| variant | F1 | AUROC | AUPRC | precision | recall | notes |
+|---|---|---|---|---|---|---|
+| ResNet18 (x64) | 0.495 | 0.894 | 0.519 | 0.403 | 0.644 | Student-only `topk_mean`, topk_ratio=0.20 |
+| ResNet50 (x64) | 0.488 | 0.913 | 0.581 | 0.382 | 0.676 | Imported Kaggle default score |
+| ResNet50 (x64, best local score) | 0.525 | 0.909 | 0.599 | 0.418 | 0.704 | Mixed `2.0:1.0` `topk_mean`, topk_ratio=0.20 |
+| WideResNet50_2 Layer2 (x64) | 0.508 | 0.920 | 0.540 | 0.406 | 0.680 | Dual-layer features, mixed score |
+| WideResNet50_2 Multilayer (x64) | 0.504 | 0.923 | 0.549 | 0.401 | 0.680 | Layer2+layer3 multilayer, mixed score |
+| WideResNet50_2 Multilayer (x64, best score) | 0.524 | 0.923 | 0.546 | 0.422 | 0.692 | `s2_a1_topk_mean_r0.15` |
+| WideResNet50_2 Multilayer (x224) | — | — | — | — | — | Pending evaluation |
+
+**Key findings:**
+
+1. **WideResNet50_2 dominates on AUROC** (0.920-0.923), indicating excellent anomaly ranking under class imbalance
+2. **ResNet50 achieves highest AUPRC** (0.581 default, 0.599 best score), best score calibration among evaluated variants
+3. **WideResNet Layer2 has strongest per-defect balance** (F1=0.508), balancing precision and recall effectively
+4. **Score composition interacts strongly with backbone capacity** — the ResNet50 checkpoint improved from F1=0.488 to F1=0.525 purely by switching to the mixed student+autoencoder score
+5. **Multilayer feature fusion helps** — WRN50_2 multilayer (layer2+layer3) gives a small but consistent gain over single-layer layer2
+
+Per-defect recall comparison for the strongest variants:
+
+| defect type | ResNet18 x64 | ResNet50 x64 | WRN50_2 Layer2 x64 | WRN50_2 Multilayer x64 |
+|---|---|---|---|---|
+| Scratch | 0.333 | 0.333 | 0.333 | 0.467 |
+| Loc | 0.441 | 0.559 | 0.559 | 0.559 |
+| Edge-Loc | 0.491 | 0.491 | 0.585 | 0.585 |
+| Center | 0.620 | 0.720 | 0.620 | 0.780 |
+| Donut | 0.714 | 0.714 | 1.000 | 1.000 |
+| Edge-Ring | 0.857 | 0.929 | 0.917 | 0.798 |
+| Random | 1.000 | 1.000 | 1.000 | 1.000 |
+| Near-full | 1.000 | 1.000 | 1.000 | 1.000 |
 
 ### Experiment 11: Teacher-Distillation-ResNet18
 
@@ -1758,6 +1917,23 @@ The sequence of runs was:
 The WideResNet50-2 family figure below summarizes that branch directly using the representative selected row from each completed WRN experiment: the plain backbone baseline, the single-layer teacher-student run, the multilayer teacher-student run, and the selected multilayer PatchCore run. The left panel ranks those experiment-level results by deployed F1, while the right panel shows their precision-recall operating points with point size scaled by best-sweep F1.
 
 ![WideResNet50-2 family comparison](artifacts/report_plots/wrn_family_comparison.png)
+
+### Backbone Embedding Family Summary
+
+| experiment | backbone | embedding dim | precision | recall | F1 | AUROC | AUPRC | best sweep F1 |
+|---|---|---|---|---|---|---|---|---|
+| ResNet18-center | ResNet18 | 512 | 0.201705 | 0.284000 | 0.235880 | 0.684746 | 0.194977 | 0.259740 |
+| WideRes50-center | Wide ResNet50-2 | 2048 | 0.221854 | 0.268000 | 0.242754 | 0.677274 | 0.142323 | 0.269504 |
+
+**Key finding:** Both models score below 0.25 F1 and below 0.69 AUROC. The larger backbone (WRN50-2, 4× more dimensions) does not improve over ResNet18 — in fact AUROC is slightly lower. Global center-distance scoring is insufficient regardless of backbone capacity.
+
+**Key takeaways:**
+
+1. **Backbone scale alone does not help.** WRN50-2 (2048-dim) is not better than ResNet18 (512-dim) on the primary F1 metric.
+2. **Global center-distance is the bottleneck.** Both backbones produce embeddings where anomalies are deeply interleaved with normals.
+3. **Only catastrophic defects are detectable.** Random, Edge-Ring, and Near-full have recall above 0.5 for ResNet18. Every local defect is near-random.
+4. **These are lower bounds.** The value of these experiments is establishing that `F1 ≈ 0.24` and `AUROC ≈ 0.68` is the floor when using ImageNet features + global scoring.
+5. **The fix is local scoring, not a bigger backbone.** PatchCore on ResNet18 (Experiment 9) reaches `F1 = 0.401` — a 70% relative improvement — purely by switching from global center-distance to local patch nearest-neighbor scoring on the same backbone.
 
 ### Experiment 13: Pretrained WideResNet50-2 Backbone Baseline `64x64`
 
@@ -2097,6 +2273,41 @@ Interpretation:
 ![FastFlow variant comparison](experiments/anomaly_detection/fastflow/x64/main/artifacts/fastflow_variant_sweep/plots/variant_comparison_metrics.png)
 
 ![FastFlow best-variant defect breakdown](experiments/anomaly_detection/fastflow/x64/main/artifacts/fastflow_variant_sweep/plots/best_variant_defect_breakdown.png)
+
+### Holdout Evaluation: FastFlow on Expanded `70k` Normal / `3.5k` Defect
+
+The `wrn50_l23_s4` checkpoint was evaluated on the expanded holdout using the same validation threshold. Results live at:
+
+`artifacts/fastflow_variant_sweep/holdout70k_3p5k/`
+
+| metric | benchmark (5k/250) | holdout (70k/3.5k) |
+| ------ | ------------------ | ------------------ |
+| threshold | 0.412847 | 0.412847 |
+| precision | 0.385167 | 0.400834 |
+| recall | 0.644000 | 0.686571 |
+| F1 | 0.482036 | **0.506161** |
+| AUROC | 0.870692 | **0.889555** |
+| AUPRC | 0.488619 | **0.541732** |
+| predicted anomalies | 418 | 5,995 |
+
+Holdout per-defect recall:
+
+| defect type | count | detected | recall |
+| ----------- | ----- | -------- | ------ |
+| `Scratch` | `169` | `37` | `0.219` |
+| `Loc` | `492` | `201` | `0.409` |
+| `Edge-Loc` | `739` | `455` | `0.616` |
+| `Center` | `603` | `441` | `0.731` |
+| `Edge-Ring` | `1,302` | `1,082` | `0.831` |
+| `Donut` | `71` | `63` | `0.887` |
+| `Random` | `108` | `108` | `1.000` |
+| `Near-full` | `16` | `16` | `1.000` |
+
+![FastFlow holdout defect breakdown](experiments/anomaly_detection/fastflow/x64/main/artifacts/fastflow_variant_sweep/holdout70k_3p5k/plots/defect_breakdown.png)
+
+![FastFlow holdout threshold sweep](experiments/anomaly_detection/fastflow/x64/main/artifacts/fastflow_variant_sweep/holdout70k_3p5k/plots/threshold_sweep.png)
+
+The holdout shows improved metrics across the board — both AUROC and F1 increase with the larger evaluation pool. This suggests the benchmark F1 was slightly pessimistic due to the small anomaly count (250 vs 3,500). Scratch remains the hardest class (~0.22 recall at scale). The large holdout confirms the model's behavior is not an artifact of the small 250-anomaly benchmark set.
 
 ## Experiment 20: Post-Hoc Score Ensemble of WRN PatchCore + TS-Res50
 

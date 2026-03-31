@@ -211,7 +211,7 @@ def _prepare_processed_dataset() -> None:
         REMOTE_ARTIFACT_DIR: artifact_volume,
     },
 )
-def run_patchcore_remote(num_workers: int = 4, batch_size: int = 64) -> dict[str, Any]:
+def run_patchcore_remote(num_workers: int = 4, batch_size: int = 128) -> dict[str, Any]:
     _prepare_processed_dataset()
     command = [
         "python",
@@ -237,7 +237,7 @@ def run_patchcore_remote(num_workers: int = 4, batch_size: int = 64) -> dict[str
 
 
 @app.local_entrypoint()
-def main(num_workers: int = 4, batch_size: int = 64, sync_back: bool = True) -> None:
+def main(num_workers: int = 4, batch_size: int = 128, sync_back: bool = True) -> None:
     result = run_patchcore_remote.remote(num_workers=num_workers, batch_size=batch_size)
     print(json.dumps(result, indent=2))
     if sync_back:

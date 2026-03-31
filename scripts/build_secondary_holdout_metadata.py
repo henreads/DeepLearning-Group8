@@ -78,18 +78,19 @@ def build_export_records(
     rows: pd.DataFrame,
     *,
     arrays_dir: Path,
-    repo_root: Path,
+    processed_root: Path,
     image_size: int,
     file_offset: int,
 ) -> list[dict[str, object]]:
     records: list[dict[str, object]] = []
+    relative_arrays_root = processed_root / arrays_dir.name
     for local_index, (_, row) in enumerate(rows.iterrows(), start=file_offset):
         file_name = f"wafer_{local_index:07d}.npy"
         array_path = arrays_dir / file_name
         raw_map = np.asarray(row["waferMap"])
         wafer_map = normalize_map(raw_map, image_size=image_size)
         np.save(array_path, wafer_map)
-        relative_array_path = array_path.resolve().relative_to(repo_root).as_posix()
+        relative_array_path = (relative_arrays_root / file_name).as_posix()
         records.append(
             {
                 "array_path": relative_array_path,
@@ -161,7 +162,7 @@ def main() -> None:
     records = build_export_records(
         pd.concat([holdout_normals, holdout_defects], ignore_index=True),
         arrays_dir=output_arrays_dir,
-        repo_root=repo_root,
+        processed_root=Path(args.output_metadata).parent,
         image_size=args.image_size,
         file_offset=0,
     )

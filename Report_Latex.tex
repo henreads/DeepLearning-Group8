@@ -1,0 +1,1458 @@
+\documentclass[11pt]{article}
+
+\usepackage[a4paper,margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{float}
+\usepackage{subcaption}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{microtype}
+\usepackage{parskip}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    urlcolor=blue,
+    citecolor=blue
+}
+
+\setlength{\parskip}{6pt}
+
+\title{%
+  \textbf{Wafer Map Anomaly Detection on WM-811K}\\[0.4em]
+  \large From Reconstruction Baselines to Pretrained Local Feature Modelling
+}
+\author{Deep Learning Project Report, Group 08\\[0.3em]
+  Henry Lee Jun (1004219) \quad Chia Tang (1007200) \quad Genson Low (1005931)}
+\date{\today}
+
+\begin{document}
+
+\begin{titlepage}
+  \centering
+  \vspace*{2cm}
+  {\LARGE\bfseries Wafer Map Anomaly Detection on WM-811K\par}
+  \vspace{0.5cm}
+  {\large From Reconstruction Baselines to Pretrained Local Feature Modelling\par}
+  \vspace{1.5cm}
+  {\large\bfseries Deep Learning Project Report\par}
+  \vspace{0.4cm}
+  {\large 50.039 Deep Learning, Y2026\par}
+  \vspace{0.4cm}
+  {\large Group 08\par}
+  \vspace{0.6cm}
+  {\normalsize
+    Henry Lee Jun (1004219) \quad
+    Chia Tang (1007200) \quad
+    Genson Low (1005931)\par}
+  \vspace{0.8cm}
+
+  {\large \today\par}
+  \vfill
+  {\small All models implemented in PyTorch. This report documents the experimental design,
+  results, and diagnostic analysis for normal-only wafer anomaly detection on the
+  WM-811K / LSWMD dataset.\par}
+\end{titlepage}
+
+\pagenumbering{roman}
+
+\begin{abstract}
+This report presents an anomaly-detection study on the WM-811K / LSWMD wafer-map dataset
+under a strict normal-only training regime. The project begins with convolutional autoencoders
+to establish a stable baseline pipeline, then moves progressively toward pretrained
+ImageNet representations, teacher-student distillation, and PatchCore-style local anomaly
+scoring. The main finding is that stronger frozen backbones combined with local feature
+modelling improve performance substantially over plain reconstruction or global
+embedding-distance baselines. The best completed run on the main benchmark is a
+direct-$224\!\times\!224$ PatchCore model built on a pretrained ViT-B/16 backbone
+(block 6 features, top-10\% patch reduction), achieving $\mathrm{F1}=0.595$,
+$\mathrm{AUROC}=0.956$, and $\mathrm{AUPRC}=0.671$ under a deployment-style
+95th-percentile validation threshold.
+Score histograms and UMAP diagnostics show that the remaining bottleneck is
+score-distribution overlap and naive thresholding rather than feature quality alone.
+\end{abstract}
+
+\newpage
+\tableofcontents
+\newpage
+
+\pagenumbering{arabic}
+
+\section{Introduction}
+
+Semiconductor wafer fabrication involves hundreds of process steps, and a single systematic error at any stage can render an entire region of dies unusable.
+After fabrication, every die is electrically tested and the pass/fail result is
+recorded at its spatial location, producing a \emph{wafer bin map} (WBM), a
+2-D representation of the wafer's quality. These spatial patterns are
+diagnostically useful as different defect types leave distinct signatures on
+the map. For example, a ring of failures near the wafer edge suggests a
+different root cause than a central cluster or a diagonal scratch. Being able
+to detect such patterns automatically would allow for faster wafer disposition
+and better upstream process control.
+
+A natural first instinct is to treat this as a supervised classification problem,
+and indeed many prior works have done so with high reported accuracy on fixed
+benchmarks. However, this approach does not translate well to real-world fab
+conditions. In the WM-811K dataset used in this project, only $3.1\%$ of wafers
+carry a confirmed defect label while $78.7\%$ are entirely unlabelled. More
+fundamentally, the set of possible defect types is not fixed. As fabrication
+tools and processes evolve, new failure modes emerge that have no existing label
+and would go completely undetected by a supervised classifier. For these reasons,
+this project adopts a \emph{normal-only anomaly detection} approach instead. The
+model is trained purely on normal wafers, and at inference time each wafer is
+given an anomaly score based on how much it deviates from what the model has
+learned to be normal. This means the system does not need any defect labels
+during training and is inherently able to generalise to defect types it has
+never seen before.
+
+This report walks through three families of models explored under this
+normal-only training setting. Starting from a convolutional autoencoder
+baseline, the work progresses through pretrained backbone embeddings and then
+to local feature modelling methods, namely teacher-student distillation,
+FastFlow, and PatchCore-style nearest-neighbour patch scoring.
+
+\section{Problem Framing and Manufacturing Context}
+
+\subsection{Wafer Defects and Their Spatial Signatures}
+
+During fabrication, a wafer passes through hundreds of process steps including
+deposition, lithography, etching, doping, and planarisation. When a systematic
+error occurs at any stage, the affected dies do not fail randomly. Instead, they
+fail in spatially coherent clusters whose shape encodes the root cause. These
+spatial signatures are captured in a \emph{wafer bin map} (WBM), which is a
+2-D pass/fail grid recorded after electrical testing. Automated recognition of
+such patterns enables rapid wafer disposition and feeds back into upstream
+process control.
+
+\subsection{Why Supervised Classification Falls Short}
+
+The conventional machine-learning approach to this problem is supervised
+multi-class classification, where each defect pattern type is labelled and a
+classifier is trained on those labels. Prior works have achieved high accuracy
+this way on fixed benchmark splits. However, this approach has a fundamental
+limitation when applied to real production settings.
+
+The core issue is that the defect vocabulary is neither fixed nor complete. The
+eight labelled pattern types in WM-811K (Edge-Ring, Edge-Loc, Center, Loc,
+Scratch, Donut, Random, and Near-full) reflect historically documented failures
+from specific fabs and process generations. In practice, production lines evolve
+continuously as new materials, tools, and process recipes are introduced, which
+can give rise to failure modes that no existing label covers. A supervised
+classifier is inherently unable to flag what it has never encountered during
+training, making it a poor fit for long-term defect monitoring.
+
+\subsection{Anomaly Detection as the Design Choice}
+
+These limitations motivate the use of a \emph{normal-only anomaly detection}
+approach in this project. Rather than training on labelled defect examples, the
+model is trained exclusively on wafers labelled as normal and learns a
+representation of healthy spatial structure. At inference time, each wafer is
+assigned an anomaly score that reflects how much its die-level pattern deviates
+from the learned normal distribution. Since no defect labels are required during
+training, the model is naturally agnostic to the defect vocabulary and is capable
+of flagging novel failure modes that a supervised classifier would miss entirely.
+The unlabelled portion of WM-811K is excluded from training to ensure that the
+normal model remains uncontaminated.
+
+\subsection{Operational Consequences of Decision Errors}
+
+A deployed anomaly detector must commit to a binary decision for every wafer.
+The two error types carry asymmetric consequences.
+
+\begin{description}[leftmargin=2em, style=nextline]
+  \item[False positive] A normal wafer is flagged as anomalous, triggering
+        unnecessary manual review, reinspection, or scrap and reducing fab
+        throughput. False positives are costly but recoverable.
+  \item[False negative] A defective wafer passes inspection undetected,
+        continuing through the production line and potentially being shipped
+        to a customer. In safety-critical applications such as avionics or
+        implantable medical devices, a missed defect can have catastrophic
+        consequences. False negatives are generally the more serious failure mode.
+\end{description}
+
+Because a deployed system must commit to a specific operating threshold rather
+than simply rank wafers, this report prioritises metrics that reflect real
+threshold behaviour. A model with high AUROC but a poorly calibrated threshold
+is operationally weak. The primary reported metric is therefore the F1 score
+at a threshold derived from validation-normal scores alone, with no access to
+defect labels at any point in threshold selection.
+
+\section{Dataset and Split Construction}
+
+\subsection{Source and Preprocessing}
+
+The WM-811K dataset contains 811,457 wafer bin maps represented as variable-size
+2-D matrices of die-level pass/fail values. The preprocessing pipeline retains
+only explicitly labelled rows, converts each map to a normalised floating-point
+array in $[0, 1]$, resizes using nearest-neighbour interpolation, and saves
+the results alongside split metadata for reproducibility. Only wafers explicitly
+labelled as normal are used for training; all other labelled failure types are
+treated as anomaly. The unlabelled majority (${\sim}78.7\%$) is excluded
+entirely to prevent label noise from entering evaluation.
+
+\begin{table}[H]
+\centering
+\caption{WM-811K dataset composition.}
+\label{tab:dataset_distribution}
+\begin{tabular}{lcc}
+\toprule
+Category & Count & Fraction \\
+\midrule
+No-label & ${\approx}638{,}507$ & $78.7\%$ \\
+Labelled: None (Normal) & $147{,}431$ & $18.2\%$ \\
+Labelled: Pattern (Defect) & $25{,}519$ & $3.1\%$ \\
+\midrule
+\textbf{Total} & \textbf{811,457} & \textbf{100\%} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Most experiments use wafer maps resized to $64\!\times\!64$ pixels. Later
+pretrained-backbone experiments additionally evaluate direct $224\!\times\!224$
+preprocessing to match each backbone's native training resolution.
+
+\subsection{Split Design}
+
+All experiments share a single benchmark split drawing 50,000 normal wafers
+from the labelled pool, with defect wafers held out exclusively in the test
+partition. Normals are divided 80/10/10 across train, validation, and test;
+defects are added only to the test set, capped at 5\% of the test-normal
+count to reflect realistic production prevalence.
+
+\begin{table}[H]
+\centering
+\caption{Main benchmark split.}
+\label{tab:main_split}
+\begin{tabular}{lcc}
+\toprule
+Subset & Normal wafers & Defect wafers \\
+\midrule
+Train   & 40{,}000 & 0   \\
+Val     & 5{,}000  & 0   \\
+Test    & 5{,}000  & 250 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The validation split serves one purpose only: deriving the deployment
+threshold. No defect labels are visible at any point before test evaluation.
+
+\subsection{Defect Categories}
+
+The 250 test-set defects span eight labelled pattern types that vary
+substantially in spatial scale, coverage, and visual distinctiveness
+(Table~\ref{tab:defect_types}, Figure~\ref{fig:defect_gallery}).
+
+\begin{table}[H]
+\centering
+\caption{Defect-type breakdown of the main benchmark test set.}
+\label{tab:defect_types}
+\begin{tabularx}{\linewidth}{lc>{\raggedright\arraybackslash}X}
+\toprule
+Defect type & Count & Spatial character \\
+\midrule
+Edge-Ring & 84  & Continuous ring of failures near the wafer perimeter \\
+Edge-Loc  & 53  & Localised cluster at or near the wafer edge \\
+Center    & 50  & Compact cluster at the wafer centre \\
+Loc       & 34  & Off-centre localised patch \\
+Scratch   & 15  & Thin elongated streak across the die grid \\
+Donut     & 7   & Curved partial ring inside the wafer body \\
+Random    & 5   & Scattered failures with no spatial coherence \\
+Near-full & 2   & Defective region covering nearly the entire wafer \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{images/defect_type_gallery.png}
+    \caption{Representative examples of all eight defect pattern types in the
+    WM-811K evaluation set. Each image is a wafer bin map rendered as a
+    binary die-level pass/fail grid. The diversity in spatial scale and
+    structure, from full-wafer ring patterns to single-streak scratches,
+    is a primary challenge for any global anomaly scoring approach.}
+    \label{fig:defect_gallery}
+\end{figure}
+
+This diversity directly motivates the modelling choices described in
+Section~\ref{sec:methodology}. Broad, globally visible defects such as
+Edge-Ring and Center are detectable by models that measure overall
+reconstruction quality. Small, localised defects such as Scratch and Loc
+require spatially precise scoring that attends to individual patch regions
+rather than image-level averages.
+
+\section{Methodology}
+\label{sec:methodology}
+
+Table~\ref{tab:method_overview} summarises all model families evaluated in
+this study. The methods are grouped by the research question they address and
+progress from fully in-domain training to frozen pretrained features with
+increasingly local scoring.
+
+\begin{table}[H]
+\centering
+\caption{Overview of model families evaluated in this study.}
+\label{tab:method_overview}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{3.2cm}
+                              >{\raggedright\arraybackslash}p{2.2cm}
+                              >{\raggedright\arraybackslash}p{2.4cm}
+                              >{\raggedright\arraybackslash}X}
+\toprule
+Method & Training & Scoring & Backbones / notes \\
+\midrule
+Convolutional Autoencoder
+  & From scratch
+  & Pixel reconstruction error
+  & In-domain encoder; multiple architectural variants \\
+Variational Autoencoder (VAE)
+  & From scratch
+  & Reconstruction error + KL divergence
+  & KL weight $\beta$ swept \\
+Deep SVDD
+  & From scratch
+  & Distance to latent hypersphere centre
+  & One-class geometric objective; no reconstruction \\
+\midrule
+Pretrained backbone (center-distance)
+  & None (frozen)
+  & Global embedding distance to normal centroid
+  & ResNet18; WideResNet50-2 \\
+\midrule
+Teacher-student distillation
+  & Student trained on normals
+  & Spatial discrepancy map (patch-level)
+  & ResNet18; ResNet50; WideResNet50-2 \\
+PatchCore
+  & None (memory bank only)
+  & Patch nearest-neighbour distance
+  & ResNet18; ResNet50; WideResNet50-2; EfficientNet-B0; ViT-B/16 \\
+FastFlow
+  & Normalising flow trained on normals
+  & Log-likelihood under learned feature distribution
+  & WideResNet50-2 (multilayer) \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Evaluation Protocol}
+
+Every model is evaluated under an identical protocol to keep comparisons fair
+across model families. The primary operating threshold is derived from
+validation-normal scores alone:
+\[
+  \tau_{0.95} = \text{95th percentile of validation-normal anomaly scores.}
+\]
+This threshold uses no defect labels and directly reflects a realistic
+deployment constraint: in production, only normal wafers are available to
+calibrate the detector. All reported precision, recall, and F1 values use
+this threshold exclusively.
+
+Five metrics are reported for each model. Val-threshold F1, the harmonic mean
+of precision and recall at $\tau_{0.95}$, is the primary metric because it
+measures performance at the actual deployed operating point. Precision and
+recall at $\tau_{0.95}$ are reported separately to characterise whether a
+model fails by flagging too many normal wafers (low precision) or by missing
+too many defects (low recall). AUROC and AUPRC summarise ranking quality
+across all thresholds and are particularly useful for comparing score
+distributions, with AUPRC being the more informative of the two under
+the class imbalance present in this dataset. A fifth metric, best-sweep F1,
+reports the highest F1 achievable by sweeping thresholds on test labels.
+This is an analysis ceiling only and is never used as a deployment result;
+its value lies in quantifying how much headroom remains if a better threshold
+selection rule were available.
+
+\noindent\textbf{Implementation framework.} All models are implemented in
+PyTorch. Key dependencies include \texttt{torch}, \texttt{torchvision},
+\texttt{timm} (for EfficientNet and ViT backbones), \texttt{numpy},
+\texttt{scikit-learn}, \texttt{umap-learn}, and \texttt{matplotlib}.
+Full dependency versions are documented in \texttt{README.md} in the
+project repository.
+
+\subsection{Modelling Approach and Motivation}
+
+The experiments are organised around four progressively refined questions
+about what drives anomaly detection performance on wafer maps. Full
+training configurations and hyperparameter details for each method are
+listed in Appendix~\ref{app:notebooks}.
+
+\subsubsection{Question 1: Can reconstruction error detect wafer anomalies?}
+
+The most direct anomaly detection strategy is to train a model to reconstruct
+normal wafers and flag deviations at inference. If a model has only ever
+seen normal patterns, the hypothesis is that it will reconstruct those
+accurately while producing higher error on defective wafers whose patterns
+were absent from training. Three model families test this idea.
+
+\textbf{Convolutional Autoencoder.} An encoder-decoder trained end-to-end
+on normal wafers to minimise pixel-wise reconstruction loss. The baseline
+uses a latent dimension of 128, Adam optimisation with learning rate
+$10^{-3}$ and weight decay $10^{-4}$, and early stopping on validation loss.
+This is the natural first choice because it requires only in-domain data,
+is fully trainable from scratch, and yields spatially resolved error maps.
+A family of architectural variants tests whether the reconstruction ceiling
+can be raised without changing the underlying paradigm: a batch-normalised
+variant, a dropout sweep over rates $\{0.00, 0.05, 0.10, 0.20\}$, a residual
+encoder-decoder with skip connections, and a higher-resolution
+$128\!\times\!128$ version.
+
+\textbf{Variational Autoencoder (VAE).} Extends the autoencoder by replacing
+the deterministic latent code with a Gaussian latent distribution regularised
+by a KL-divergence penalty. The KL weight $\beta$ is swept over
+$\{0.001, 0.005, 0.01, 0.05\}$ to find the right trade-off between
+reconstruction fidelity and latent regularisation. The motivation is that a
+structured, probabilistic latent space may better capture the manifold of
+normal wafers and produce a cleaner anomaly score.
+
+\textbf{Deep SVDD.} Rather than using reconstruction error, Deep SVDD
+trains a network to map all normal wafers into a compact hypersphere in
+latent space. The anomaly score is the squared distance from a test
+wafer's embedding to the learned hypersphere centre. This tests whether
+a one-class geometric objective, with no reconstruction pathway at all,
+can match or improve on the autoencoder family.
+
+Across all three methods, a post-training scoring ablation compares seven
+reduction rules applied to the same saved model checkpoint. These span global
+pixel averages, foreground-masked variants that ignore background die positions,
+a spatially smoothed pooled average, a single worst-pixel maximum, and a
+top-$k$ percentile mean that averages only the highest-error pixels. This
+ablation reveals that the scoring rule is a design decision co-equal with
+architecture: the same trained model can rank very differently depending on
+which score is applied.
+
+\subsubsection{Question 2: Do pretrained ImageNet features help?}
+
+Reconstruction models are limited by the capacity of a network trained
+from scratch on a few tens of thousands of wafer images. A natural hypothesis
+is that features from ImageNet pretraining encode richer, more transferable
+visual structure and should produce better-separated embeddings for normal
+versus anomalous wafers without any domain-specific training.
+
+\textbf{Pretrained backbone center-distance baseline.} Frozen
+ImageNet-pretrained backbones (ResNet18 and WideResNet50-2) are evaluated
+using the simplest possible anomaly score: the L2 distance from each wafer's
+global embedding to the centroid of train-normal embeddings. No fine-tuning
+is applied. If pretrained features alone are sufficient, this baseline should
+clearly outperform the trained autoencoders. The result deliberately stress-tests
+the backbone-only hypothesis before any local scoring is introduced.
+
+\subsubsection{Question 3: Does local spatial scoring matter?}
+
+If global embedding distance is insufficient, the anomaly signal is likely
+present in the spatial feature maps but diluted by global pooling. Small
+localised defects occupy only a fraction of the wafer area; averaging their
+contribution over the full image suppresses exactly the signal that matters.
+Three methods test whether spatially precise, patch-level scoring recovers
+that signal.
+
+\textbf{Teacher-student distillation.} A frozen pretrained backbone (teacher)
+extracts spatial feature maps from normal wafers. A lightweight student
+convolutional network and an auxiliary feature autoencoder are trained jointly
+to reproduce those feature maps on normal inputs only. At inference, the
+per-location discrepancy between teacher and student forms a spatial anomaly
+map: locations where the student fails to match the teacher are locally
+anomalous. The map is reduced to a wafer score by averaging only the most
+deviant patch locations, with the fraction of patches included swept as a
+hyperparameter. Post-training branch weighting between the student and
+autoencoder components is also swept to find the best deployed score
+composition. Teacher backbones evaluated include ResNet18, ResNet50 (with
+shallow and deep feature layers compared), and WideResNet50-2 (single-layer
+and combined shallow-plus-deep).
+
+\textbf{PatchCore.} Rather than training a student, PatchCore stores a
+memory bank of patch-level feature embeddings extracted from normal wafers
+during a single forward pass, then scores each test wafer by the nearest-neighbour
+distance of its patch embeddings to the bank. No additional training is
+required. Because each spatial patch is scored independently against its
+closest normal neighbours, the method is inherently sensitive to localised
+defects that affect only a small region of the image. Wafer-level scores
+are reduced from per-patch distances using global mean, top-$k$ percentile
+mean, or maximum patch distance, with memory bank size and the top-$k$ ratio
+swept systematically. Backbones evaluated include ResNet18, ResNet50,
+WideResNet50-2 with combined shallow and deep feature layers, and EfficientNet-B0.
+
+\textbf{FastFlow.} An alternative local density estimator that fits a
+normalising flow on top of frozen backbone feature maps. Rather than measuring
+distance to stored neighbours, FastFlow assigns anomaly scores through
+log-likelihood under the learned normal feature distribution. This tests
+whether a generative density model over features can compete with the
+nearest-neighbour approach of PatchCore without requiring a memory bank.
+The WideResNet50-2 backbone with combined shallow and deep spatial feature
+layers and four coupling-flow steps is the evaluated configuration.
+
+\subsubsection{Question 4: Does input resolution matter for pretrained methods?}
+
+Wafer maps in WM-811K are originally small (typically $32$--$64$ pixels across
+the die grid). Pretrained backbones expect $224\!\times\!224$ inputs. In the main
+$64\!\times\!64$ experiments, wafer maps are cached at low resolution and
+upsampled internally before entering the backbone, discarding spatial
+information that was never captured. The final question is whether caching
+wafers directly at $224\!\times\!224$ and feeding them natively to the backbone
+provides a meaningful lift. This is evaluated for the EfficientNet-B0,
+WideResNet50-2, and ViT-B/16 PatchCore branches, each compared against its
+$64\!\times\!64$ counterpart with all other hyperparameters held fixed.
+The ViT-B/16 backbone is also evaluated here as a qualitatively different
+architecture: rather than a convolutional feature hierarchy, it uses a
+transformer that processes the image as a sequence of non-overlapping patches,
+producing a globally context-aware feature representation at each patch location.
+
+\subsection{Experiment Staging}
+
+The experiments follow a deliberate investigative sequence rather than a
+parallel grid search. Each stage is designed to isolate one variable and let
+its result motivate the next direction.
+
+\paragraph{Stage 1: Reconstruction baseline.}
+The plain autoencoder establishes the end-to-end pipeline, the validation-derived
+threshold rule, and a first honest characterisation of the task difficulty.
+Broad defects such as Edge-Ring and Center prove readily detectable; small
+local defects such as Scratch and Loc expose the fundamental limit of
+full-image reconstruction error as an anomaly signal.
+
+\paragraph{Stage 2: Architecture and scoring ablations.}
+BatchNorm, dropout, and residual variants, combined with the post-training
+score sweep, determine whether the reconstruction ceiling can be raised
+through in-domain tuning alone. The key finding from this stage is that
+scoring rule choice is as impactful as architecture: the batch-normalised
+checkpoint scored using maximum absolute pixel error outperforms the same
+checkpoint scored using a top-$k$ mean, and reaches the highest
+reconstruction-family F1. Dropout and higher resolution both fail to improve results.
+
+\paragraph{Stage 3: Pretrained backbone baselines.}
+The plain center-distance baselines for ResNet18 and WideResNet50-2 answer
+Question 2 decisively. Both are weaker than the trained autoencoders despite
+using much larger and richer feature spaces. The problem is not the backbone
+quality but the global aggregation that collapses all spatial structure before
+scoring.
+
+\paragraph{Stage 4: Local anomaly scoring.}
+Teacher-student and PatchCore experiments, staged from lighter to stronger
+backbones, confirm that local spatial scoring is the decisive factor. Within
+this stage, backbone scale (ResNet18 to ResNet50 to WideResNet50-2) provides
+incremental gains, the choice of local aggregation ratio matters significantly,
+and moving to direct $224\!\times\!224$ preprocessing provides a further clear
+lift for the strongest backbones.
+
+\paragraph{Stage 5: Diagnostics.}
+Once the leading models are identified by metrics, UMAP embedding visualisations
+and score histogram analysis examine why the fixed $\tau_{0.95}$ threshold
+leaves headroom relative to the best-sweep F1. This diagnostic stage does not
+change any model or result; it characterises the remaining bottleneck as
+score-distribution overlap rather than feature quality.
+
+\section{Main Results}
+
+\subsection{Overview}
+
+Table~\ref{tab:main_leaderboard} summarises the nine representative models
+that anchor the main narrative. Full sweep results across all variants are given in
+Appendix~\ref{app:notebooks}.
+
+\begin{table}[H]
+\centering
+\caption{Representative results on the main benchmark (ranked by val-threshold F1).
+Models are selected to illustrate each stage of the experimental progression
+rather than to list every variant tested.}
+\label{tab:main_leaderboard}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}Xcccc}
+\toprule
+Model & F1 & AUROC & AUPRC & Sweep F1 \\
+\midrule
+PatchCore + ViT-B/16, direct $224\!\times\!224$              & \textbf{0.595} & \textbf{0.956} & \textbf{0.671} & \textbf{0.651} \\
+PatchCore + EfficientNet-B1, direct $240\!\times\!240$       & 0.591 & 0.935 & 0.609 & 0.651 \\
+PatchCore + WideResNet50-2, direct $224\!\times\!224$        & 0.549 & 0.931 & 0.659 & 0.634 \\
+PatchCore + WideResNet50-2, $64\!\times\!64$                 & 0.532 & 0.917 & 0.562 & 0.586 \\
+Teacher-Student + ResNet50                                   & 0.525 & 0.909 & 0.599 & 0.606 \\
+Teacher-Student + WideResNet50-2 (layer2+layer3)             & 0.524 & 0.923 & 0.546 & 0.561 \\
+Autoencoder + BatchNorm (best score)                         & 0.502 & 0.834 & 0.568 & 0.630 \\
+FastFlow + WideResNet50-2                                    & 0.482 & 0.871 & 0.489 & 0.482 \\
+WideResNet50-2 center-distance (frozen)                      & 0.243 & 0.677 & 0.142 & 0.270 \\
+ResNet18 center-distance (frozen)                            & 0.236 & 0.685 & 0.195 & 0.260 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{images/autoencoder/overall_experiment_comparison.png}
+    \caption{Overall comparison across all completed experiments. Left: top runs
+    ranked by deployed F1. Right: all runs in AUPRC-vs-F1 space, point size
+    scaled by AUROC. The gap between the reconstruction family (lower left) and
+    the local pretrained-feature methods (upper right) is the central finding
+    of the project.}
+    \label{fig:overall_comparison}
+\end{figure}
+
+Three cross-cutting findings run through every model family and explain the
+shape of the leaderboard.
+
+\textbf{1. Score design matters almost as much as model design.}
+The BatchNorm autoencoder with its default scoring rule ranked \emph{below}
+the plain baseline ($\mathrm{F1}=0.431$ vs $0.468$). Post-training rescoring
+with maximum absolute pixel error lifted it to $\mathrm{F1}=0.502$ without
+any retraining. The same interaction appeared in the teacher-student family:
+the ResNet50 teacher at its default score reached $\mathrm{F1}=0.488$; a
+post-training score sweep lifted it to $\mathrm{F1}=0.525$. The scoring rule
+is a design decision co-equal with the model architecture.
+
+\textbf{2. Pretrained backbones require local scoring to be useful.}
+Both center-distance baselines ($\mathrm{F1}<0.25$, $\mathrm{AUROC}<0.70$)
+are weaker than every reconstruction model despite using far richer feature
+representations. The bottleneck is not feature quality but global aggregation:
+averaging all spatial information into one embedding vector discards exactly
+the local patch evidence that defects produce.
+
+\textbf{3. Native high-resolution preprocessing provides a clear and consistent lift.}
+EfficientNet-B0 PatchCore rose from $\mathrm{F1}=0.467$ to $0.544$ when
+wafer images were cached at full resolution rather than upsampled from
+$64\!\times\!64$ inside the model. Scaling backbone capacity from B0 to B1 at
+its native $240\!\times\!240$ input resolution pushes performance further to
+$\mathrm{F1}=0.591$, making it the strongest CNN PatchCore result in the project.
+WideResNet50-2 PatchCore improved similarly at $224\!\times\!224$, and
+the ViT-B/16 branch achieves the overall best result ($\mathrm{F1}=0.595$)
+at that same resolution.
+
+\subsection{Reconstruction Family}
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[t]{0.49\linewidth}
+  \includegraphics[width=\linewidth]{images/autoencoder/ae64_training_and_evaluation.png}
+  \caption{Baseline AE: training curves and score distribution.}
+\end{subfigure}
+\hfill
+\begin{subfigure}[t]{0.49\linewidth}
+  \includegraphics[width=\linewidth]{images/autoencoder/ae64_score_ablation.png}
+  \caption{Score ablation on the baseline AE checkpoint.}
+\end{subfigure}
+\caption{Baseline autoencoder ($64\!\times\!64$, latent dim 128): training behaviour
+and the effect of scoring-rule choice on deployed F1 and AUROC. The same
+checkpoint spans a wide range of F1 values depending solely on which score
+is applied.}
+\label{fig:ae_training_ablation}
+\end{figure}
+
+The plain autoencoder, scored with a top-$k$ percentile mean, achieves
+$\mathrm{F1}=0.468$, $\mathrm{AUROC}=0.839$, $\mathrm{AUPRC}=0.522$.
+The per-class pattern is informative: broad, globally visible defects such
+as Edge-Ring (recall 0.810) and Center (recall 0.720) are well-detected,
+while small, localised defects such as Loc (recall 0.206) and Scratch
+(recall 0.200) are largely missed. This failure pattern motivates every
+subsequent modelling direction.
+
+Adding batch normalisation with the same scoring rule counterintuitively
+\emph{reduces} F1 to 0.431. Score ablation reveals why: batch normalisation
+changes the error distribution so that the single worst pixel becomes a
+more reliable anomaly signal than the average of the top-$k$ pixels.
+Rescoring the BatchNorm checkpoint with maximum absolute pixel error lifts
+F1 to 0.502, recall to 0.668, and AUPRC to 0.568, the best
+reconstruction-family result in the project. This is achieved without
+retraining.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{images/autoencoder/autoencoder_family_comparison.png}
+\caption{Autoencoder family: all AE-family variants ranked by deployed F1 (left)
+and precision-recall operating points (right). The BatchNorm variant with
+rescored maximum pixel error clearly separates from the rest of the family.}
+\label{fig:ae_family}
+\end{figure}
+
+Two alternative one-class approaches were also evaluated as comparisons.
+The Variational Autoencoder, with KL weight swept over four values, peaked
+at $\mathrm{F1}=0.340$ ($\beta=0.005$), remaining clearly below the plain
+autoencoder despite the more principled probabilistic latent space. Deep
+SVDD, which maps normal wafers into a compact hypersphere rather than
+performing reconstruction, reached $\mathrm{F1}=0.360$ and
+$\mathrm{AUROC}=0.788$, but with very weak $\mathrm{AUPRC}=0.213$,
+indicating poor ranking quality under class imbalance. Neither approach
+is competitive with the tuned autoencoder. Additional reconstruction
+variants including dropout sweeps, a residual encoder-decoder, and a
+$128\!\times\!128$ version are documented in the appendix; none improved
+on the BatchNorm result.
+
+\subsection{Pretrained Backbone Baselines}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{images/pretrained/compact_baseline_comparison.png}
+\caption{Non-leading baselines: VAE, Deep SVDD, and plain embedding-distance
+backbones. All fall well below the reconstruction-family ceiling, establishing
+that both probabilistic one-class methods and raw pretrained features are
+insufficient without local scoring.}
+\label{fig:compact_baselines}
+\end{figure}
+
+Frozen ResNet18 ($\mathrm{F1}=0.236$, $\mathrm{AUROC}=0.685$) and
+WideResNet50-2 ($\mathrm{F1}=0.243$, $\mathrm{AUROC}=0.677$) with
+center-distance scoring both fall \emph{below} the plain autoencoder
+despite using much richer ImageNet features. The failure is not the
+backbone but the aggregation: collapsing a full spatial feature map into
+a single global embedding vector loses exactly the local deviation signals
+that defects produce. Larger backbones do not fix this; only local scoring
+methods do. These results are therefore deliberate negative controls that
+motivate the local scoring methods in the next two subsections.
+
+\subsection{Teacher-Student Distillation}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{images/teacherstudent/ts_family_comparison.png}
+\caption{Teacher-student family: ResNet18 vs ResNet50 teachers. Left: deployed
+F1, AUPRC, and AUROC. Right: precision-recall operating points. The ResNet50
+teacher clearly separates from the ResNet18 teacher after score selection.}
+\label{fig:ts_family}
+\end{figure}
+
+Teacher-student distillation addresses the local scoring problem by training
+a lightweight student network to reproduce the teacher's spatial feature maps
+on normal wafers only. At inference, the per-location discrepancy between
+teacher and student forms a spatial anomaly map, which is then reduced to a
+wafer score by averaging over the most deviant patch locations.
+
+The ResNet18 teacher with the default combined score is weak, but rescoring
+with student-only top-$k$ mean at ratio 0.20 lifts F1 to 0.495. The pattern
+repeats with the ResNet50 teacher: the default score gives $\mathrm{F1}=0.488$,
+while a post-training branch-weight sweep yields the best teacher-student result
+at $\mathrm{F1}=0.525$, $\mathrm{AUROC}=0.909$, $\mathrm{AUPRC}=0.599$.
+This is the strongest result in the project at this stage and confirms
+that local spatial scoring on pretrained features decisively outperforms both
+reconstruction models and global embedding distance.
+
+Scaling the teacher backbone further to WideResNet50-2 was the natural next
+step. Using a single teacher feature layer (layer2) gives $\mathrm{F1}=0.508$,
+$\mathrm{AUROC}=0.920$. Combining two spatial scales (layer2 and layer3)
+gives $\mathrm{F1}=0.524$, $\mathrm{AUROC}=0.923$, $\mathrm{AUPRC}=0.546$ ---
+comparable to the ResNet50 teacher on deployed F1 but with clearly stronger
+anomaly ranking quality. These experiments validate WideResNet50-2 as a strong
+feature source for local anomaly detection and directly motivate its subsequent
+use as a PatchCore backbone. Full sweep details are in the appendix.
+
+\subsection{PatchCore: Local Nearest-Neighbour Scoring}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{images/patchcore/patchcore_family_comparison.png}
+\caption{PatchCore family: best result per backbone (left) and all PatchCore
+variants coloured by backbone (right). The progression from in-domain AE
+encoder to pretrained ResNet to WideResNet50-2 to ViT-B/16 follows a clear
+upward trajectory, with native $224\!\times\!224$ preprocessing providing the
+final decisive lift.}
+\label{fig:patchcore_family}
+\end{figure}
+
+PatchCore stores patch-level feature embeddings from normal wafers in a memory
+bank and scores test wafers by the nearest-neighbour distance of their patch
+embeddings to the bank. Because each patch is scored independently, the method
+is inherently sensitive to localised defects. The backbone progression tells a
+clear story.
+
+Using the frozen BatchNorm AE encoder as the backbone produces $\mathrm{F1}=0.336$,
+limited by the in-domain encoder's weak feature quality. Switching to
+ImageNet-pretrained ResNet18 jumps to $\mathrm{F1}=0.401$, validating the
+pretrained-backbone direction. ResNet50 improves further to $\mathrm{F1}=0.420$.
+Scaling to the multilayer WideResNet50-2 backbone at $64\!\times\!64$ reaches
+$\mathrm{F1}=0.532$, the first result to simultaneously beat both the best
+autoencoder and the best teacher-student model.
+
+The EfficientNet-B0 branch provides the clearest controlled test of the
+resolution hypothesis: the same backbone and method at $64\!\times\!64$
+preprocessing gives $\mathrm{F1}=0.467$, while switching to native
+$224\!\times\!224$ preprocessing raises it to $\mathrm{F1}=0.544$. The spatial
+information that was being discarded by upsampling matters substantially.
+WideResNet50-2 PatchCore at native $224\!\times\!224$ reaches $\mathrm{F1}=0.549$,
+confirming the pattern.
+
+\subsubsection{EfficientNet-B1 PatchCore: Strongest CNN Result}
+
+Scaling from EfficientNet-B0 to EfficientNet-B1 at its native
+$240\!\times\!240$ input resolution, with one-layer feature extraction from
+block 3 and a coreset memory bank of 240k patches, pushes the CNN PatchCore
+branch to its best result: $\mathrm{F1}=0.591$, $\mathrm{AUROC}=0.935$,
+$\mathrm{AUPRC}=0.609$, Sweep F1 $=0.651$. This result is only 0.004 F1
+below the ViT-B/16 leader and represents the strongest CNN-based
+operating point in the project.
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[t]{0.48\linewidth}
+  \includegraphics[width=\linewidth]{artifacts/x240/patchcore_efficientnet_b1_one_layer/benchmark_distribution_sweep.png}
+  \caption{Score distribution and threshold sweep, EfficientNet-B1 $240\!\times\!240$.}
+\end{subfigure}
+\hfill
+\begin{subfigure}[t]{0.48\linewidth}
+  \includegraphics[width=\linewidth]{artifacts/x240/patchcore_efficientnet_b1_one_layer/benchmark_defect_breakdown.png}
+  \caption{Per-defect recall, EfficientNet-B1 $240\!\times\!240$.}
+\end{subfigure}
+\caption{EfficientNet-B1 PatchCore at $240\!\times\!240$: score distribution with
+deployed threshold and per-defect recall. Edge-Ring, Donut, Random, and Near-full
+all reach recall $\geq 0.93$, while Scratch (0.40) and Loc (0.59) remain the
+hardest categories, consistent with the broader project pattern.}
+\label{fig:effnetb1_x240}
+\end{figure}
+
+Per-defect recall for EfficientNet-B1 at $240\!\times\!240$: Scratch 0.400,
+Loc 0.588, Center 0.700, Edge-Loc 0.792, Edge-Ring 0.929, Donut 1.000,
+Random 1.000, Near-full 1.000. This is competitive with the ViT result on
+all categories except Center and Edge-Loc, where the ViT's global context-aware
+patch features carry a measurable advantage.
+
+\subsubsection{ViT-B/16 PatchCore: Best Overall Result}
+
+The ViT-B/16 backbone differs architecturally from the CNN models above: rather
+than a convolutional hierarchy, it processes the wafer image as a sequence of
+non-overlapping patches using a transformer, producing globally context-aware
+features at each patch location. Applied with PatchCore at native
+$224\!\times\!224$, it achieves the best result in the project:
+$\mathrm{F1}=0.595$, $\mathrm{AUROC}=0.956$, $\mathrm{AUPRC}=0.671$.
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[t]{0.55\linewidth}
+  \includegraphics[width=\linewidth]{images/patchcore/18A2-patchcore-wideresnet50-multilayer-umap/score_histogram.png}
+  \caption{Score histogram: WideResNet50-2 PatchCore $224\!\times\!224$.}
+\end{subfigure}
+\hfill
+\begin{subfigure}[t]{0.43\linewidth}
+  \includegraphics[width=\linewidth]{images/patchcore/18A2-patchcore-wideresnet50-multilayer-umap/threshold_sweep_metrics.png}
+  \caption{Threshold sweep: precision, recall, and F1.}
+\end{subfigure}
+\caption{Score distribution and threshold sweep for the WideResNet50-2 PatchCore
+$224\!\times\!224$ variant. The 95th-percentile validation threshold ($\tau=0.537$)
+and the best-sweep threshold ($0.559$) are both marked. The gap between them
+represents the headroom that a more principled threshold rule could recover.}
+\label{fig:wrn_x224_diag}
+\end{figure}
+
+\subsection{Cross-Model Defect Analysis}
+
+Table~\ref{tab:per_defect} compares per-defect recall across five representative
+models, chosen to trace the progression from the best reconstruction baseline
+through the best local feature result.
+
+\begin{table}[H]
+\centering
+\caption{Per-defect recall for six representative models tracing the experimental
+progression. Bold indicates the best recall for that defect type.}
+\label{tab:per_defect}
+\begin{tabular}{lcccccc}
+\toprule
+Defect type
+  & Baseline AE
+  & AE-BN
+  & WRN center
+  & TS-Res50
+  & WRN PC $224$px
+  & ViT-B/16 PC \\
+\midrule
+Scratch   & 0.200 & 0.467 & 0.200 & 0.333 & 0.667 & \textbf{0.727} \\
+Loc       & 0.206 & 0.294 & 0.176 & 0.559 & 0.735 & \textbf{0.829} \\
+Edge-Loc  & 0.434 & 0.472 & 0.132 & 0.491 & 0.623 & \textbf{0.705} \\
+Center    & 0.720 & \textbf{0.800} & 0.140 & 0.720 & 0.780 & 0.618 \\
+Donut     & 0.571 & 0.571 & 0.286 & 0.714 & \textbf{1.000} & \textbf{1.000} \\
+Edge-Ring & 0.810 & 0.893 & 0.464 & \textbf{0.929} & 0.798 & 0.941 \\
+Random    & 0.600 & 0.800 & 0.600 & \textbf{1.000} & \textbf{1.000} & \textbf{1.000} \\
+Near-full & 0.500 & \textbf{1.000} & 0.000 & \textbf{1.000} & \textbf{1.000} & \textbf{1.000} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Several patterns emerge clearly. The center-distance baseline struggles
+uniformly across all defect types, confirming that global feature aggregation
+is the bottleneck. The reconstruction family is strongest on Center, a globally
+visible defect where full-image reconstruction error carries a clear signal.
+Local scoring methods lead on every small, spatially confined defect:
+WRN PatchCore at $224\!\times\!224$ and ViT-B/16 PatchCore both achieve
+strong results on Scratch, Loc, and Edge-Loc, with ViT-B/16 pulling ahead on
+those three categories ($+0.06$ Scratch, $+0.09$ Loc, $+0.08$ Edge-Loc) at
+the cost of slightly weaker Center recall (0.618 vs 0.800 for AE-BN).
+Teacher-student distillation remains the leader on Edge-Ring (0.929).
+Scratch is the hardest category across all models,
+reflecting its thin, low-coverage spatial signature.
+
+\subsection{Comparison with Published Work}
+
+Two published works provide the closest available reference points for
+situating these results within the literature on normal-only wafer anomaly
+detection. Direct numerical comparison is qualified carefully below, as
+evaluation protocols differ across papers.
+
+\paragraph{Jo \& Lee (2021) --- one-class classification on WM-811K.}
+The most directly comparable published study is \cite{jo2021oneclass},
+which applies one-class classification to the identical WM-811K dataset
+under a normal-only training regime. The paper trains and evaluates three
+models: Deep SVDD \cite{ruff2018deepsvdd}, a standalone Adversarial
+Autoencoder (AAE), and a hybrid AAE with DSVDD prior (AAE-DSVDD). Their
+experimental design mirrors the present project in the key respects that
+matter for comparison: training uses only labelled-normal wafers, and
+evaluation is image-level binary detection across the same eight defect
+pattern classes.
+
+Their reported results show that Deep SVDD achieves precision and accuracy
+below 0.5 across most classes, with AAE providing moderate improvement and
+AAE-DSVDD achieving the best F1 among the three. This trajectory is
+consistent with the present work: our Deep SVDD result (F1 = 0.360)
+confirms the weakness of the pure hypersphere objective, and our
+reconstruction family (best F1 = 0.502) already surpasses the AAE-class
+performance reported in that work. The best result in the present project,
+ViT-B/16 PatchCore at direct $224\!\times\!224$ (F1 = 0.595,
+AUROC = 0.956), substantially exceeds all models reported in
+\cite{jo2021oneclass} on image-level ranking quality, extending their
+baseline study with the local pretrained-feature methods they do not
+consider.
+
+\paragraph{Roth et al.\ (2022) --- PatchCore on MVTec AD.}
+The PatchCore method used as the primary local scoring approach in this
+project is introduced by \cite{roth2022patchcore}. In that paper, PatchCore
+is evaluated on the MVTec AD benchmark, achieving image-level
+AUROC near 99\% across industrial texture and object categories under a
+training-free, normal-only regime. While WM-811K is not evaluated in the
+original paper, the method transfers directly to this domain: patch-level
+nearest-neighbour scoring against a coreset-reduced memory bank of
+normal-image features is architecture-agnostic. The present project can
+therefore be understood as the first systematic application of PatchCore to
+wafer-map anomaly detection under a strict deployment-style threshold
+constraint, evaluating five backbone variants across two input resolutions.
+
+The gap between MVTec AD performance (AUROC $\approx$99\%) and the present
+WM-811K results (best AUROC = 0.956) is expected and informative. Wafer
+maps present a structurally harder problem than most MVTec categories:
+defects are sparse, occupying only a small fraction of die area; the normal
+wafer texture is nearly uniform, reducing the contrast between normal and
+defective patches; and the strict 95th-percentile threshold calibration on
+validation normals alone removes the oracle-threshold headroom that
+boosts reported AUROC-only benchmarks. The remaining 0.044 AUROC gap and
+the deployed F1 of 0.595 are therefore attributable to the domain
+difficulty and the deployment threshold constraint rather than to
+implementation quality.
+\section{Expanded Holdout Validation}
+
+To test whether the strongest checkpointed models remain stable on a much larger
+evaluation pool, a disjoint secondary holdout was constructed:
+
+\begin{table}[H]
+\centering
+\caption{Main benchmark vs.\ expanded holdout dataset sizes.}
+\label{tab:holdout_sizes}
+\begin{tabular}{lcc}
+\toprule
+Subset & Main benchmark & Expanded holdout \\
+\midrule
+Train normals & 40{,}000 & 40{,}000 \\
+Val normals   &  5{,}000 &  5{,}000 \\
+Test normals  &  5{,}000 & 70{,}000 \\
+Test defects  &    250   &  3{,}500 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The defect pool expands by roughly 14$\times$, making rare-class recall far more
+meaningful than in the main benchmark. The same train and validation normals are
+kept fixed, so each reevaluation reuses the previously selected checkpoint and
+its validation-derived threshold policy.
+
+\begin{table}[H]
+\centering
+\caption{Defect-type scaling from benchmark to expanded holdout.}
+\label{tab:holdout_defects}
+\begin{tabular}{lcc}
+\toprule
+Defect type & Benchmark & Holdout \\
+\midrule
+Edge-Ring & 84  & 1{,}302 \\
+Edge-Loc  & 53  & 739     \\
+Center    & 50  & 603     \\
+Loc       & 34  & 492     \\
+Scratch   & 15  & 169     \\
+Random    &  5  & 108     \\
+Donut     &  7  &  71     \\
+Near-full &  2  &  16     \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Top expanded-holdout results among the currently reevaluated leading checkpoints
+(70\,k normal / 3.5\,k defect test set).}
+\label{tab:holdout_leaderboard}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}Xcccc}
+\toprule
+Model / variant & F1 & AUROC & AUPRC & Sweep F1 \\
+\midrule
+PatchCore + EfficientNet-B1, direct $240{\times}240$ & 0.596 & 0.953 & 0.656 & 0.671 \\
+PatchCore + ViT-B/16, direct $224{\times}224$       & 0.548 & 0.941 & 0.615 & 0.606 \\
+Teacher-Student + ResNet50                          & 0.516 & 0.926 & 0.622 & 0.585 \\
+Autoencoder + BatchNorm (\texttt{max\_abs})        & 0.507 & 0.858 & 0.638 & 0.663 \\
+Residual Autoencoder (\texttt{max\_abs})           & 0.503 & 0.871 & 0.637 & 0.643 \\
+AE-BN-Dropout-0.00 (\texttt{max\_abs})             & 0.501 & 0.857 & 0.654 & 0.673 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The expanded holdout confirms that the strongest direct PatchCore variants remain
+the most stable on a much larger test pool. PatchCore with EfficientNet-B1 now
+leads the available holdout reevaluations on deployed F1, AUROC, and AUPRC,
+while the ViT-B/16 run remains a strong second and preserves a clear margin over
+the teacher-student baseline. The best autoencoder variants still remain
+competitive, especially on AUPRC and optimistic threshold-sweep F1, but they no
+longer lead the deployed operating point once the test pool expands to
+70{,}000 normal and 3{,}500 defect wafers.
+
+This expanded-holdout bundle still does not include the newer WideResNet50-2
+$224{\times}224$ PatchCore winner from the main benchmark leaderboard, nor the
+fresh FastFlow rerun. It should therefore be read as a robustness check on the
+currently reevaluated checkpoints rather than as a complete replacement for the
+main benchmark ranking.
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[t]{0.32\linewidth}
+  \includegraphics[width=\linewidth]{experiments/anomaly_detection/patchcore/efficientnet_b1/x240/main/artifacts/patchcore_efficientnet_b1_one_layer/results/holdout70k_3p5k/plots/holdout_distribution_sweep_confusion.png}
+  \caption{PatchCore + EfficientNet-B1}
+\end{subfigure}
+\hfill
+\begin{subfigure}[t]{0.32\linewidth}
+  \includegraphics[width=\linewidth]{experiments/anomaly_detection/patchcore/vit_b16/x224/main/artifacts/patchcore_vit_b16_5pct/holdout70k_3p5k/plots/test_evaluation.png}
+  \caption{PatchCore + ViT-B/16}
+\end{subfigure}
+\hfill
+\begin{subfigure}[t]{0.32\linewidth}
+  \includegraphics[width=\linewidth]{artifacts/x64/holdout70k_3p5k_evaluations/_histograms_all/ts_resnet50.png}
+  \caption{Teacher-Student + ResNet50}
+\end{subfigure}
+\caption{Expanded-holdout score distributions and evaluation views for the three
+strongest currently reevaluated checkpoints. The EfficientNet-B1 PatchCore run
+shows the cleanest deployed operating point, the ViT-B/16 run remains robust on
+the larger pool, and TS-ResNet50 is still competitive but with heavier overlap
+near the decision boundary.}
+\label{fig:holdout_histograms}
+\end{figure}
+
+
+\section{UMAP-Based Embedding Analysis}
+
+UMAP projections are used as a geometric diagnostic once the leading models
+have already been identified by metrics. The goal is to reveal the overlap
+structure behind the score distributions and explain why the fixed
+95th-percentile threshold remains reasonable but leaves headroom.
+
+UMAP should be read as a map of neighbourhood structure, not as a classifier.
+Points that land close together share similar embeddings; points that separate
+into different branches or islands are geometrically dissimilar. The
+split-coloured plots show whether validation normals, test normals, and
+anomalies occupy the same manifold regions. The score-coloured plots show
+where the model concentrates anomaly evidence within that same space. Absolute
+axis values carry no meaning; the informative signal is relative clustering,
+branch structure, and where high-score regions concentrate.
+
+\subsection{Plain WideResNet50-2 Embedding Baseline}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.78\linewidth]{images/wrn/embedding_umap.png}
+\caption{UMAP of the plain WideResNet50-2 embedding baseline. Anomaly wafers spread
+through the same large islands as both validation and test normals. A single
+center-distance threshold is intrinsically limited when there is no geometric
+separation.}
+\label{fig:umap_wrn_baseline}
+\end{figure}
+
+The UMAP confirms the metric result: anomalies populate the dominant manifold
+alongside normals, with no identifiable anomaly-only cluster. A few anomaly-rich
+side clumps exist, but the dominant picture is deep overlap, explaining why
+center-distance scoring fails to separate classes.
+
+\subsection{ResNet18 PatchCore}
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[t]{0.48\linewidth}
+  \includegraphics[width=\linewidth]{artifacts/x64/patchcore_resnet18_10A/max_mb50k/evaluation/plots/umap_by_split.png}
+  \caption{Coloured by split}
+\end{subfigure}
+\hfill
+\begin{subfigure}[t]{0.48\linewidth}
+  \includegraphics[width=\linewidth]{artifacts/x64/patchcore_resnet18_10A/max_mb50k/evaluation/plots/umap_by_score.png}
+  \caption{Coloured by anomaly score}
+\end{subfigure}
+\caption{Supplemental UMAP for a saved ResNet18 PatchCore artifact
+(qualitative geometry check; the selected best-performing variant uses mean
+patch aggregation rather than the maximum shown here).
+Normals and anomalies still share broad islands, but score-coloured heatmaps
+show localised high-score pockets compatible with PatchCore local detection.}
+\label{fig:umap_resnet18_patchcore}
+\end{figure}
+
+The split-coloured view shows that normals and anomalies continue to occupy
+overlapping broad islands. The score-coloured view, however, reveals localised
+hotter regions inside the manifold: PatchCore has learned useful local patch
+structure even where global geometry is mixed. A geometry-aware nearest-neighbour
+threshold calibrated on validation normals was also tested as an alternative
+to the fixed percentile rule, but it collapsed to near-random ranking
+($\mathrm{F1}=0.132$, $\mathrm{AUROC}=0.567$). For ResNet18 PatchCore, the
+UMAP is therefore best interpreted as a diagnostic visualisation rather than
+as a stronger deployment threshold.
+
+\subsection{WideResNet50-2 PatchCore at Direct $224\!\times\!224$}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.78\linewidth]{images/patchcore/18A2-patchcore-wideresnet50-multilayer-umap/umap_by_split.png}
+\caption{UMAP for the selected WideResNet50-2 PatchCore $224\!\times\!224$
+checkpoint. Validation and test normals
+overlap heavily, confirming there is no distribution-shift artifact between splits.
+Anomalies now concentrate more on branch edges, thinner tails, and smaller side
+islands compared with the plain WRN embedding baseline, though full class
+separation is not achieved.}
+\label{fig:umap_wrn_patchcore}
+\end{figure}
+
+The geometry is healthier than the plain baseline: anomalies are no longer
+uniformly distributed throughout the dominant manifold, but instead tend to
+appear near structural boundaries and thinner branches. This is compatible
+with local patch scoring catching these out-of-manifold regions. The remaining
+overlap explains the moderate F1 values and the gap between 95th-percentile
+and best-sweep thresholds.
+
+\subsection{ViT-B/16 PatchCore at Direct $224\!\times\!224$}
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[t]{0.48\linewidth}
+  \includegraphics[width=\linewidth]{artifacts/x224/patchcore_vit_b16_5pct/main_5pct/umap_test_embeddings.png}
+  \caption{Coloured by split}
+\end{subfigure}
+\hfill
+\begin{subfigure}[t]{0.48\linewidth}
+  \includegraphics[width=\linewidth]{artifacts/x224/patchcore_vit_b16_5pct/main_5pct/umap_by_score.png}
+  \caption{Coloured by anomaly score}
+\end{subfigure}
+\caption{Reference-fit UMAP for the ViT-B/16 PatchCore main-benchmark run.
+The manifold is fit on 5,000 sampled train-normal reference points and
+exported with the full main-benchmark evaluation set.}
+\label{fig:umap_vit_patchcore}
+\end{figure}
+
+The ViT geometry is useful as a diagnostic but not as a replacement threshold.
+The split-coloured view shows that anomalies do not peel cleanly into one
+isolated cluster; they still overlap heavily with the dominant normal manifold,
+even though the score-coloured view highlights concentrated high-score regions
+and sharper tails where the model assigns strong anomaly evidence. This is
+consistent with the main result: the ViT PatchCore wafer score is very strong
+($\mathrm{F1}=0.595$, $\mathrm{AUROC}=0.956$), but a geometry-aware
+nearest-neighbour threshold calibrated on validation normals remains weak
+($\mathrm{F1}=0.083$, $\mathrm{AUROC}=0.525$). The UMAP is therefore best
+read as an explanatory visualisation of embedding structure rather than as
+a viable deployment threshold. Note that the ViT embeddings use cosine
+distance for the UMAP projection, consistent with how transformer patch
+features are typically compared, while the CNN PatchCore projections
+elsewhere in this section use Euclidean distance.
+
+\section{Thresholding Limitations and Discussion}
+
+The 95th-percentile validation-normal threshold is fair, reproducible, and
+requires no defect labels.  However, three consistent observations from the
+diagnostics show its limitations:
+
+\begin{itemize}[leftmargin=1.5em]
+  \item \textbf{Score overlap.} Even the best models show substantial overlap
+        between normal and anomaly score distributions.  The histogram for
+        the WRN PatchCore x224 selected variant (Figure~\ref{fig:wrn_x224_diag})
+        shows that the normal and anomaly distributions overlap near the
+        operating threshold.
+  \item \textbf{Geometric overlap.} UMAP figures show that anomalies are not
+        cleanly peeled off from the normal manifold; they occupy boundaries
+        and tails, but do not form an isolated cluster.
+  \item \textbf{Sweep headroom.} Best-sweep F1 is systematically $0.06$--$0.08$
+        above deployed-threshold F1 across the strongest models (e.g.\ WRN
+        PatchCore x224: deployed 0.549, sweep 0.634).  This gap represents
+        the threshold-selection headroom that a more principled rule could capture.
+\end{itemize}
+
+Possible directions to improve thresholding beyond the 95th-percentile rule:
+\begin{itemize}[leftmargin=1.5em]
+  \item Adaptive thresholding calibrated on validation score structure.
+  \item Local-density or manifold-aware decision boundaries informed by embedding geometry.
+        The current UMAP-space KNN follow-ups are not yet sufficient:
+        for example, the ViT-B/16 branch keeps a very strong original wafer
+        score while its 2-D UMAP-KNN score collapses to near-random ranking.
+  \item Hybrid supervision: if any defect examples can be used for threshold tuning
+        without contaminating training, they could inform a more calibrated operating point.
+\end{itemize}
+
+Not every main-report winner has been reevaluated on the expanded holdout yet.
+The holdout bundle is therefore a stability check on the reevaluated subset,
+not a universal replacement benchmark.
+
+\section{Conclusion}
+
+This project demonstrates a clear and reproducible progression in wafer-map
+anomaly detection, implemented entirely in PyTorch:
+
+\begin{enumerate}[leftmargin=1.5em]
+  \item Plain reconstruction models establish a viable pipeline and show that
+        local-defect sensitivity is the main limitation.
+  \item Better in-domain autoencoder variants and score selection improve
+        performance without new training; the BatchNorm autoencoder scored with
+        maximum absolute pixel error is the strongest reconstruction baseline
+        ($\mathrm{F1}=0.502$).
+  \item Pretrained backbones with global center-distance scoring are consistently
+        weak regardless of backbone size.
+  \item Local anomaly scoring methods (teacher-student distillation and
+        PatchCore) produce the strongest results. The score composition
+        choice interacts strongly with the checkpoint; post-training score
+        sweeps are as important as architecture choices.
+  \item Native high-resolution preprocessing provides a consistent and material
+        lift: EfficientNet-B0 gained $+0.077$ F1 from $64\!\times\!64$ to
+        $224\!\times\!224$; EfficientNet-B1 at $240\!\times\!240$ reaches
+        $\mathrm{F1}=0.591$, the strongest CNN result in the project.
+  \item The best completed result on the main benchmark, ViT-B/16 PatchCore at
+        direct $224\!\times\!224$, achieves $\mathrm{F1}=0.595$,
+        $\mathrm{AUROC}=0.956$, and $\mathrm{AUPRC}=0.671$. It leads
+        EfficientNet-B1 by only 0.004 F1, with the ViT's advantage concentrated
+        in Scratch, Loc, and Edge-Loc recall.
+\end{enumerate}
+
+The dual conclusion is: representation quality and local scoring matter
+greatly, and the combination of a strong pretrained backbone with patch-level
+nearest-neighbour scoring substantially outperforms reconstruction-based
+or globally aggregated alternatives.  At the same time, the remaining
+bottleneck is now score overlap and threshold selection rather than feature
+extraction, which points toward more principled operating-point selection as
+the highest-leverage next step.
+
+\appendix
+\newpage
+\section{Appendix: Experiment Inventory}
+\label{app:notebooks}
+
+This appendix documents the broader search space that sits behind the
+streamlined main narrative.
+
+\subsection{Autoencoder-Family Leaderboard (Main Benchmark)}
+
+\begin{table}[H]
+\centering
+\caption{Selected autoencoder-family results (main benchmark, best score per checkpoint).}
+\label{tab:appendix_ae}
+\begin{tabular}{lccc}
+\toprule
+Variant & F1 & AUROC & AUPRC \\
+\midrule
+AE-64-BN-max              & 0.502 & 0.834 & 0.568 \\
+AE-64-BN-DO0.00-max       & 0.487 & 0.851 & 0.617 \\
+AE-64-BN-DO0.10-max       & 0.484 & 0.845 & 0.570 \\
+AE-64-BN-DO0.05-max       & 0.483 & 0.835 & 0.552 \\
+AE-64-Res-max             & 0.474 & 0.843 & 0.589 \\
+AE-64-topk (43 ep)        & 0.460 & 0.835 & 0.525 \\
+AE-64-BN-topk             & 0.431 & 0.790 & 0.603 \\
+AE-128-topk               & 0.431 & 0.815 & 0.455 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{PatchCore Leaderboard (Main Benchmark)}
+
+\begin{table}[H]
+\centering
+\caption{Selected PatchCore results (main benchmark, best variant per backbone).}
+\label{tab:appendix_patchcore}
+\begin{tabular}{lccc}
+\toprule
+Variant & F1 & AUROC & AUPRC \\
+\midrule
+ViT-B16-x224-topk10-mb400k        & 0.595 & 0.956 & 0.671 \\
+EffNetB1-x240-topk3-mb240k        & 0.591 & 0.935 & 0.609 \\
+WideRes50-x224-topk-mb600k-r005   & 0.549 & 0.931 & 0.659 \\
+EffNetB0-x224-topk-mb240k-r002    & 0.544 & 0.925 & 0.483 \\
+WideRes50-topk-mb50k-r010         & 0.532 & 0.917 & 0.562 \\
+WideRes50-topk-mb50k-r015         & 0.526 & 0.912 & 0.549 \\
+WideRes50-topk-mb50k-r005         & 0.525 & 0.921 & 0.564 \\
+EffNetB0-x64-topk-mb240k-r002     & 0.467 & 0.905 & 0.489 \\
+Res50-mean-mb50k                  & 0.420 & 0.821 & 0.363 \\
+Res18-mean-mb50k                  & 0.401 & 0.842 & 0.411 \\
+AE-BN-mean-mb50k                  & 0.336 & 0.851 & 0.226 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{AE-Backed PatchCore Sweep}
+
+\begin{table}[H]
+\centering
+\caption{PatchCore variants built on the frozen AE-BN encoder.}
+\label{tab:appendix_aebn_patchcore}
+\begin{tabularx}{\linewidth}{lcc>{\raggedright\arraybackslash}X}
+\toprule
+Variant & F1 & AUROC & Notes \\
+\midrule
+\texttt{mean\_mb50k}       & 0.336 & 0.851 & Best AE-BN PatchCore result \\
+\texttt{topk\_mb50k\_r010} & 0.185 & 0.809 & Top-k reduction, 50\,k bank \\
+\texttt{topk\_mb50k\_r005} & 0.123 & 0.777 & Narrower top-k region \\
+\texttt{max\_mb50k}        & 0.056 & 0.679 & Max reduction too brittle \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{ResNet18 Teacher-Student Focused Ablation}
+
+\begin{table}[H]
+\centering
+\caption{ResNet18 teacher-student focused layer and top-k ablation.}
+\label{tab:appendix_ts_resnet18}
+\begin{tabular}{lcccc}
+\toprule
+Variant & Layer & Top-k ratio & F1 & AUROC \\
+\midrule
+\texttt{ts\_resnet18\_layer2\_topk25} & layer2 & 0.25 & 0.494 & 0.890 \\
+\texttt{ts\_resnet18\_layer2\_topk20} & layer2 & 0.20 & 0.494 & 0.889 \\
+\texttt{ts\_resnet18\_layer2\_topk15} & layer2 & 0.15 & 0.483 & 0.889 \\
+\texttt{ts\_resnet18\_layer1\_topk15} & layer1 & 0.15 & 0.411 & 0.824 \\
+\texttt{ts\_resnet18\_layer1\_topk20} & layer1 & 0.20 & 0.387 & 0.817 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{ResNet50 Teacher-Student Score Sweep}
+
+\begin{table}[H]
+\centering
+\caption{ResNet50 teacher-student local score-sweep summary (top rows).}
+\label{tab:appendix_ts_resnet50}
+\begin{tabular}{lcccc}
+\toprule
+Score variant & F1 & AUROC & AUPRC & Sweep F1 \\
+\midrule
+\texttt{s2\_a1\_topk\_mean\_r0.20} (selected) & 0.525 & 0.909 & 0.599 & 0.606 \\
+\texttt{s1\_a0.5\_topk\_mean\_r0.20}           & 0.525 & 0.909 & 0.599 & 0.606 \\
+\texttt{s1\_a2\_topk\_mean\_r0.20}             & 0.523 & 0.904 & 0.570 & 0.565 \\
+\texttt{s2\_a1\_topk\_mean\_r0.10}             & 0.506 & 0.913 & 0.584 & 0.563 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{WideResNet50-2 Teacher-Student Score Sweep}
+
+\begin{table}[H]
+\centering
+\caption{WideResNet50-2 multilayer teacher-student score-sweep (top rows).}
+\label{tab:appendix_ts_wrn}
+\begin{tabular}{lcccc}
+\toprule
+Score variant & F1 & AUROC & AUPRC & Sweep F1 \\
+\midrule
+\texttt{s2\_a1\_topk\_mean\_r0.15} (selected) & 0.524 & 0.923 & 0.546 & 0.561 \\
+\texttt{s1\_a1\_topk\_mean\_r0.25}             & 0.518 & 0.926 & 0.538 & 0.558 \\
+\texttt{s2\_a1\_topk\_mean\_r0.20}             & 0.512 & 0.922 & 0.543 & 0.561 \\
+\texttt{s2\_a1\_topk\_mean\_r0.10}             & 0.511 & 0.923 & 0.544 & 0.556 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{FastFlow Ablation Summary}
+
+\begin{table}[H]
+\centering
+\caption{FastFlow training-variant ablation (WideResNet50-2 backbone).}
+\label{tab:appendix_fastflow}
+\begin{tabular}{lccccc}
+\toprule
+Training variant & Layers & Steps & Best score & F1 & AUROC \\
+\midrule
+\texttt{wrn50\_l23\_s4} (selected) & layer2+layer3 & 4 & mean       & 0.482 & 0.871 \\
+\texttt{wrn50\_l23\_s6}            & layer2+layer3 & 6 & mean       & 0.470 & 0.870 \\
+\texttt{wrn50\_l2\_s6}             & layer2 only   & 6 & topk-r0.15 & 0.442 & 0.884 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Score Ensemble Study}
+
+\begin{table}[H]
+\centering
+\caption{Post-hoc score ensemble: WRN PatchCore + TS-Res50.}
+\label{tab:appendix_ensemble}
+\begin{tabular}{lcccc}
+\toprule
+Fusion variant & F1 & AUROC & AUPRC & Sweep F1 \\
+\midrule
+PatchCore only         & 0.532 & 0.917 & 0.562 & 0.586 \\
+max pair (selected)    & 0.529 & 0.916 & \textbf{0.611} & 0.620 \\
+mean 70/30 PatchCore   & 0.528 & 0.918 & 0.596 & 0.616 \\
+mean 50/50             & 0.526 & 0.917 & 0.606 & 0.615 \\
+TS only                & 0.525 & 0.909 & 0.599 & 0.606 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The ensemble improved AUPRC notably (0.611 vs 0.562) but did not beat the
+standalone PatchCore on deployed F1.
+
+\subsection{Experiment-to-File Reference}
+
+\begin{table}[H]
+\centering
+\caption{Key experiment-to-notebook mapping for reproducibility.}
+\label{tab:appendix_notebooks}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X}
+\toprule
+Experiment & Notebook / config \\
+\midrule
+Baseline AE                       & \texttt{02\_autoencoder\_training.ipynb} \\
+BatchNorm AE                      & \texttt{05\_autoencoder\_batchnorm\_training.ipynb} \\
+Dropout sweep                     & \texttt{06\_autoencoder\_batchnorm\_dropout\_training.ipynb} \\
+Residual AE                       & \texttt{08\_autoencoder\_residual\_training.ipynb} \\
+VAE beta sweep                    & \texttt{03\_vae\_training.ipynb} \\
+Deep SVDD                         & \texttt{04\_svdd\_training.ipynb} \\
+PatchCore AE-BN backbone          & \texttt{07\_patchcore\_training.ipynb} \\
+ResNet18 backbone baseline        & \texttt{09\_resnet18\_backbone\_baseline.ipynb} \\
+PatchCore ResNet18                & \texttt{10\_patchcore\_resnet18\_training.ipynb} \\
+PatchCore ResNet50                & \texttt{11\_patchcore\_resnet50\_training.ipynb} \\
+TS-ResNet18                       & \texttt{12\_ts\_distillation\_training.ipynb} \\
+TS-ResNet50 (imported + analysis) & \texttt{13\_ts\_resnet50\_kaggle\_import\_analysis.ipynb} \\
+WRN50-2 embedding baseline        & \texttt{15A\_wideresnet50\_2\_backbone\_baseline.ipynb} \\
+WRN50-2 PatchCore x224            & \texttt{18A-patchcore-wideresnet50-multilayer-x224.ipynb} \\
+WRN50-2 PatchCore x224 + UMAP    & \texttt{18A2-patchcore-wideresnet50-multilayer-x224\_with\_umap.ipynb} \\
+EfficientNet-B0 PatchCore x64     & \texttt{21A\_patchcore\_efficientnet\_b0\_all-in-one.ipynb} \\
+EfficientNet-B0 PatchCore x224    & \texttt{21B\_patchcore\_efficientnet\_b0\_all-in-one\_224.ipynb} \\
+ViT-B/16 PatchCore x224           & \texttt{23\_patchcore-vit-b16-811k-one-layer.ipynb} \\
+FastFlow sweep                    & \texttt{19A\_fastflow\_all\_in\_one.ipynb} \\
+Score ensemble                    & \texttt{20\_score\_ensemble\_analysis.ipynb} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\newpage
+\begin{thebibliography}{9}
+
+\bibitem{jo2021oneclass}
+H.~Y. Jo and S.-W. Lee,
+\newblock ``One-class classification for wafer map using adversarial autoencoder with DSVDD prior,''
+\newblock \textit{arXiv preprint arXiv:2107.08823}, 2021.
+\newblock \url{https://arxiv.org/abs/2107.08823}
+
+\bibitem{roth2022patchcore}
+K.~Roth, L.~Pemula, J.~Zepeda, B.~Sch\"{o}lkopf, T.~Brox, and P.~Gehler,
+\newblock ``Towards total recall in industrial anomaly detection,''
+\newblock in \textit{Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+\newblock pp.\ 14318--14328, 2022.
+\newblock \url{https://arxiv.org/abs/2106.08265}
+
+\bibitem{ruff2018deepsvdd}
+L.~Ruff, R.~Vandermeulen, N.~Goernitz, L.~Deecke, S.~A. Siddiqui, A.~Binder, E.~M\"{u}ller, and M.~Kloft,
+\newblock ``Deep one-class classification,''
+\newblock in \textit{Proceedings of the 35th International Conference on Machine Learning (ICML)},
+\newblock vol.\ 80, pp.\ 4393--4402, 2018.
+\newblock \url{http://proceedings.mlr.press/v80/ruff18a.html}
+
+\end{thebibliography}
+
+\end{document}
