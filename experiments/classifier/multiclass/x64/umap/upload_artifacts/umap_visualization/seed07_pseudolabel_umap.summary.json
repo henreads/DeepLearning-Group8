@@ -1,0 +1,51 @@
+{
+  "checkpoint": "/kaggle/working/seed07_pseudolabel_bundle_kaggle/artifacts/multiclass_classifier_all_80_10_10_seed07/best_model.pt",
+  "pseudo_label_csv": "/kaggle/working/seed07_pseudolabel_bundle_kaggle/artifacts/multiclass_classifier_all_80_10_10_seed07_pseudolabels/unlabeled_predictions.seed07.pseudolabels.csv",
+  "output_dir": "/kaggle/working/seed07_pseudolabel_bundle_kaggle/artifacts/multiclass_classifier_all_80_10_10_seed07_pseudolabels/umap_visualization",
+  "device": "cuda",
+  "class_names": [
+    "none",
+    "Center",
+    "Donut",
+    "Edge-Loc",
+    "Edge-Ring",
+    "Loc",
+    "Near-full",
+    "Random",
+    "Scratch"
+  ],
+  "min_confidence": 0.75,
+  "max_labeled_per_class": 400,
+  "max_pseudo_per_class": 800,
+  "n_neighbors": 30,
+  "min_dist": 0.1,
+  "metric": "cosine",
+  "labeled_points": 3349,
+  "pseudo_points": 6865,
+  "labeled_distribution": {
+    "Center": 400,
+    "Donut": 400,
+    "Edge-Loc": 400,
+    "Edge-Ring": 400,
+    "Loc": 400,
+    "Near-full": 149,
+    "Random": 400,
+    "Scratch": 400,
+    "none": 400
+  },
+  "pseudo_distribution": {
+    "Center": 800,
+    "Donut": 465,
+    "Edge-Loc": 800,
+    "Edge-Ring": 800,
+    "Loc": 800,
+    "Near-full": 800,
+    "Random": 800,
+    "Scratch": 800,
+    "none": 800
+  },
+  "mean_pseudo_confidence": 0.9139058553295594,
+  "figure_path": "/kaggle/working/seed07_pseudolabel_bundle_kaggle/artifacts/multiclass_classifier_all_80_10_10_seed07_pseudolabels/umap_visualization/seed07_pseudolabel_umap.png",
+  "labeled_csv": "/kaggle/working/seed07_pseudolabel_bundle_kaggle/artifacts/multiclass_classifier_all_80_10_10_seed07_pseudolabels/umap_visualization/labeled_reference_umap.csv",
+  "pseudo_csv": "/kaggle/working/seed07_pseudolabel_bundle_kaggle/artifacts/multiclass_classifier_all_80_10_10_seed07_pseudolabels/umap_visualization/pseudo_label_umap.csv"
+}

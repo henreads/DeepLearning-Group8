@@ -1,0 +1,37 @@
+{
+  "checkpoint": "/kaggle/working/seed07_pseudolabel_bundle_kaggle/artifacts/multiclass_classifier_all_80_10_10_seed07/best_model.pt",
+  "data_config_runtime": "/kaggle/working/seed07_pseudolabel_bundle_kaggle/runtime_configs/data_multiclass_all_80_10_10_pseudolabel.kaggle.toml",
+  "source_predictions_csv": "/kaggle/working/seed07_pseudolabel_bundle_kaggle/artifacts/multiclass_classifier_all_80_10_10_seed07_pseudolabels/unlabeled_predictions.seed07.raw.csv",
+  "enriched_predictions_csv": "/kaggle/working/seed07_pseudolabel_bundle_kaggle/artifacts/multiclass_classifier_all_80_10_10_seed07_pseudolabels/unlabeled_predictions.seed07.pseudolabels.csv",
+  "accepted_predictions_csv": "/kaggle/working/seed07_pseudolabel_bundle_kaggle/artifacts/multiclass_classifier_all_80_10_10_seed07_pseudolabels/unlabeled_predictions.seed07.accepted.csv",
+  "confidence_threshold": 0.9,
+  "rows_scored": 638507,
+  "accepted_rows": 417831,
+  "accepted_fraction": 0.6543875008418075,
+  "predicted_label_distribution": {
+    "Center": 21294,
+    "Donut": 613,
+    "Edge-Loc": 33053,
+    "Edge-Ring": 15074,
+    "Loc": 25583,
+    "Near-full": 90485,
+    "Random": 13223,
+    "Scratch": 31300,
+    "none": 407882
+  },
+  "accepted_label_distribution": {
+    "Center": 13825,
+    "Donut": 364,
+    "Edge-Loc": 10958,
+    "Edge-Ring": 6254,
+    "Loc": 7248,
+    "Near-full": 72101,
+    "Random": 9486,
+    "Scratch": 7682,
+    "none": 289913
+  },
+  "predicted_defect_fraction": 0.36119416075313193,
+  "accepted_defect_fraction": 0.30614770086470366,
+  "mean_confidence": 0.8637002130584657,
+  "mean_accepted_confidence": 0.9474949646583708
+}

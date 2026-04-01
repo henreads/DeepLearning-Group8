@@ -10,7 +10,7 @@ The classifier family supports three goals:
 
 - reporting supervised classification performance on known defect types
 - generating pseudo-label candidates for unlabeled wafers
-- comparing single-model and ensemble behavior
+- exporting seed-specific follow-up analysis such as pseudo-label review and UMAP views
 
 ## Branches
 
@@ -20,8 +20,10 @@ The classifier family supports three goals:
   Visualization and presentation-oriented analysis.
 - `x64/final_labeling/`
   Final pseudo-label generation workflow.
-- `x64/ensemble/`
-  Ensemble evaluation and inference workflow.
+- `x64/seed07/`
+  Seed07 full-labeled checkpoint review and pseudo-label workflow.
+- `x64/umap/`
+  UMAP follow-up analysis built on the seed07 artifacts.
 
 ## Common Files In A Branch
 

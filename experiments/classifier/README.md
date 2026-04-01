@@ -7,7 +7,7 @@ Unlike the anomaly-detection families, these branches are trained with explicit 
 ## Main Family
 
 - `multiclass/`
-  Residual CNN classifier training, showcase analysis, pseudo-label generation, and ensemble evaluation.
+  Residual CNN classifier training, showcase analysis, final pseudo-label generation, seed07 follow-up, and UMAP exports.
 
 ## Common Branch Files
 
