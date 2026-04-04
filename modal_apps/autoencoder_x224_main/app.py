@@ -48,168 +48,215 @@ REMOTE_PREPARE_SCRIPT = f"{REMOTE_PROJECT_ROOT}/scripts/prepare_wm811k.py"
 
 image = (
     modal.Image.debian_slim(python_version="3.11")
-    .apt_install("git")
     .pip_install(
-        "torch>=2.0",
-        "torchvision>=0.15",
-        "numpy>=1.24",
-        "pandas>=1.5",
-        "scikit-learn>=1.3",
-        "toml>=0.10",
-        "matplotlib>=3.6",
-        "jupyter>=1.0",
-        "nbconvert>=7.0",
+        "numpy>=1.26",
+        "pandas>=2.2",
+        "scikit-learn>=1.5",
+        "matplotlib>=3.9",
+        "seaborn>=0.13",
+        "ipython>=8.0",
+        "torch>=2.2",
+        "torchvision>=0.17",
         "tqdm>=4.66",
+    )
+    .add_local_python_source("wafer_defect", copy=True)
+    .add_local_dir("configs", remote_path=f"{REMOTE_PROJECT_ROOT}/configs", copy=True)
+    .add_local_dir("scripts", remote_path=f"{REMOTE_PROJECT_ROOT}/scripts", copy=True)
+    .add_local_dir(
+        "experiments/anomaly_detection/autoencoder/x224/main",
+        remote_path=f"{REMOTE_PROJECT_ROOT}/experiments/anomaly_detection/autoencoder/x224/main",
+        copy=True,
+        ignore=["artifacts", "artifacts/**"],
     )
 )
 
-app = modal.App(name=APP_NAME)
+raw_volume = modal.Volume.from_name(RAW_VOLUME_NAME, create_if_missing=True)
+processed_volume = modal.Volume.from_name(PROCESSED_VOLUME_NAME, create_if_missing=True)
+artifact_volume = modal.Volume.from_name(ARTIFACT_VOLUME_NAME, create_if_missing=True)
+app = modal.App(APP_NAME, image=image)
 
 
-@app.function(
-    image=image,
-    gpu="A10G",
-    timeout=8 * 3600,
-    volumes={
-        RAW_VOLUME_NAME: modal.Volume.from_name(RAW_VOLUME_NAME, create_if_missing=True),
-        PROCESSED_VOLUME_NAME: modal.Volume.from_name(PROCESSED_VOLUME_NAME, create_if_missing=True),
-        ARTIFACT_VOLUME_NAME: modal.Volume.from_name(ARTIFACT_VOLUME_NAME, create_if_missing=True),
-    },
-)
-def main(
-    run_train: bool = True,
-    run_eval: bool = True,
-    run_sweep: bool = True,
-) -> dict[str, Any]:
-    """
-    Main training pipeline for Autoencoder x224 Main.
+def _run_modal_cli(args: list[str], *, capture_output: bool = False) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, "-m", "modal", *args],
+        check=True,
+        cwd=LOCAL_REPO_ROOT,
+        text=True,
+        capture_output=capture_output,
+    )
 
-    Phases:
-    1. Prepare: Ensure x224 dataset is ready
-    2. Train: Train autoencoder checkpoint
-    3. Eval: Evaluate on test split
-    4. Sweep: Generate threshold sweep and metrics
-    """
-    from pathlib import Path
 
-    REMOTE_ROOT = Path(REMOTE_PROJECT_ROOT)
-    RAW_VOL_MOUNT = Path("/mnt/raw")
-    PROCESSED_VOL_MOUNT = Path("/mnt/processed")
-    ARTIFACT_VOL_MOUNT = Path("/mnt/artifacts")
+def _download_artifacts(local_artifact_dir: str, remote_subdir: str) -> None:
+    local_dir = Path(local_artifact_dir).resolve()
+    local_dir.mkdir(parents=True, exist_ok=True)
+    listing = _run_modal_cli(["volume", "ls", ARTIFACT_VOLUME_NAME, remote_subdir, "--json"], capture_output=True)
+    entries = json.loads(listing.stdout)
+    for entry in entries:
+        remote_name = str(entry["Filename"])
+        if Path(remote_name).name == "processed":
+            continue
+        local_target = local_dir / Path(remote_name)
+        if str(entry.get("Type", "")).lower() == "dir":
+            local_target.mkdir(parents=True, exist_ok=True)
+        else:
+            local_target.parent.mkdir(parents=True, exist_ok=True)
+        _run_modal_cli(["volume", "get", ARTIFACT_VOLUME_NAME, f"/{remote_name}", str(local_target), "--force"])
 
-    # Mount volumes
-    raw_vol = modal.Volume.from_name(RAW_VOLUME_NAME)
-    processed_vol = modal.Volume.from_name(PROCESSED_VOLUME_NAME)
-    artifact_vol = modal.Volume.from_name(ARTIFACT_VOLUME_NAME)
 
-    # Ensure directories exist
-    RAW_VOL_MOUNT.mkdir(parents=True, exist_ok=True)
-    PROCESSED_VOL_MOUNT.mkdir(parents=True, exist_ok=True)
-    ARTIFACT_VOL_MOUNT.mkdir(parents=True, exist_ok=True)
+def _cached_dataset_is_valid(metadata_path: Path, arrays_dir: Path) -> bool:
+    if not metadata_path.exists() or not arrays_dir.exists():
+        return False
 
-    # Check if x224 dataset needs preparation
-    metadata_path = PROCESSED_VOL_MOUNT / "metadata_50k_5pct.csv"
-    if not metadata_path.exists():
-        print("Preparing x224 dataset...")
-        env = {"PYTHONPATH": str(REMOTE_ROOT / "src")}
-        subprocess.run(
-            [
-                "python",
-                str(REMOTE_PREPARE_SCRIPT),
-                "--pkl-path", str(RAW_VOL_MOUNT / "LSWMD.pkl"),
-                "--output-dir", str(PROCESSED_VOL_MOUNT),
-                "--target-size", "224",
-            ],
-            cwd=REMOTE_ROOT,
-            env={**subprocess.os.environ, **env},
-            check=True,
+    expected_prefix = f"data/processed/x224/wm811k/{arrays_dir.name}/"
+    with metadata_path.open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        first_row = next(reader, None)
+
+    if not first_row:
+        return False
+
+    sample_path = str(first_row.get("array_path", "")).strip()
+    if not sample_path:
+        return False
+    if ":\\" in sample_path or sample_path.startswith("C:/") or "\\" in sample_path:
+        return False
+    if not sample_path.startswith(expected_prefix):
+        return False
+    return (Path(REMOTE_PROJECT_ROOT) / sample_path).exists()
+
+
+def _clear_processed_cache(metadata_path: Path, arrays_dir: Path) -> None:
+    for candidate in metadata_path.parent.glob("metadata*.csv"):
+        if candidate.exists():
+            candidate.unlink()
+    if arrays_dir.exists():
+        shutil.rmtree(arrays_dir)
+
+
+def _prepare_processed_dataset() -> None:
+    metadata_path = Path(REMOTE_PROCESSED_DIR) / "metadata_50k_5pct.csv"
+    arrays_dir = Path(REMOTE_PROCESSED_DIR) / "arrays_50k_5pct"
+    if _cached_dataset_is_valid(metadata_path, arrays_dir):
+        print(
+            f"[autoencoder-x224-main] reusing cached processed dataset: {metadata_path}",
+            flush=True,
         )
-        processed_vol.commit()
-        print("x224 dataset preparation complete.")
-    else:
-        print(f"Found existing x224 dataset at {metadata_path}")
+        return
+    if metadata_path.exists() or arrays_dir.exists():
+        print("[autoencoder-x224-main] cached processed dataset is stale; rebuilding", flush=True)
+        _clear_processed_cache(metadata_path, arrays_dir)
 
-    # Train or load artifact
-    train_config_path = REMOTE_ROOT / "experiments/anomaly_detection/autoencoder/x224/main/train_config.toml"
-    runner_result = {}
-
-    if run_train:
-        print("Phase 1: Training...")
-        runner_result["train"] = subprocess.run(
-            ["python", str(REMOTE_RUNNER), "train"],
-            cwd=REMOTE_ROOT,
-            env={**subprocess.os.environ, "PYTHONPATH": str(REMOTE_ROOT / "src")},
-            capture_output=True,
-            text=True,
-            check=True,
-        ).returncode
-        artifact_vol.commit()
-        print("Training phase complete.")
-
-    if run_eval:
-        print("Phase 2: Evaluation...")
-        runner_result["eval"] = subprocess.run(
-            ["python", str(REMOTE_RUNNER), "eval"],
-            cwd=REMOTE_ROOT,
-            env={**subprocess.os.environ, "PYTHONPATH": str(REMOTE_ROOT / "src")},
-            capture_output=True,
-            text=True,
-            check=True,
-        ).returncode
-        artifact_vol.commit()
-        print("Evaluation phase complete.")
-
-    if run_sweep:
-        print("Phase 3: Threshold sweep and metrics...")
-        runner_result["sweep"] = subprocess.run(
-            ["python", str(REMOTE_RUNNER), "sweep"],
-            cwd=REMOTE_ROOT,
-            env={**subprocess.os.environ, "PYTHONPATH": str(REMOTE_ROOT / "src")},
-            capture_output=True,
-            text=True,
-            check=True,
-        ).returncode
-        artifact_vol.commit()
-        print("Threshold sweep phase complete.")
-
-    return {
-        "status": "success",
-        "phases": runner_result,
-        "artifact_dir": REMOTE_ARTIFACT_DIR,
-    }
+    config_path = Path("/tmp/autoencoder_x224_prepare_wm811k.toml")
+    config_path.write_text(
+        "\n".join(
+            [
+                "[dataset]",
+                'name = "wm811k"',
+                f'raw_pickle = "{REMOTE_RAW_DIR}/LSWMD.pkl"',
+                f'processed_root = "{REMOTE_PROCESSED_DIR}"',
+                f'metadata_csv = "{REMOTE_PROCESSED_DIR}/metadata.csv"',
+                f'metadata_50k_csv = "{REMOTE_PROCESSED_DIR}/metadata_50k.csv"',
+                f'metadata_50k_5pct_csv = "{REMOTE_PROCESSED_DIR}/metadata_50k_5pct.csv"',
+                f'dev_metadata_csv = "{REMOTE_PROCESSED_DIR}/metadata_dev.csv"',
+                "image_size = 224",
+                'normal_label = "none"',
+                'defect_label = "pattern"',
+                "",
+                "[split_generation]",
+                'mode = "normal_only_test_defects"',
+                "",
+                "[splits]",
+                "train_normal_fraction = 0.8",
+                "val_normal_fraction = 0.1",
+                "test_normal_fraction = 0.1",
+                "random_seed = 42",
+                "",
+                "[dev_subset]",
+                "enabled = true",
+                "normal_count = 2000",
+                "defect_count = 400",
+                "",
+                "[train_subset]",
+                "normal_count = 50000",
+                "use_all_defects_for_test = false",
+                "test_defect_fraction_of_test_normals = 0.05",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    command = [
+        "python",
+        "-u",
+        REMOTE_PREPARE_SCRIPT,
+        "--config",
+        str(config_path),
+    ]
+    print(f"[autoencoder-x224-main] preparing processed dataset: {' '.join(command)}", flush=True)
+    subprocess.run(command, check=True, cwd=REMOTE_PROJECT_ROOT)
+    processed_volume.commit()
+    print("[autoencoder-x224-main] processed dataset volume committed", flush=True)
 
 
 @app.function(
-    image=image,
+    gpu="A10G",
+    timeout=60 * 60 * 8,
     volumes={
-        ARTIFACT_VOLUME_NAME: modal.Volume.from_name(ARTIFACT_VOLUME_NAME),
+        REMOTE_RAW_DIR: raw_volume,
+        REMOTE_PROCESSED_DIR: processed_volume,
+        REMOTE_ARTIFACT_DIR: artifact_volume,
     },
 )
-def download_artifacts() -> str:
-    """Download artifacts from Modal volume back to local repo."""
-    import shutil
-    from pathlib import Path
-
-    ARTIFACT_VOL_MOUNT = Path("/mnt/artifacts")
-    LOCAL_ARTIFACT_ROOT = LOCAL_ARTIFACT_DIR
-
-    if not ARTIFACT_VOL_MOUNT.exists():
-        return f"No artifacts found in volume at {ARTIFACT_VOL_MOUNT}"
-
-    LOCAL_ARTIFACT_ROOT.parent.mkdir(parents=True, exist_ok=True)
-    if LOCAL_ARTIFACT_ROOT.exists():
-        shutil.rmtree(LOCAL_ARTIFACT_ROOT)
-
-    shutil.copytree(ARTIFACT_VOL_MOUNT / "autoencoder_x224", LOCAL_ARTIFACT_ROOT)
-    return f"Artifacts downloaded to {LOCAL_ARTIFACT_ROOT}"
+def run_autoencoder_remote(phase: str = "train") -> dict[str, Any]:
+    _prepare_processed_dataset()
+    command = [
+        "python",
+        "-u",
+        REMOTE_RUNNER,
+        "--phase",
+        phase,
+    ]
+    print(f"[autoencoder-x224-main] launching notebook runner: {' '.join(command)}", flush=True)
+    subprocess.run(command, check=True, cwd=REMOTE_PROJECT_ROOT)
+    artifact_volume.commit()
+    print(f"[autoencoder-x224-main] artifact volume committed after {phase} phase", flush=True)
+    manifest_path = Path(REMOTE_ARTIFACT_DIR) / "autoencoder_x224" / f"{phase}_phase_manifest.json"
+    if manifest_path.exists():
+        return json.loads(manifest_path.read_text(encoding="utf-8"))
+    return {"output_dir": REMOTE_ARTIFACT_DIR, "phase": phase}
 
 
 @app.local_entrypoint()
-def cli():
-    """CLI entry point for training."""
-    print(f"Starting {APP_NAME}...")
-    result = main.remote(run_train=True, run_eval=True, run_sweep=True)
-    print(f"Training result: {result}")
-    print("\nDownloading artifacts...")
-    download_msg = download_artifacts.remote()
-    print(download_msg)
+def main(run_train: bool = True, run_eval: bool = True, run_sweep: bool = True, sync_back: bool = True) -> None:
+    results = {}
+
+    if run_train:
+        print("[autoencoder-x224-main] running train phase...")
+        results["train"] = run_autoencoder_remote.remote(phase="train")
+
+    if run_eval:
+        print("[autoencoder-x224-main] running eval phase...")
+        results["eval"] = run_autoencoder_remote.remote(phase="eval")
+
+    if run_sweep:
+        print("[autoencoder-x224-main] running sweep phase...")
+        results["sweep"] = run_autoencoder_remote.remote(phase="sweep")
+
+    print(json.dumps(results, indent=2))
+
+    if sync_back:
+        print("[autoencoder-x224-main] downloading artifacts...")
+        _download_artifacts(str(LOCAL_ARTIFACT_DIR), "/autoencoder_x224")
+
+
+@app.local_entrypoint()
+def upload_raw_data(local_raw_pickle: str = str(LOCAL_RAW_PICKLE)) -> None:
+    local_path = Path(local_raw_pickle).resolve()
+    if not local_path.exists():
+        raise FileNotFoundError(f"Raw pickle not found: {local_path}")
+    _run_modal_cli(["volume", "put", RAW_VOLUME_NAME, str(local_path), "/LSWMD.pkl"])
+
+
+@app.local_entrypoint()
+def download_artifacts(local_artifact_dir: str = str(LOCAL_ARTIFACT_DIR)) -> None:
+    _download_artifacts(local_artifact_dir, "/autoencoder_x224")

@@ -96,9 +96,25 @@ def main() -> None:
         best_state_dict = clone_state_dict(model)
         print(f"Resumed from {resume_path} at epoch {start_epoch}", flush=True)
 
-    for epoch in tqdm(range(start_epoch, int(config["training"]["epochs"])), desc="Training epochs", total=int(config["training"]["epochs"]), initial=start_epoch):
-        train_metrics = run_ts_epoch(model, train_loader, device, optimizer=optimizer)
-        val_metrics = run_ts_epoch(model, val_loader, device)
+    for epoch in tqdm(
+        range(start_epoch, int(config["training"]["epochs"])),
+        desc="Training epochs",
+        total=int(config["training"]["epochs"]),
+        initial=start_epoch,
+    ):
+        train_metrics = run_ts_epoch(
+            model,
+            train_loader,
+            device,
+            optimizer=optimizer,
+            progress_desc=f"Train {epoch + 1}/{int(config['training']['epochs'])}",
+        )
+        val_metrics = run_ts_epoch(
+            model,
+            val_loader,
+            device,
+            progress_desc=f"Val {epoch + 1}/{int(config['training']['epochs'])}",
+        )
         record = {
             "epoch": epoch + 1,
             "train_loss": train_metrics.loss,

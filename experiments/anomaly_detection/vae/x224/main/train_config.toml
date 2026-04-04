@@ -5,8 +5,8 @@ seed = 42
 [data]
 metadata_csv = "data/processed/x224/wm811k/metadata_50k_5pct.csv"
 image_size = 224
-batch_size = 64
-num_workers = 4
+batch_size = 512
+num_workers = 8
 
 [training]
 epochs = 30

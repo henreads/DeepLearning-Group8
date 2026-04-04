@@ -54,11 +54,13 @@ image = (
         "pandas>=2.2",
         "scikit-learn>=1.5",
         "matplotlib>=3.9",
+        "seaborn>=0.13",
         "torch>=2.2",
         "torchvision>=0.17",
         "tqdm>=4.66",
     )
     .add_local_python_source("wafer_defect", copy=True)
+    .add_local_dir("configs", remote_path=f"{REMOTE_PROJECT_ROOT}/configs", copy=True)
     .add_local_dir("scripts", remote_path=f"{REMOTE_PROJECT_ROOT}/scripts", copy=True)
     .add_local_dir(
         "experiments/anomaly_detection/vae/x64/latent_dim_sweep",
@@ -205,7 +207,7 @@ def _prepare_processed_dataset() -> None:
         REMOTE_ARTIFACT_DIR: artifact_volume,
     },
 )
-def run_vae_remote() -> dict[str, Any]:
+def run_vae_remote(retrain: bool = False, full_retrain: bool = False) -> dict[str, Any]:
     _prepare_processed_dataset()
     manifests: dict[str, Any] = {}
     for phase in ["train", "eval", "sweep"]:
@@ -218,6 +220,10 @@ def run_vae_remote() -> dict[str, Any]:
             "--phase",
             phase,
         ]
+        if retrain:
+            command.append("--retrain")
+        if full_retrain:
+            command.append("--full-retrain")
         print(f"[vae-latent-dim-sweep] launching phase={phase}: {' '.join(command)}", flush=True)
         subprocess.run(command, check=True, cwd=REMOTE_PROJECT_ROOT)
         artifact_volume.commit()
@@ -232,8 +238,8 @@ def run_vae_remote() -> dict[str, Any]:
 
 
 @app.local_entrypoint()
-def main(sync_back: bool = True) -> None:
-    result = run_vae_remote.remote()
+def main(sync_back: bool = True, retrain: bool = False, full_retrain: bool = False) -> None:
+    result = run_vae_remote.remote(retrain=retrain, full_retrain=full_retrain)
     print(json.dumps(result, indent=2))
     if sync_back:
         _download_artifacts(str(LOCAL_ARTIFACT_DIR), "/vae_latent_dim_sweep")

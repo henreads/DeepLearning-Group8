@@ -97,8 +97,23 @@ def main() -> None:
         print(f"Resumed from {resume_path} at epoch {start_epoch}")
 
     for epoch in tqdm(range(start_epoch, int(config["training"]["epochs"])), desc="Training epochs", total=int(config["training"]["epochs"]), initial=start_epoch):
-        train_metrics = run_vae_epoch(model, train_loader, device, beta=beta, optimizer=optimizer)
-        val_metrics = run_vae_epoch(model, val_loader, device, beta=beta)
+        train_metrics = run_vae_epoch(
+            model,
+            train_loader,
+            device,
+            beta=beta,
+            optimizer=optimizer,
+            progress_desc=f"train e{epoch + 1}",
+            leave_progress=False,
+        )
+        val_metrics = run_vae_epoch(
+            model,
+            val_loader,
+            device,
+            beta=beta,
+            progress_desc=f"val e{epoch + 1}",
+            leave_progress=False,
+        )
         record = {
             "epoch": epoch + 1,
             "train_loss": train_metrics.loss,

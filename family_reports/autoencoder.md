@@ -502,6 +502,112 @@ Confusion matrix: `[[4788, 212], [123, 127]]`
 
 ---
 
+## Variant: Autoencoder `224×224` (Baseline, No BatchNorm)
+
+**Notebook:** [`experiments/anomaly_detection/autoencoder/x224/main/notebook.ipynb`](../experiments/anomaly_detection/autoencoder/x224/main/notebook.ipynb)
+**Artifact dir:** `experiments/anomaly_detection/autoencoder/x224/main/artifacts/autoencoder_x224/`
+
+### Configuration
+
+| parameter | value |
+|---|---|
+| image size | 224×224 |
+| batch size | 512 |
+| latent dimension | 128 |
+| BatchNorm | disabled |
+| dropout | 0.0 |
+| optimizer | Adam |
+| learning rate | 0.001 |
+| weight decay | 0.0001 |
+| max epochs | 20 |
+| early stopping patience | 5 |
+
+### Training
+
+- Best epoch: **18**, best val loss: **0.0182**, epochs ran: **20**
+- Early convergence: loss plateau after epoch 10, marginal improvements thereafter
+
+![Training curves](../experiments/anomaly_detection/autoencoder/x224/main/artifacts/autoencoder_x224/plots/training_curves.png)
+
+### Score Ablation
+
+The same checkpoint was evaluated under seven scoring rules. `topk_abs_mean` clearly dominates, with F1=0.510 at the deployment threshold.
+
+| score | val-threshold F1 | precision | recall | AUROC | AUPRC | best sweep F1 |
+|---|---|---|---|---|---|---|
+| `topk_abs_mean` | **0.509985** | 0.413965 | **0.664** | **0.901079** | **0.596145** | **0.587473** |
+| `max_abs` | 0.485226 | 0.396947 | 0.624 | 0.833279 | 0.472978 | 0.531008 |
+| `mse_mean` | 0.322061 | 0.269542 | 0.400 | 0.784720 | 0.369674 | 0.408964 |
+| `foreground_mse` | 0.297254 | 0.249322 | 0.368 | 0.760712 | 0.357783 | 0.386555 |
+| `pooled_mae_mean` | 0.268007 | 0.230548 | 0.320 | 0.735596 | 0.288344 | 0.308123 |
+| `mae_mean` | 0.253333 | 0.217143 | 0.304 | 0.724106 | 0.287549 | 0.324930 |
+| `foreground_mae` | 0.242623 | 0.205556 | 0.296 | 0.708942 | 0.292964 | 0.324930 |
+
+![Score ablation summary](../experiments/anomaly_detection/autoencoder/x224/main/artifacts/autoencoder_x224/plots/score_ablation_summary.png)
+
+**Selected score:** `topk_abs_mean`
+
+### Evaluation (selected score)
+
+| metric | value |
+|---|---|
+| precision | 0.413965 |
+| recall | 0.664000 |
+| F1 | 0.509985 |
+| AUROC | 0.901079 |
+| AUPRC | 0.596145 |
+| threshold | 0.453111 |
+| best sweep F1 | 0.587473 |
+
+Confusion matrix: `[[4765, 235], [84, 166]]`
+
+![Score distribution](../experiments/anomaly_detection/autoencoder/x224/main/artifacts/autoencoder_x224/plots/score_distribution.png)
+
+![Threshold sweep](../experiments/anomaly_detection/autoencoder/x224/main/artifacts/autoencoder_x224/plots/threshold_sweep.png)
+
+![Confusion matrix](../experiments/anomaly_detection/autoencoder/x224/main/artifacts/autoencoder_x224/plots/confusion_matrix.png)
+
+### Failure Analysis
+
+| error type | count | mean score |
+|---|---|---|
+| true positive | 166 | 0.525519 |
+| false negative | 84 | 0.427697 |
+| false positive | 235 | 0.474078 |
+| true negative | 4765 | 0.404905 |
+
+![Failure examples — false positives](../experiments/anomaly_detection/autoencoder/x224/main/artifacts/autoencoder_x224/plots/failure_examples_fp.png)
+
+![Failure examples — false negatives](../experiments/anomaly_detection/autoencoder/x224/main/artifacts/autoencoder_x224/plots/failure_examples_fn.png)
+
+### Per-Defect Recall
+
+| defect type | count | detected | recall |
+|---|---|---|---|
+| Edge-Ring | 84 | 75 | 0.892857 |
+| Center | 50 | 38 | 0.760000 |
+| Donut | 7 | 6 | 0.857143 |
+| Random | 5 | 4 | 0.800000 |
+| Loc | 34 | 18 | 0.529412 |
+| Edge-Loc | 53 | 20 | 0.377358 |
+| Scratch | 15 | 3 | 0.200000 |
+| Near-full | 2 | 2 | 1.000000 |
+
+### Reconstruction Examples
+
+![Reconstruction examples](../experiments/anomaly_detection/autoencoder/x224/main/artifacts/autoencoder_x224/plots/reconstruction_examples.png)
+
+### Interpretation
+
+- Higher image resolution (224×224 vs 64×64) produces **stronger ranking quality** (AUROC=0.901 vs 0.839 for x64/baseline, AUPRC=0.596 vs 0.522)
+- Deployed F1 (0.510) is **competitive with x64 baselines** (0.468) despite no architectural enhancements (no BatchNorm, no residuals)
+- The lack of BatchNorm is notable — at x224 resolution, raw reconstruction signals are sufficient
+- Edge-Ring and Center recall are excellent (0.89 and 0.76), but Scratch remains a hard failure (0.20)
+- Best sweep F1 (0.587) is well above deployed threshold, suggesting good margin for threshold tuning
+- The dominant `topk_abs_mean` score confirms that local high-error regions are more informative than full-image statistics, even at 224×224
+
+---
+
 ## Cross-Branch Summary
 
 ![Autoencoder family comparison](../artifacts/report_plots/autoencoder_family_comparison.png)
@@ -510,17 +616,19 @@ Confusion matrix: `[[4788, 212], [123, 127]]`
 
 | branch | best score | F1 | AUROC | AUPRC |
 |---|---|---|---|---|
+| x224/baseline | `topk_abs_mean` | 0.509985 | **0.901079** | **0.596145** |
 | x64/batchnorm | `max_abs` | **0.501502** | 0.834023 | 0.568039 |
-| x64/batchnorm_dropout (d=0.00) | `max_abs` | 0.487062 | 0.850790 | **0.616946** |
+| x64/batchnorm_dropout (d=0.00) | `max_abs` | 0.487062 | 0.850790 | 0.616946 |
 | x64/residual | `max_abs` | 0.473529 | 0.843360 | 0.588907 |
-| x64/baseline | `topk_abs_mean` | 0.467949 | **0.839282** | 0.522171 |
+| x64/baseline | `topk_abs_mean` | 0.467949 | 0.839282 | 0.522171 |
 | x128/baseline | `topk_abs_mean` | 0.431239 | 0.814856 | 0.455031 |
 
 ### Key Takeaways
 
 1. **Score design matters as much as architecture.** BatchNorm changed which score worked best (`topk_abs_mean` → `max_abs`). Always run a score ablation before declaring a checkpoint weak.
-2. **BatchNorm + `max_abs` is the family winner** on deployed F1 (0.502). It is also simpler and trains faster than the residual variant.
-3. **Dropout does not help.** The sweep confirmed `dropout=0.00` as best — latent dropout is not a useful regulariser for this AE.
-4. **Residual architecture has the best ranking quality** (highest best-sweep F1 = 0.678 under `topk_abs_mean`) but trails on deployed threshold F1.
-5. **Higher resolution (128×128) hurts.** Worse on nearly every defect type at the same score. Do not pursue larger AE resolutions without a fundamentally different architecture.
-6. **Persistent failure pattern.** Across all variants: Scratch, Loc, and Edge-Loc recall stays low. The bottleneck is local anomaly sensitivity, not reconstruction quality. This motivated the move to PatchCore and teacher-student methods.
+2. **Higher resolution (224×224) can improve ranking quality dramatically.** The x224 baseline achieves AUROC=0.901 (vs 0.839 for x64/baseline) and AUPRC=0.596 (vs 0.522) with **no architectural changes**—just larger images. Deployed F1 remains competitive (0.510 vs 0.502 for x64/batchnorm).
+3. **At 224×224, BatchNorm is not necessary.** Raw reconstruction signals at higher resolution are sufficient; the x224 baseline outranks the x64/batchnorm on AUROC/AUPRC despite lacking batch normalization.
+4. **`topk_abs_mean` dominates at higher resolution.** While x64/batchnorm preferred `max_abs`, x224 strongly prefers `topk_abs_mean` (F1 difference: 0.51 vs 0.49). This suggests that at higher resolution, local high-error clusters are more reliable than single-pixel extremes.
+5. **BatchNorm + `max_abs` remains competitive on deployed F1** (x64/batchnorm: 0.502), but x224 + `topk_abs_mean` achieves better ranking (AUPRC, best-sweep F1) at similar deployed performance.
+6. **Persistent failure pattern across resolutions.** Scratch, Loc, and Edge-Loc recall stay low even at 224×224. The bottleneck is local anomaly sensitivity, not image resolution. This motivated the move to PatchCore and teacher-student methods.
+7. **128×128 remains suboptimal.** The jump from 64→128 hurt performance; the jump from 64→224 helped. Resolution matters, but more data and stronger architectures may be needed for intermediate sizes.

@@ -6,6 +6,7 @@ from __future__ import annotations
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
+from tqdm.auto import tqdm
 
 from wafer_defect.scoring import reconstruction_mse
 from wafer_defect.training.common import EpochMetrics
@@ -16,6 +17,8 @@ def run_autoencoder_epoch(
     dataloader: DataLoader,
     device: torch.device,
     optimizer: torch.optim.Optimizer | None = None,
+    progress_desc: str | None = None,
+    leave_progress: bool = False,
 ) -> EpochMetrics:
     is_training = optimizer is not None
     model.train(is_training)
@@ -23,7 +26,11 @@ def run_autoencoder_epoch(
     total_loss = 0.0
     total_items = 0
 
-    for inputs, labels in dataloader:
+    iterator = dataloader
+    if progress_desc:
+        iterator = tqdm(dataloader, desc=progress_desc, leave=leave_progress)
+
+    for inputs, labels in iterator:
         inputs = inputs.to(device)
         labels = labels.to(device)
 

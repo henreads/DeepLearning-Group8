@@ -54,11 +54,13 @@ image = (
         "pandas>=2.2",
         "scikit-learn>=1.5",
         "matplotlib>=3.9",
+        "seaborn>=0.13",
         "torch>=2.2",
         "torchvision>=0.17",
         "tqdm>=4.66",
     )
     .add_local_python_source("wafer_defect", copy=True)
+    .add_local_dir("configs", remote_path=f"{REMOTE_PROJECT_ROOT}/configs", copy=True)
     .add_local_dir("scripts", remote_path=f"{REMOTE_PROJECT_ROOT}/scripts", copy=True)
     .add_local_dir(
         "experiments/anomaly_detection/teacher_student/resnet50/x224/main",
@@ -205,7 +207,7 @@ def _prepare_processed_dataset() -> None:
         REMOTE_ARTIFACT_DIR: artifact_volume,
     },
 )
-def run_ts_remote() -> dict[str, Any]:
+def run_ts_remote(fresh_train: bool = False) -> dict[str, Any]:
     _prepare_processed_dataset()
     manifests: dict[str, Any] = {}
     for phase in ["train", "eval", "sweep"]:
@@ -218,6 +220,8 @@ def run_ts_remote() -> dict[str, Any]:
             "--phase",
             phase,
         ]
+        if phase == "train" and fresh_train:
+            command.append("--fresh-train")
         print(f"[ts-resnet50-x224-main] launching phase={phase}: {' '.join(command)}", flush=True)
         subprocess.run(command, check=True, cwd=REMOTE_PROJECT_ROOT)
         artifact_volume.commit()
@@ -232,8 +236,8 @@ def run_ts_remote() -> dict[str, Any]:
 
 
 @app.local_entrypoint()
-def main(sync_back: bool = True) -> None:
-    result = run_ts_remote.remote()
+def main(sync_back: bool = True, fresh_train: bool = False) -> None:
+    result = run_ts_remote.remote(fresh_train=fresh_train)
     print(json.dumps(result, indent=2))
     if sync_back:
         _download_artifacts(str(LOCAL_ARTIFACT_DIR), "/ts_resnet50_x224")

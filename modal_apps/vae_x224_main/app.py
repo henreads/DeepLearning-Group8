@@ -59,11 +59,13 @@ image = (
         "pandas>=2.2",
         "scikit-learn>=1.5",
         "matplotlib>=3.9",
+        "seaborn>=0.13",
         "torch>=2.2",
         "torchvision>=0.17",
         "tqdm>=4.66",
     )
     .add_local_python_source("wafer_defect", copy=True)
+    .add_local_dir("configs", remote_path=f"{REMOTE_PROJECT_ROOT}/configs", copy=True)
     .add_local_dir("scripts", remote_path=f"{REMOTE_PROJECT_ROOT}/scripts", copy=True)
     .add_local_dir(
         "experiments/anomaly_detection/vae/x224/main",

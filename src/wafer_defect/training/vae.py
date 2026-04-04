@@ -6,6 +6,7 @@ from __future__ import annotations
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
+from tqdm.auto import tqdm
 
 from wafer_defect.models.vae import VAEOutput
 from wafer_defect.scoring import normalized_kl_divergence, reconstruction_mse
@@ -18,6 +19,8 @@ def run_vae_epoch(
     device: torch.device,
     beta: float,
     optimizer: torch.optim.Optimizer | None = None,
+    progress_desc: str | None = None,
+    leave_progress: bool = False,
 ) -> EpochMetrics:
     is_training = optimizer is not None
     model.train(is_training)
@@ -27,7 +30,11 @@ def run_vae_epoch(
     total_kl_loss = 0.0
     total_items = 0
 
-    for inputs, labels in dataloader:
+    iterator = dataloader
+    if progress_desc:
+        iterator = tqdm(dataloader, desc=progress_desc, leave=leave_progress)
+
+    for inputs, labels in iterator:
         inputs = inputs.to(device)
         labels = labels.to(device)
 
