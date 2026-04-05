@@ -52,6 +52,12 @@ Download the latest artifacts again without rerunning:
 modal run modal_apps/patchcore_effb1_x240/app.py::download_artifacts
 ```
 
+Prepare the shared x240 processed dataset cache only:
+
+```powershell
+modal run modal_apps/patchcore_effb1_x240/app.py::prepare_processed_data
+```
+
 If you launch `--run-extras`, the remote run commits the main benchmark artifacts before starting holdout and UMAP. That means you can open a second terminal and pull the already-finished main artifacts immediately with:
 
 ```powershell
@@ -61,9 +67,11 @@ modal run modal_apps/patchcore_effb1_x240/app.py::download_artifacts
 ## Volumes
 
 - Raw-data volume: `wafer-defect-lswmd-raw`
+- Processed-data volume: `wafer-defect-wm811k-x240-processed`
 - Artifact volume: `wafer-defect-patchcore-effb1-x240-artifacts`
 
 The remote app mounts:
 
 - `wafer-defect-lswmd-raw` at `/root/project/data/raw`
+- `wafer-defect-wm811k-x240-processed` at `/root/project/data/processed/x240/wm811k`
 - `wafer-defect-patchcore-effb1-x240-artifacts` at `/root/project/experiments/anomaly_detection/patchcore/efficientnet_b1/x240/main/artifacts`

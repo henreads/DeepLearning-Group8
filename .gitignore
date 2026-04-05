@@ -14,3 +14,4 @@ venv/
 .DS_Store
 kaggle_outputs/
 uploads/
+.claude

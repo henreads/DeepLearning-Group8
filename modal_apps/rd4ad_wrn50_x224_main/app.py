@@ -1,19 +1,23 @@
 from __future__ import annotations
 
+import csv
 import json
 from pathlib import Path
 import shutil
 import subprocess
 import sys
+import time
 from typing import Any
 
 import modal
 
 
-APP_NAME = "wafer-defect-patchcore-effb1-x240"
+APP_NAME = "wafer-defect-rd4ad-wrn50-x224-main"
 RAW_VOLUME_NAME = "wafer-defect-lswmd-raw"
-PROCESSED_VOLUME_NAME = "wafer-defect-wm811k-x240-processed"
-ARTIFACT_VOLUME_NAME = "wafer-defect-patchcore-effb1-x240-artifacts"
+PROCESSED_VOLUME_NAME = "wafer-defect-wm811k-x224-processed"
+ARTIFACT_VOLUME_NAME = "wafer-defect-rd4ad-wrn50-x224-main-artifacts"
+
+ARTIFACT_SUBDIR = "rd4ad_wrn50_x224"
 
 
 def _resolve_local_repo_root() -> Path:
@@ -36,21 +40,25 @@ LOCAL_ARTIFACT_DIR = (
     LOCAL_REPO_ROOT
     / "experiments"
     / "anomaly_detection"
-    / "patchcore"
-    / "efficientnet_b1"
-    / "x240"
+    / "rd4ad"
+    / "wideresnet50"
+    / "x224"
     / "main"
     / "artifacts"
 )
 
 REMOTE_PROJECT_ROOT = "/root/project"
 REMOTE_RAW_DIR = f"{REMOTE_PROJECT_ROOT}/data/raw"
-REMOTE_PROCESSED_DIR = f"{REMOTE_PROJECT_ROOT}/data/processed/x240/wm811k"
+REMOTE_PROCESSED_DIR = f"{REMOTE_PROJECT_ROOT}/data/processed/x224/wm811k"
 REMOTE_ARTIFACT_DIR = (
-    f"{REMOTE_PROJECT_ROOT}/experiments/anomaly_detection/patchcore/efficientnet_b1/x240/main/artifacts"
+    f"{REMOTE_PROJECT_ROOT}/experiments/anomaly_detection/rd4ad/wideresnet50/x224/main/artifacts"
 )
-REMOTE_RUNNER = f"{REMOTE_PROJECT_ROOT}/scripts/run_patchcore_effb1_x240_notebook.py"
+REMOTE_TRAIN_CONFIG = (
+    f"{REMOTE_PROJECT_ROOT}/experiments/anomaly_detection/rd4ad/wideresnet50/x224/main/train_config.toml"
+)
+REMOTE_RUNNER = f"{REMOTE_PROJECT_ROOT}/scripts/train_rd4ad.py"
 REMOTE_PREPARE_SCRIPT = f"{REMOTE_PROJECT_ROOT}/scripts/prepare_wm811k.py"
+ARTIFACT_COMMIT_INTERVAL_SECONDS = 300
 
 image = (
     modal.Image.debian_slim(python_version="3.11")
@@ -59,22 +67,17 @@ image = (
         "pandas>=2.2",
         "scikit-learn>=1.5",
         "matplotlib>=3.9",
-        "umap-learn>=0.5.6",
         "torch>=2.2",
         "torchvision>=0.17",
         "tqdm>=4.66",
+        "umap-learn>=0.5.6",
     )
     .add_local_python_source("wafer_defect", copy=True)
     .add_local_dir("configs", remote_path=f"{REMOTE_PROJECT_ROOT}/configs", copy=True)
     .add_local_dir("scripts", remote_path=f"{REMOTE_PROJECT_ROOT}/scripts", copy=True)
     .add_local_dir(
-        "data/dataset/x240/benchmark_50k_5pct",
-        remote_path=f"{REMOTE_PROJECT_ROOT}/data/dataset/x240/benchmark_50k_5pct",
-        copy=True,
-    )
-    .add_local_dir(
-        "experiments/anomaly_detection/patchcore/efficientnet_b1/x240/main_one_layer",
-        remote_path=f"{REMOTE_PROJECT_ROOT}/experiments/anomaly_detection/patchcore/efficientnet_b1/x240/main_one_layer",
+        "experiments/anomaly_detection/rd4ad/wideresnet50/x224/main",
+        remote_path=f"{REMOTE_PROJECT_ROOT}/experiments/anomaly_detection/rd4ad/wideresnet50/x224/main",
         copy=True,
         ignore=["artifacts", "artifacts/**"],
     )
@@ -96,47 +99,52 @@ def _run_modal_cli(args: list[str], *, capture_output: bool = False) -> subproce
     )
 
 
-def _download_artifacts(local_artifact_dir: str) -> None:
+def _download_artifacts(local_artifact_dir: str, remote_subdir: str) -> None:
     local_dir = Path(local_artifact_dir).resolve()
     local_dir.mkdir(parents=True, exist_ok=True)
-    remote_base = "/patchcore_efficientnet_b1_one_layer"
-    local_base = local_dir / "patchcore_efficientnet_b1_one_layer"
-    local_base.mkdir(parents=True, exist_ok=True)
-    listing = _run_modal_cli(
-        ["volume", "ls", ARTIFACT_VOLUME_NAME, remote_base, "--json"],
-        capture_output=True,
-    )
-    entries = json.loads(listing.stdout)
-    for entry in entries:
-        remote_name = str(entry["Filename"])
-        if Path(remote_name).name == "processed":
-            continue
-        local_target = local_dir / Path(remote_name)
-        if str(entry.get("Type", "")).lower() == "dir":
-            local_target.mkdir(parents=True, exist_ok=True)
-        else:
+    keep_checkpoint_names = {"best_model.pt", "latest_checkpoint.pt"}
+
+    def _download_tree(remote_dir: str) -> None:
+        listing = _run_modal_cli(["volume", "ls", ARTIFACT_VOLUME_NAME, remote_dir, "--json"], capture_output=True)
+        entries = json.loads(listing.stdout)
+        for entry in entries:
+            remote_name = str(entry["Filename"])
+            local_target = local_dir / Path(remote_name)
+            entry_type = str(entry.get("Type", "")).lower()
+            if entry_type == "dir":
+                local_target.mkdir(parents=True, exist_ok=True)
+                _download_tree(f"/{remote_name}")
+                continue
+            if (
+                local_target.suffix == ".pt"
+                and (
+                    local_target.name.startswith("checkpoint_epoch_")
+                    or (
+                        "checkpoints" in local_target.parts
+                        and local_target.name not in keep_checkpoint_names
+                    )
+                )
+            ):
+                continue
             local_target.parent.mkdir(parents=True, exist_ok=True)
-        _run_modal_cli(["volume", "get", ARTIFACT_VOLUME_NAME, f"/{remote_name}", str(local_target), "--force"])
+            _run_modal_cli(["volume", "get", ARTIFACT_VOLUME_NAME, f"/{remote_name}", str(local_target), "--force"])
+
+    _download_tree(remote_subdir)
 
 
 def _cached_dataset_is_valid(metadata_path: Path, arrays_dir: Path) -> bool:
     if not metadata_path.exists() or not arrays_dir.exists():
         return False
 
-    expected_prefix = f"data/processed/x240/wm811k/{arrays_dir.name}/"
+    expected_prefix = f"data/processed/x224/wm811k/{arrays_dir.name}/"
     with metadata_path.open("r", encoding="utf-8", newline="") as handle:
-        header = handle.readline()
-        if not header:
-            return False
-        first_row = handle.readline().strip()
+        reader = csv.DictReader(handle)
+        first_row = next(reader, None)
 
     if not first_row:
         return False
 
-    columns = [c.strip() for c in header.strip().split(",")]
-    values = [v.strip() for v in first_row.split(",")]
-    row = dict(zip(columns, values))
-    sample_path = str(row.get("array_path", "")).strip()
+    sample_path = str(first_row.get("array_path", "")).strip()
     if not sample_path:
         return False
     if ":\\" in sample_path or sample_path.startswith("C:/") or "\\" in sample_path:
@@ -158,13 +166,13 @@ def _prepare_processed_dataset() -> Path:
     metadata_path = Path(REMOTE_PROCESSED_DIR) / "metadata_50k_5pct.csv"
     arrays_dir = Path(REMOTE_PROCESSED_DIR) / "arrays_50k_5pct"
     if _cached_dataset_is_valid(metadata_path, arrays_dir):
-        print(f"[patchcore-effb1-x240] reusing cached processed dataset: {metadata_path}", flush=True)
+        print(f"[{APP_NAME}] reusing cached processed dataset: {metadata_path}", flush=True)
         return metadata_path
     if metadata_path.exists() or arrays_dir.exists():
-        print("[patchcore-effb1-x240] cached processed dataset is stale; rebuilding", flush=True)
+        print(f"[{APP_NAME}] cached processed dataset is stale; rebuilding", flush=True)
         _clear_processed_cache(metadata_path, arrays_dir)
 
-    config_path = Path("/tmp/patchcore_effb1_x240_prepare_wm811k.toml")
+    config_path = Path(f"/tmp/{APP_NAME}_prepare_wm811k.toml")
     config_path.write_text(
         "\n".join(
             [
@@ -176,7 +184,7 @@ def _prepare_processed_dataset() -> Path:
                 f'metadata_50k_csv = "{REMOTE_PROCESSED_DIR}/metadata_50k.csv"',
                 f'metadata_50k_5pct_csv = "{REMOTE_PROCESSED_DIR}/metadata_50k_5pct.csv"',
                 f'dev_metadata_csv = "{REMOTE_PROCESSED_DIR}/metadata_dev.csv"',
-                "image_size = 240",
+                "image_size = 224",
                 'normal_label = "none"',
                 'defect_label = "pattern"',
                 "",
@@ -204,27 +212,11 @@ def _prepare_processed_dataset() -> Path:
         encoding="utf-8",
     )
     command = ["python", "-u", REMOTE_PREPARE_SCRIPT, "--config", str(config_path)]
-    print(f"[patchcore-effb1-x240] preparing processed dataset: {' '.join(command)}", flush=True)
+    print(f"[{APP_NAME}] preparing processed dataset: {' '.join(command)}", flush=True)
     subprocess.run(command, check=True, cwd=REMOTE_PROJECT_ROOT)
     processed_volume.commit()
-    print("[patchcore-effb1-x240] processed dataset volume committed", flush=True)
+    print(f"[{APP_NAME}] processed dataset volume committed", flush=True)
     return metadata_path
-
-
-def _build_runner_command(*, num_workers: int, phase: str) -> list[str]:
-    return [
-        "python",
-        "-u",
-        REMOTE_RUNNER,
-        "--raw-pickle",
-        f"{REMOTE_RAW_DIR}/LSWMD.pkl",
-        "--output-dir",
-        "experiments/anomaly_detection/patchcore/efficientnet_b1/x240/main/artifacts/patchcore_efficientnet_b1_one_layer",
-        "--num-workers",
-        str(num_workers),
-        "--phase",
-        phase,
-    ]
 
 
 @app.function(
@@ -236,40 +228,67 @@ def _build_runner_command(*, num_workers: int, phase: str) -> list[str]:
         REMOTE_ARTIFACT_DIR: artifact_volume,
     },
 )
-def run_patchcore_remote(num_workers: int = 4, run_extras: bool = False) -> dict[str, Any]:
+def prepare_processed_remote() -> dict[str, str]:
+    metadata_path = _prepare_processed_dataset()
+    return {"metadata_csv": metadata_path.as_posix()}
+
+
+@app.function(
+    gpu="A10G",
+    timeout=60 * 60 * 8,
+    volumes={
+        REMOTE_RAW_DIR: raw_volume,
+        REMOTE_PROCESSED_DIR: processed_volume,
+        REMOTE_ARTIFACT_DIR: artifact_volume,
+    },
+)
+def run_rd4ad_remote() -> dict[str, Any]:
     _prepare_processed_dataset()
-    main_command = _build_runner_command(num_workers=num_workers, phase="main")
-    print(f"[patchcore-effb1-x240] launching main phase: {' '.join(main_command)}", flush=True)
-    subprocess.run(main_command, check=True, cwd=REMOTE_PROJECT_ROOT)
+    command = [
+        "python",
+        "-u",
+        REMOTE_RUNNER,
+        "--config",
+        REMOTE_TRAIN_CONFIG,
+    ]
+    print(f"[{APP_NAME}] launching runner: {' '.join(command)}", flush=True)
+    process = subprocess.Popen(command, cwd=REMOTE_PROJECT_ROOT)
+    last_commit_time = time.monotonic()
+    while True:
+        return_code = process.poll()
+        now = time.monotonic()
+        if now - last_commit_time >= ARTIFACT_COMMIT_INTERVAL_SECONDS:
+            artifact_volume.commit()
+            print(f"[{APP_NAME}] periodic artifact volume commit", flush=True)
+            last_commit_time = now
+        if return_code is not None:
+            if return_code != 0:
+                raise subprocess.CalledProcessError(return_code, command)
+            break
+        time.sleep(15)
     artifact_volume.commit()
-    print(
-        "[patchcore-effb1-x240] main benchmark artifacts committed; "
-        "you can download them now from another terminal if you want.",
-        flush=True,
-    )
+    print(f"[{APP_NAME}] artifact volume committed", flush=True)
 
-    if run_extras:
-        extras_command = _build_runner_command(num_workers=num_workers, phase="extras")
-        print(f"[patchcore-effb1-x240] launching extras phase: {' '.join(extras_command)}", flush=True)
-        subprocess.run(extras_command, check=True, cwd=REMOTE_PROJECT_ROOT)
-
-    artifact_volume.commit()
-    print("[patchcore-effb1-x240] artifact volume committed", flush=True)
-
-    manifest_path = Path(REMOTE_ARTIFACT_DIR) / "patchcore_efficientnet_b1_one_layer" / "run_manifest.json"
-    if not manifest_path.exists():
-        manifest_path = Path(REMOTE_ARTIFACT_DIR) / "patchcore_efficientnet_b1_one_layer" / "main_phase_manifest.json"
-    if manifest_path.exists():
-        return json.loads(manifest_path.read_text(encoding="utf-8"))
-    return {"output_dir": REMOTE_ARTIFACT_DIR}
+    summary_path = Path(REMOTE_ARTIFACT_DIR) / ARTIFACT_SUBDIR / "results" / "summary.json"
+    history_path = Path(REMOTE_ARTIFACT_DIR) / ARTIFACT_SUBDIR / "results" / "history.json"
+    result: dict[str, Any] = {
+        "output_dir": f"{REMOTE_ARTIFACT_DIR}/{ARTIFACT_SUBDIR}",
+        "train_config": REMOTE_TRAIN_CONFIG,
+    }
+    if summary_path.exists():
+        result["summary"] = json.loads(summary_path.read_text(encoding="utf-8"))
+    if history_path.exists():
+        history = json.loads(history_path.read_text(encoding="utf-8"))
+        result["history_len"] = len(history)
+    return result
 
 
 @app.local_entrypoint()
-def main(num_workers: int = 4, run_extras: bool = False, sync_back: bool = True) -> None:
-    result = run_patchcore_remote.remote(num_workers=num_workers, run_extras=run_extras)
+def main(sync_back: bool = True) -> None:
+    result = run_rd4ad_remote.remote()
     print(json.dumps(result, indent=2))
     if sync_back:
-        _download_artifacts(str(LOCAL_ARTIFACT_DIR))
+        _download_artifacts(str(LOCAL_ARTIFACT_DIR), f"/{ARTIFACT_SUBDIR}")
 
 
 @app.local_entrypoint()
@@ -280,22 +299,6 @@ def upload_raw_data(local_raw_pickle: str = str(LOCAL_RAW_PICKLE)) -> None:
     _run_modal_cli(["volume", "put", RAW_VOLUME_NAME, str(local_path), "/LSWMD.pkl"])
 
 
-@app.function(
-    timeout=60 * 60,
-    volumes={
-        REMOTE_RAW_DIR: raw_volume,
-        REMOTE_PROCESSED_DIR: processed_volume,
-    },
-)
-def prepare_processed_remote() -> dict[str, str]:
-    metadata_path = _prepare_processed_dataset()
-    return {
-        "processed_volume": PROCESSED_VOLUME_NAME,
-        "metadata_path": metadata_path.as_posix(),
-        "arrays_dir": f"{REMOTE_PROCESSED_DIR}/arrays_50k_5pct",
-    }
-
-
 @app.local_entrypoint()
 def prepare_processed_data() -> None:
     result = prepare_processed_remote.remote()
@@ -304,4 +307,4 @@ def prepare_processed_data() -> None:
 
 @app.local_entrypoint()
 def download_artifacts(local_artifact_dir: str = str(LOCAL_ARTIFACT_DIR)) -> None:
-    _download_artifacts(local_artifact_dir)
+    _download_artifacts(local_artifact_dir, f"/{ARTIFACT_SUBDIR}")

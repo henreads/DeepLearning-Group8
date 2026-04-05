@@ -390,6 +390,7 @@ scoring on frozen pretrained features can outperform training-from-scratch.
   \item \textbf{FastFlow:} Fit a normalising flow directly on top of frozen WideResNet50-2 spatial feature maps,
     estimating the feature distribution of normal wafers. Score test wafers by log-likelihood under the learned
     distribution. Requires training the flow head but not the backbone.
+
 \end{itemize}
 
 \textbf{Why local scoring matters:} Averaging small defects (50 pixels) with 4000+ normal pixels dilutes the signal;
@@ -578,6 +579,8 @@ The choice of 128-dimensional latent space balances two constraints: large enoug
 \end{itemize}
 
 Both reference methods underperform plain reconstruction, which suggests that the reconstruction error signal, despite its global-averaging limitation, is fundamentally more informative than probabilistic or geometric alternatives on this dataset.
+
+A later experiment (RD4AD) tested whether applying the same reconstruction principle in feature space rather than pixel space would improve performance. RD4AD trains a decoder to reconstruct frozen WideResNet50-2 teacher features from a compressed bottleneck, rather than reconstructing raw pixels. It achieves $\mathrm{F1}=0.477$, which falls below both the plain AE ($\mathrm{F1}=0.468$ baseline, $0.510$ at $224\!\times\!224$) and the BatchNorm AE ($\mathrm{F1}=0.502$). Feature-space reconstruction does not improve over pixel-space reconstruction on this dataset, suggesting that the bottleneck is the reconstruction paradigm itself rather than the representation it operates on.
 
 \subsubsection{Baseline Autoencoder Training and Score Selection}
 
@@ -1400,102 +1403,136 @@ the 70\,k holdout normals, 90\% exceed the 95th-percentile threshold calibrated 
 normals, collapsing deployed F1 to 0.097 despite a best-sweep F1 of 0.652 (AUROC 0.845). This is a
 concrete illustration of the threshold instability discussed in Section~\ref{sec:thresholding}.
 
-\section{Diagnostic Analysis: Score Overlap and Threshold Limitations}
+\section{Supervised Classifier and Pseudo-Label Generation}
+\label{sec:classifier}
 
-\textbf{The gap.} All models maintain a consistent gap between their deployed F1 and the best F1 achievable with optimal threshold selection. Score histograms reveal substantial overlap between normal and anomaly score distributions near the operating threshold, even for the best models. The key question is whether this gap arises from weak feature quality, poor geometric separability, or limitations of the 95th-percentile threshold rule itself.
+To extend evaluation beyond the 25,519 labeled defect wafers, a supervised multiclass classifier was trained on the full labeled WM-811K subset. The goal was to assign high-confidence pseudo-labels to the 638,507 unlabeled wafers and use the accepted predictions as silver labels for downstream anomaly-detection analysis.
 
-\textbf{Diagnostic tools.} This section uses two approaches to investigate. First, UMAP visualises the patch embedding geometry to check whether normal and anomaly wafers are geometrically separable. Second, threshold sweeps scan every possible cut-point on the labelled test set to measure how much performance could be recovered with a perfectly chosen threshold.
+\subsection{Classifier Design}
 
-\subsection{Embedding Geometry Analysis via UMAP}
+\textbf{Architecture.} A residual CNN is trained to predict one of nine classes: the eight known defect types plus the normal class. The backbone uses strided residual blocks with batch normalisation. Training uses weighted random sampling to counteract class imbalance, label smoothing to reduce overconfidence, and early stopping with the best checkpoint selected by validation balanced accuracy.
 
-UMAP projects patch embeddings into 2D to examine whether normal and anomalous wafers are geometrically separable. Given the small, sparse nature of wafer defects, perfect separation is not expected. The diagnostic question is what mixing pattern accounts for the gap between deployed and best-sweep F1. Figure~\ref{fig:umap_comparison} shows binary split-coloured views for the global baseline and WRN50-2 PatchCore. Figure~\ref{fig:nn_distance_vit} shows the nearest-neighbour distance distribution for ViT-B/16 PatchCore, quantifying score overlap directly in the original feature space. The backbone progression coloured by defect type is in Figure~\ref{fig:umap_3model}.
+\textbf{Split.} The labeled pool (172,950 wafers: 147,431 normal and 25,519 defect) is split 80/10/10 into train, validation, and test. No unlabeled wafers are used during training; they are only scored after the classifier is validated on held-out labeled data, and accepted predictions are retained as silver-label candidates.
+
+\subsection{Classification Results}
+
+\begin{table}[H]
+\centering
+\caption{Supervised classifier test-set performance by class (seed 07 checkpoint). Balanced accuracy = 0.918, overall accuracy = 0.959.}
+\label{tab:classifier_results}
+\begin{tabular}{lcccc}
+\toprule
+Class & Precision & Recall & F1 & Support \\
+\midrule
+Normal (none) & 0.998 & 0.962 & 0.980 & 14{,}743 \\
+Edge-Ring     & 0.970 & 0.983 & 0.977 & 968 \\
+Near-full     & 1.000 & 0.867 & 0.929 & 15 \\
+Center        & 0.800 & 0.970 & 0.877 & 430 \\
+Random        & 0.728 & 0.954 & 0.826 & 87 \\
+Donut         & 0.825 & 0.855 & 0.839 & 55 \\
+Edge-Loc      & 0.677 & 0.917 & 0.779 & 519 \\
+Scratch       & 0.571 & 0.908 & 0.701 & 119 \\
+Loc           & 0.601 & 0.847 & 0.703 & 359 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The classifier achieves strong recall across all defect classes, including the hardest ones (Scratch 0.908, Loc 0.847). Precision is lower for spatially ambiguous classes such as Scratch and Loc, consistent with the difficulty those classes present to the anomaly detection models as well. The per-class recall pattern confirms that the classifier reliably identifies most defective wafers, even if it occasionally misclassifies the specific defect type.
+
+\subsection{Pseudo-Label Quality at 0.9 Confidence}
+
+\textbf{Filtering.} All 638,507 unlabeled wafers were scored. Predictions with softmax confidence below 0.90 were rejected. This yields 417,831 accepted pseudo-labels (65.4\% of the unlabeled pool), with a mean accepted confidence of 0.947.
+
+\begin{table}[H]
+\centering
+\caption{High-confidence silver-label candidate summary on the 638,507 unlabeled wafers.}
+\label{tab:pseudolabel_summary}
+\begin{tabular}{lc}
+\toprule
+Metric & Value \\
+\midrule
+Wafers scored & 638{,}507 \\
+Retained as silver-label candidates ($\geq 0.90$ conf.) & 417{,}831 (65.4\%) \\
+Mean confidence of retained candidates & 0.947 \\
+Retained candidates predicted as defective & 127{,}918 (30.6\%) \\
+Retained candidates predicted as normal & 289{,}913 (69.4\%) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Why 0.90 confidence is used as a conservative silver-label threshold.} The 0.90 threshold retains only predictions where the classifier assigns at least 90\% probability to a single class. Because the classifier achieves 0.918 balanced accuracy on a held-out labeled test set, this threshold is used as a conservative filter to select more reliable predictions. The retained predictions should therefore be interpreted as silver labels: high-confidence model-derived labels that are useful for large-scale downstream analysis, but still noisier than human-verified ground truth. Results that rely on these labels should be read as approximate and threshold-dependent.
 
 \begin{figure}[H]
 \centering
-\begin{subfigure}[t]{0.48\linewidth}
-  \includegraphics[width=\linewidth]{experiments/anomaly_detection/backbone_embedding/wide_resnet50_2/x64/baseline/artifacts/umaps/wideresnet50A_embedding_baseline/evaluation/plots/embedding_umap.png}
-  \caption{WRN50-2 center-distance baseline: anomalies (red) are distributed
-  uniformly throughout the same islands as normals. No geometric threshold can
-  reliably separate them.}
+\begin{subfigure}[t]{\linewidth}
+  \centering
+  \includegraphics[width=\linewidth, height=0.32\textheight, keepaspectratio]{images/umap_by_split_10a_style.notebook.png}
+  \caption{Coloured by data split: labeled normal (blue), labeled defect (orange), pseudo-unlabeled (dark blue). Unlabeled wafers follow the same manifold structure as the labeled data, confirming that the classifier embedding generalises to the full dataset.}
+  \label{fig:classifier_umap_split}
+\end{subfigure}
+\vspace{0.2cm}
+\begin{subfigure}[t]{\linewidth}
+  \centering
+  \includegraphics[width=\linewidth, height=0.38\textheight, keepaspectratio]{images/umap_by_pseudo_label_10a_style.notebook.png}
+  \caption{Coloured by predicted class. Each defect type forms a distinct cluster well separated from the normal mass (yellow-green), confirming geometrically meaningful class boundaries.}
+  \label{fig:classifier_umap_pseudolabel}
+\end{subfigure}
+\caption{UMAP of seed-07 classifier embeddings. Fit on labeled reference wafers; unlabeled wafers projected via transform. Generated by \texttt{experiments/classifier/multiclass/x64/umap/notebook.ipynb}.}
+\label{fig:classifier_umap}
+\end{figure}
+
+\section{Diagnostic Analysis: Embedding Geometry}
+\label{sec:diagnostic}
+
+All models show a consistent gap between deployed F1 and best-sweep F1 (see Figure~\ref{fig:score_distributions}).
+The score distribution overlaps already documented there explain the quantitative gap.
+What remains is a geometric question: are normal and anomalous wafers separable in feature space at all,
+or does the mixing reflect the problem structure itself?
+
+Figure~\ref{fig:umap_comparison} addresses this with split-coloured UMAP views at two operating points.
+
+\begin{figure}[H]
+\centering
+\begin{subfigure}[t]{\linewidth}
+  \centering
+  \includegraphics[width=\linewidth, height=0.28\textheight, keepaspectratio]{images/wrn/embedding_umap.png}
+  \caption{WRN50-2 center-distance baseline: anomalies are uniformly mixed throughout the normal manifold.}
   \label{fig:umap_wrn_baseline}
 \end{subfigure}
-\hfill
-\begin{subfigure}[t]{0.48\linewidth}
-  \includegraphics[width=\linewidth]{experiments/anomaly_detection/patchcore/wideresnet50/x224/multilayer_umap_followup/artifacts/patchcore-wideresnet50-multilayer-umap/topk_mb50k_r005_x224/plots/umap_by_split.png}
-  \caption{WRN50-2 PatchCore $224\!\times\!224$: anomalies begin to concentrate
-  on manifold boundaries, thinner branches, and side islands rather than the
-  dominant normal core, healthier geometry than the baseline, but still mixed.}
+
+\vspace{0.15cm}
+
+\begin{subfigure}[t]{\linewidth}
+  \centering
+  \includegraphics[width=\linewidth, height=0.28\textheight, keepaspectratio]{images/wrn/umap_by_split.png}
+  \caption{WRN50-2 PatchCore $224\!\times\!224$: anomalies shift toward manifold boundaries and side islands, but the geometry remains mixed.}
   \label{fig:umap_wrn_patchcore}
 \end{subfigure}
-\caption{Split-coloured UMAP comparison: global center-distance baseline (left)
-vs. the WideResNet50-2 PatchCore $224\!\times\!224$ checkpoint (right).
-Anomaly wafers are shown in red, normals in blue/grey. The progression from
-completely uniform mixing to boundary-concentrated anomalies reflects the gain
-from switching to local patch-level scoring.
-Left panel generated by \texttt{experiments/anomaly\_detection/backbone\_embedding/wide\_resnet50\_2/x64/baseline/notebook.ipynb};
-right panel by \texttt{experiments/anomaly\_detection/patchcore/wideresnet50/x224/multilayer\_umap\_followup/notebook.ipynb}.}
+\caption{Split-coloured UMAP: anomalies in red, normals in blue/grey.
+Top panel from \texttt{backbone\_embedding/wide\_resnet50\_2/x64/baseline/notebook.ipynb};
+bottom panel from \texttt{patchcore/wideresnet50/x224/multilayer\_umap/notebook.ipynb}.}
 \label{fig:umap_comparison}
 \end{figure}
 
-\begin{figure}[H]
-\centering
-\includegraphics[width=\linewidth]{experiments/anomaly_detection/patchcore/vit_b16/x224/main/artifacts/patchcore_vit_b16_5pct/main_5pct/plots/nn_distance_distribution.png}
-\caption{Nearest-neighbour distance distribution for ViT-B/16 PatchCore at $224\!\times\!224$.
-The anomaly score is the maximum cosine distance from any of the 196 patch embeddings to its nearest
-neighbour in the coreset memory bank. All three populations are shown on the same axes: validation
-normals (dark, used only to derive the 95th-percentile threshold), test normals (blue), and test
-anomalies (orange). The dashed red line marks the deployed threshold $\tau_{0.95}$; the dotted green
-line marks the best-sweep threshold. The overlap between test-normal and test-anomaly distributions
-near $\tau_{0.95}$ explains the gap between deployed F1 (0.595) and best-sweep F1 (0.651):
-low-scoring anomalies fall below the threshold and are missed, while high-scoring normals exceed it.
-Generated by \texttt{experiments/anomaly\_detection/patchcore/vit\_b16/x224/main/notebook.ipynb}.}
-\label{fig:nn_distance_vit}
-\end{figure}
-
-\textbf{What the diagnostics reveal.} Overlapping geometry reflects the problem structure: defects are small,
-sparse patches that barely perturb global embeddings. Global center-distance scoring fails
-(Figure~\ref{fig:umap_comparison}, left) because no geometric threshold separates mixed clusters.
-Patch-level methods succeed by scoring each patch independently against the memory bank, and the
-resulting score distributions (Figure~\ref{fig:nn_distance_vit}) show that test-normal and test-anomaly
-scores still overlap near the deployed threshold even for the best model. The gap between deployed F1
-(0.595) and best-sweep F1 (0.651) reflects threshold placement within this overlap region, not weak
-feature quality.
+The top panel confirms that global center-distance scoring fails geometrically: no threshold in embedding space
+can separate the uniformly mixed clusters. The bottom panel shows that patch-level scoring improves the geometry,
+with anomalies concentrated at manifold boundaries rather than throughout the normal core. The mixing does not
+disappear, however. Defects are sparse and small, producing only a handful of anomalous patches per wafer.
+This structural property, not feature quality or threshold choice, is the primary reason a gap between
+deployed and best-sweep F1 persists across all models.
 
 \section{Thresholding Limitations and Discussion}
+\label{sec:thresholding}
 
-The 95th-percentile validation-normal threshold is fair, reproducible, and
-requires no defect labels.  However, three consistent observations from the
-diagnostics show its limitations:
+The 95th-percentile validation-normal threshold is fair, reproducible, and requires no defect labels. However, the diagnostics reveal a consistent pattern: moderate deployed F1 values are not primarily a threshold placement problem. They reflect the structure of the score distributions themselves.
 
-\begin{itemize}[leftmargin=1.5em]
-  \item \textbf{Score overlap.} Even the best models show substantial overlap
-        between normal and anomaly score distributions.  The histogram for
-        the WRN PatchCore x224 selected variant (Figure~\ref{fig:wrn_x224_diag})
-        shows that the normal and anomaly distributions overlap near the
-        operating threshold.
-  \item \textbf{Geometric overlap.} UMAP figures show that anomalies are not
-        cleanly peeled off from the normal manifold. They occupy boundaries
-        and tails, but do not form an isolated cluster.
-  \item \textbf{Sweep headroom.} Best-sweep F1 is systematically $0.06$--$0.08$
-        above deployed-threshold F1 across the strongest models (e.g.\ WRN
-        PatchCore x224: deployed 0.549, sweep 0.634).  This gap represents
-        the threshold-selection headroom that a more principled rule could capture.
-\end{itemize}
+\textbf{Score overlap.} Even the strongest models show substantial overlap between normal and anomaly score distributions near the operating threshold (Figure~\ref{fig:score_distributions}). A large fraction of low-scoring defects fall below the 95th-percentile cut regardless of where it is placed, because those defects score similarly to normal wafers.
 
-Possible directions to improve thresholding beyond the 95th-percentile rule:
-\begin{itemize}[leftmargin=1.5em]
-  \item Adaptive thresholding calibrated on validation score structure.
-  \item Local-density or manifold-aware decision boundaries informed by embedding geometry.
-        The current UMAP-space KNN follow-ups are not yet sufficient:
-        for example, the ViT-B/16 branch keeps a very strong original wafer
-        score while its 2-D UMAP-KNN score collapses to near-random ranking.
-  \item Hybrid supervision: if any defect examples can be used for threshold tuning
-        without contaminating training, they could inform a more calibrated operating point.
-\end{itemize}
+\textbf{Geometric overlap.} The UMAP visualisations in Section~\ref{sec:diagnostic} show that anomalies do not form a cleanly isolated cluster in feature space. They concentrate at manifold boundaries and satellite regions, but are not fully separated from the normal mass. This is a structural property of the problem: defects are sparse and small, contributing only a handful of anomalous patches per wafer, which limits how far the wafer-level anomaly score can deviate from the normal distribution.
 
-Not every main-report winner has been reevaluated on the expanded holdout yet.
-The holdout bundle is therefore a stability check on the reevaluated subset,
-not a universal replacement benchmark.
+\textbf{Sweep headroom.} Best-sweep F1 is systematically $0.06$--$0.08$ above deployed F1 across the strongest models. WRN PatchCore x224 achieves a deployed F1 of 0.549 against a sweep ceiling of 0.634, and ViT-B/16 PatchCore achieves 0.595 against 0.651. This gap represents the maximum gain available through threshold selection alone, with all model weights fixed. It is real headroom, but capturing it requires knowing the test labels at deployment time, which is not available.
+
+\textbf{Directions for improvement.} Three avenues are viable in principle. Manifold-aware calibration would use the embedding geometry already available from UMAP diagnostics: anomalies that sit at manifold boundaries should be farther from their nearest normal neighbours in feature space, and this distance could be used to derive a more geometrically grounded threshold. Adaptive thresholding calibrated on the shape of the validation-normal score distribution, for example by fitting a parametric tail model and deriving a threshold from it, could improve on the fixed-percentile rule without requiring any defect labels. Finally, if even a small number of confirmed defective wafers were available at deployment for threshold calibration only, they could inform a more principled operating point without contaminating the training set.
 
 \section{Comparison with Published Work}
 
@@ -1555,59 +1592,77 @@ implementation quality.
 
 \section{Conclusion}
 
-This project demonstrates a clear and reproducible progression in wafer-map
-anomaly detection, implemented entirely in PyTorch:
+This project presents a systematic study of normal-only wafer anomaly detection on WM-811K,
+progressing through four experimental phases from reconstruction baselines to local pretrained-feature scoring.
+The central finding is that the combination of a strong frozen backbone and patch-level nearest-neighbour scoring
+substantially and consistently outperforms all reconstruction-based and globally aggregated alternatives,
+regardless of architectural improvements within those families.
 
-\begin{enumerate}[leftmargin=1.5em]
-  \item Plain reconstruction models establish a viable pipeline and show that
-        local-defect sensitivity is the main limitation.
-  \item Better in-domain autoencoder variants and score selection improve
-        performance without new training. The BatchNorm autoencoder scored with
-        maximum absolute pixel error is the strongest reconstruction baseline
-        ($\mathrm{F1}=0.502$).
-  \item Pretrained backbones with global center-distance scoring are consistently
-        weak regardless of backbone size.
-  \item Local anomaly scoring methods (teacher-student distillation and
-        PatchCore) produce the strongest results. The score composition
-        choice interacts strongly with the checkpoint. Post-training score
-        sweeps are as important as architecture choices.
-  \item Native high-resolution preprocessing provides a consistent and material
-        lift: EfficientNet-B0 gained $+0.077$ F1 from $64\!\times\!64$ to
-        $224\!\times\!224$. EfficientNet-B1 at $240\!\times\!240$ reaches
-        $\mathrm{F1}=0.591$, the strongest CNN result in the project.
-  \item The best completed result on the main benchmark, ViT-B/16 PatchCore at
-        direct $224\!\times\!224$, achieves $\mathrm{F1}=0.595$,
-        $\mathrm{AUROC}=0.956$, and $\mathrm{AUPRC}=0.671$. It leads
-        EfficientNet-B1 by only 0.004 F1, with the ViT's advantage concentrated
-        in Scratch, Loc, and Edge-Loc recall.
-\end{enumerate}
+\textbf{Experimental progression.} Convolutional autoencoders establish a viable pipeline and expose the
+global-averaging bottleneck: small defects such as Scratch and Loc survive global pixel-error averaging
+and remain largely undetected even at native $224\!\times\!224$ resolution (best reconstruction F1 = 0.502).
+Pretrained backbones with center-distance scoring confirm that feature richness alone does not help when
+all spatial information is collapsed into a single embedding vector (both baselines below F1 = 0.25).
+Teacher-student distillation and PatchCore both escape the bottleneck through patch-level scoring,
+with PatchCore requiring no training beyond a single forward pass. Scaling to native resolution and
+stronger backbones provides a further consistent lift, with EfficientNet-B1 at $240\!\times\!240$
+reaching F1 = 0.591 on the main benchmark and F1 = 0.596 on the expanded holdout.
 
-Strong pretrained backbones combined with patch-level nearest-neighbour scoring substantially outperform
-reconstruction-based and globally aggregated alternatives. The remaining bottleneck is score-distribution
-overlap and threshold calibration, pointing toward more principled operating-point selection as the primary avenue for further improvement.
+\textbf{Best results.} ViT-B/16 PatchCore at direct $224\!\times\!224$ achieves the strongest main-benchmark
+result: $\mathrm{F1}=0.595$, $\mathrm{AUROC}=0.956$, $\mathrm{AUPRC}=0.671$. Its advantage over
+EfficientNet-B1 is concentrated in Scratch and Loc recall, where self-attention's global receptive field
+from block 1 resolves fine spatial detail that convolutional features miss. On the expanded holdout, where
+rare defect classes are represented more fully, EfficientNet-B1 leads (F1 = 0.596 vs 0.548), suggesting
+its compact cluster geometry is more stable at scale.
+
+\textbf{Remaining bottleneck.} Score-distribution overlap near the 95th-percentile threshold is the primary
+limiting factor across all models. The gap between deployed F1 and best-sweep F1 is approximately 0.06
+for the strongest PatchCore variants, representing headroom that cannot be captured without either defect
+labels for threshold calibration or a more geometrically grounded operating-point rule.
+
+\textbf{Classifier and future work.} A supervised residual CNN classifier was trained on the full labeled
+WM-811K subset, achieving a balanced accuracy of 0.918 across nine classes. Applied to the 638,507
+unlabeled wafers, the classifier produces 417,831 retained silver labels at a 0.90 confidence threshold
+(mean accepted confidence 0.947), of which 127,918 are predicted defective. These silver labels provide
+a practical path to approximate large-scale anomaly-detection evaluation on the unlabeled wafer population,
+but they should be treated as proxy supervision rather than definitive ground truth. This evaluation was
+not completed within the scope of this project. Combined with more principled threshold calibration and the embedding diagnostics
+developed here, this represents the most concrete avenue for closing the remaining performance gap.
 
 \appendix
 \newpage
 \section{Appendix: Group Contributions}
 \label{app:contributions}
 
-\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{3.5cm}>{\raggedright\arraybackslash}X}
-\toprule
-Member & Primary contributions \\
-\midrule
-Henry Lee Jun (1004219)
-  & Autoencoder family (baseline, BatchNorm, dropout sweep, residual, 128px variant),
-    score ablation framework, Deep SVDD, VAE beta sweep, teacher-student distillation
-    (ResNet18 and ResNet50), WideResNet50-2 teacher-student variants, score ensemble
-    study, report writing and LaTeX preparation. \\
-Chia Tang (1007200)
-  & PatchCore backbone family (EfficientNet-B0/B1/B2, ResNet18, ResNet50, and WideResNet50-2 variants), 
-    ViT-B16 PatchCore variants (one-layer/two-layer, with and without defect-tuning), threshold-tuning and score-analysis workflow, 
-    UMAP embedding diagnostics, and experiment/report documentation for final write-up. \\
-Genson Low (1005931)
-  & \\
-\bottomrule
-\end{tabularx}
+\textbf{Henry Lee Jun (1004219)}
+\begin{itemize}[leftmargin=1.5em]
+  \item Autoencoder family: baseline, BatchNorm, dropout sweep, residual, 128px and 224px variants
+  \item Score ablation framework across seven reduction rules
+  \item Deep SVDD and VAE beta sweep
+  \item Teacher-student distillation: ResNet18, ResNet50, WideResNet50-2 single-layer and multilayer
+  \item FastFlow (WideResNet50-2 multilayer)
+  \item PatchCore: ResNet18, ResNet50, WideResNet50-2, and AE-BN backbone variants
+  \item Pretrained backbone center-distance baselines (ResNet18, WideResNet50-2)
+  \item Score ensemble study
+  \item Expanded holdout validation
+  \item Report writing and \LaTeX{} preparation
+\end{itemize}
+
+\textbf{Chia Tang (1007200)}
+\begin{itemize}[leftmargin=1.5em]
+  \item PatchCore with EfficientNet-B0 (native $224\!\times\!224$)
+  \item PatchCore with EfficientNet-B1 ($240\!\times\!240$, one-layer and multi-layer)
+  \item ViT-B/16 PatchCore variants: block depth sweep and main result
+  \item UMAP embedding diagnostics for PatchCore models
+  \item Threshold-tuning and score-analysis workflow
+\end{itemize}
+
+\textbf{Genson Low (1005931)}
+\begin{itemize}[leftmargin=1.5em]
+  \item Supervised multiclass classifier: residual CNN, 9-class, seed sweep
+  \item Pseudo-label generation on 638,507 unlabeled wafers
+  \item Classifier UMAP diagnostics: split-coloured and class-coloured projections
+\end{itemize}
 
 \newpage
 \section{Appendix: How to Reproduce Each Figure}
@@ -1619,61 +1674,55 @@ All notebooks load pre-trained checkpoints by default (\texttt{RETRAIN = False})
 and regenerate all plots from saved artifacts without requiring GPU access.
 Setting \texttt{RETRAIN = True} reruns the full training and evaluation pipeline.
 
-\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{0.38\linewidth}>{\raggedright\arraybackslash}X}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}p{0.40\linewidth}>{\raggedright\arraybackslash}X}
+\caption*{Anomaly-detection paths omit \texttt{experiments/anomaly\_detection/};
+classifier paths omit \texttt{experiments/}.
+Append \texttt{/notebook.ipynb} to each entry.} \\
 \toprule
-Figure & Source notebook \\
+Figure & Notebook path \\
 \midrule
 Defect gallery (Fig.~\ref{fig:defect_gallery})
-  & \texttt{artifacts/report\_plots/defect\_type\_gallery.png}, generated by the dataset notebook at \texttt{data/dataset/x64/benchmark\_50k\_5pct/notebook.ipynb} \\
+  & \texttt{data/dataset/x64/benchmark\_50k\_5pct} \\
 Overall comparison (Fig.~\ref{fig:overall_comparison})
-  & \texttt{artifacts/report\_plots/overall\_experiment\_comparison.png}, generated by running the report-plot aggregation cell in any top-level analysis notebook \\
-AE training and score ablation (Fig.~\ref{fig:ae_training_ablation})
-  & \texttt{experiments/anomaly\_detection/autoencoder/x64/baseline/notebook.ipynb} \\
+  & \texttt{report\_figures} \\
+AE training / score ablation (Fig.~\ref{fig:ae_training_ablation})
+  & \texttt{autoencoder/x64/baseline} \\
 AE x224 score ablation (Fig.~\ref{fig:ae224_score_ablation})
-  & \texttt{experiments/anomaly\_detection/autoencoder/x224/main/artifacts/autoencoder\_x224/plots/score\_ablation\_summary.png}, generated by the x224 notebook score ablation cell \\
+  & \texttt{autoencoder/x224/main} \\
 AE reconstruction examples (Fig.~\ref{fig:ae_reconstruction})
-  & \texttt{experiments/anomaly\_detection/autoencoder/x64/baseline/notebook.ipynb} \\
+  & \texttt{autoencoder/x64/baseline} \\
 AE family comparison (Fig.~\ref{fig:ae_family})
-  & \texttt{artifacts/report\_plots/autoencoder\_family\_comparison.png}, regenerated by the autoencoder baseline notebook after all variant artifacts are present \\
+  & \texttt{report\_figures} \\
 Compact baselines (Fig.~\ref{fig:compact_baselines})
-  & \texttt{artifacts/report\_plots/compact\_baseline\_comparison.png}, requires VAE, SVDD, and backbone-embedding artifacts \\
+  & \texttt{report\_figures} \\
 Teacher-student family (Fig.~\ref{fig:ts_family_full})
-  & \texttt{experiments/anomaly\_detection/report\_figures/notebook.ipynb} \\
-FastFlow results (Fig.~\ref{fig:fastflow_results})
-  & \texttt{experiments/anomaly\_detection/fastflow/x64/main/notebook.ipynb} \\
+  & \texttt{report\_figures} \\
+FastFlow results (Figs.~\ref{fig:fastflow_variants},~\ref{fig:fastflow_defect_breakdown})
+  & \texttt{fastflow/x64/main} \\
 PatchCore family comparison (Fig.~\ref{fig:patchcore_family})
-  & \texttt{artifacts/report\_plots/patchcore\_family\_comparison.png}, requires all PatchCore variant artifacts \\
+  & \texttt{report\_figures} \\
 EfficientNet-B1 results (Fig.~\ref{fig:effnetb1_x240})
-  & \texttt{experiments/anomaly\_detection/patchcore/efficientnet\_b1/x240/main\_one\_layer/notebook.ipynb} \\
-WRN50-2 x224 diagnostics (Fig.~\ref{fig:wrn_x224_diag})
-  & \texttt{experiments/anomaly\_detection/patchcore/wideresnet50/x224/multilayer/notebook.ipynb} \\
+  & \texttt{patchcore/efficientnet\_b1/x240/main\_one\_layer} \\
 ViT-B/16 main result (Fig.~\ref{fig:vit_main_result})
-  & \texttt{experiments/anomaly\_detection/patchcore/vit\_b16/x224/main/notebook.ipynb} \\
+  & \texttt{patchcore/vit\_b16/x224/main} \\
 PatchCore heatmap examples (Fig.~\ref{fig:patchcore_heatmap})
-  & \texttt{experiments/anomaly\_detection/patchcore/vit\_b16/x224/main/notebook.ipynb} \\
+  & \texttt{patchcore/vit\_b16/x224/main} \\
 WRN baseline UMAP (Fig.~\ref{fig:umap_wrn_baseline})
-  & \texttt{experiments/anomaly\_detection/backbone\_embedding/wide\_resnet50\_2/x64/baseline/notebook.ipynb} \\
-ResNet18 PatchCore UMAP (Fig.~\ref{fig:umap_resnet18_patchcore})
-  & \texttt{experiments/anomaly\_detection/patchcore/resnet18/x64/holdout70k\_3p5k\_umap\_followup/notebook.ipynb} \\
+  & \texttt{backbone\_embedding/wide\_resnet50\_2/x64/baseline} \\
 WRN50-2 PatchCore x224 UMAP (Fig.~\ref{fig:umap_wrn_patchcore})
-  & \texttt{experiments/anomaly\_detection/patchcore/wideresnet50/x224/multilayer\_umap\_followup/notebook.ipynb} \\
-ViT PatchCore NN distance distribution (Fig.~\ref{fig:nn_distance_vit})
-  & \texttt{experiments/anomaly\_detection/patchcore/vit\_b16/x224/main/notebook.ipynb} \\
+  & \texttt{patchcore/wideresnet50/x224/multilayer\_umap} \\
+Classifier UMAP by split (Fig.~\ref{fig:classifier_umap_split})
+  & \texttt{classifier/multiclass/x64/umap} \\
+Classifier UMAP by class (Fig.~\ref{fig:classifier_umap_pseudolabel})
+  & \texttt{classifier/multiclass/x64/umap} \\
 \midrule
-\multicolumn{2}{l}{\textit{Cross-model comparison figures -- all generated by
-\texttt{experiments/anomaly\_detection/report\_figures/notebook.ipynb}}} \\
-Per-defect recall chart (Fig.~\ref{fig:per_defect_chart})
-  & \texttt{report\_figures/notebook.ipynb}, Plot 1 \\
-Resolution effect comparison (Fig.~\ref{fig:resolution_comparison})
-  & \texttt{report\_figures/notebook.ipynb}, Plot 2 \\
-PatchCore backbone progression (Fig.~\ref{fig:patchcore_progression})
-  & \texttt{report\_figures/notebook.ipynb}, Plot 3 \\
-Score distribution overlay (Fig.~\ref{fig:score_distributions})
-  & \texttt{report\_figures/notebook.ipynb}, Plot 4 \\
-TS family full comparison (Fig.~\ref{fig:ts_family_full})
-  & \texttt{report\_figures/notebook.ipynb}, Plot 5 \\
-3-model backbone UMAP by defect type (Fig.~\ref{fig:umap_3model})
-  & \texttt{report\_figures/notebook.ipynb}, Plot 9 \\
+\multicolumn{2}{l}{\textit{Cross-model figures -- all from \texttt{report\_figures/notebook.ipynb}}} \\
+Per-defect recall chart (Fig.~\ref{fig:per_defect_chart})        & Plot 1 \\
+Resolution effect comparison (Fig.~\ref{fig:resolution_comparison}) & Plot 2 \\
+PatchCore backbone progression (Fig.~\ref{fig:patchcore_progression}) & Plot 3 \\
+Score distribution overlay (Fig.~\ref{fig:score_distributions})   & Plot 4 \\
+TS family full comparison (Fig.~\ref{fig:ts_family_full})          & Plot 5 \\
+3-model backbone UMAP (Fig.~\ref{fig:umap_3model})                 & Plot 9 \\
 \bottomrule
 \end{tabularx}
 
@@ -1743,6 +1792,10 @@ FastFlow WRN50-2 layer2+layer3, 6 steps$^\dagger$ & 64$\times$64 & 0.470 & 0.870
 FastFlow WRN50-2 layer2 only, 6 steps$^\dagger$ & 64$\times$64 & 0.442 & 0.884 & 0.460 \\
 \midrule
 
+\multicolumn{5}{l}{\textit{RD4AD (Reverse Distillation -- feature-space reconstruction)}} \\
+RD4AD + WideResNet50-2$^\dagger$ & 224$\times$224 & 0.477 & 0.877 & 0.414 \\
+\midrule
+
 \multicolumn{5}{l}{\textit{PatchCore}} \\
 PatchCore + AE-BN encoder (\texttt{mean}) & 64$\times$64 & 0.336 & 0.851 & 0.226 \\
 PatchCore + ResNet18 (\texttt{mean}) & 64$\times$64 & 0.401 & 0.842 & 0.411 \\
@@ -1759,6 +1812,11 @@ PatchCore + ViT-B/16 block 6 (\texttt{topk r=0.10}) & 224$\times$224 & \textbf{0
 
 \multicolumn{5}{l}{\textit{Score ensemble}} \\
 WRN PatchCore + TS-Res50 (max fusion) & 64$\times$64 & 0.529 & 0.916 & 0.611 \\
+\midrule
+
+\multicolumn{5}{l}{\textit{Supervised classifier (classification metrics, not anomaly detection)}} \\
+Classifier seed 07 (balanced acc 0.918) & 64$\times$64 & \multicolumn{3}{l}{Bal.\ acc = 0.918, overall acc = 0.959} \\
+Pseudo-label generation ($\geq$0.90 conf.) & --- & \multicolumn{3}{l}{417,831 accepted of 638,507 scored} \\
 
 \end{longtable}
 
@@ -1927,69 +1985,129 @@ standalone PatchCore on deployed F1.
 \begin{table}[H]
 \centering
 \caption{Key experiment-to-notebook mapping for reproducibility.
-All paths are relative to the project root.}
+Anomaly-detection paths are relative to \texttt{experiments/anomaly\_detection/};
+classifier paths are relative to \texttt{experiments/}.
+Append \texttt{/notebook.ipynb} to each path.}
 \label{tab:appendix_notebooks}
 \begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X}
 \toprule
-Experiment & Notebook path \\
+Experiment & Path \\
 \midrule
 Baseline AE (224$\times$224)
-  & \texttt{experiments/anomaly\_detection/autoencoder/x224/main/notebook.ipynb} \\
+  & \texttt{autoencoder/x224/main} \\
 Baseline AE
-  & \texttt{experiments/anomaly\_detection/autoencoder/x64/baseline/notebook.ipynb} \\
+  & \texttt{autoencoder/x64/baseline} \\
 BatchNorm AE
-  & \texttt{experiments/anomaly\_detection/autoencoder/x64/batchnorm/notebook.ipynb} \\
+  & \texttt{autoencoder/x64/batchnorm} \\
 BatchNorm + Dropout sweep
-  & \texttt{experiments/anomaly\_detection/autoencoder/x64/batchnorm\_dropout/notebook.ipynb} \\
+  & \texttt{autoencoder/x64/batchnorm\_dropout} \\
 Residual AE
-  & \texttt{experiments/anomaly\_detection/autoencoder/x64/residual/notebook.ipynb} \\
+  & \texttt{autoencoder/x64/residual} \\
 AE 128$\times$128
-  & \texttt{experiments/anomaly\_detection/autoencoder/x128/baseline/notebook.ipynb} \\
+  & \texttt{autoencoder/x128/baseline} \\
 VAE baseline
-  & \texttt{experiments/anomaly\_detection/vae/x64/baseline/notebook.ipynb} \\
+  & \texttt{vae/x64/baseline} \\
 VAE beta sweep
-  & \texttt{experiments/anomaly\_detection/vae/x64/beta\_sweep/notebook.ipynb} \\
+  & \texttt{vae/x64/beta\_sweep} \\
 Deep SVDD
-  & \texttt{experiments/anomaly\_detection/svdd/x64/baseline/notebook.ipynb} \\
+  & \texttt{svdd/x64/baseline} \\
 ResNet18 backbone baseline
-  & \texttt{experiments/anomaly\_detection/backbone\_embedding/resnet18/x64/baseline/notebook.ipynb} \\
+  & \texttt{backbone\_embedding/resnet18/x64/baseline} \\
 WRN50-2 embedding baseline
-  & \texttt{experiments/anomaly\_detection/backbone\_embedding/wide\_resnet50\_2/x64/baseline/notebook.ipynb} \\
+  & \texttt{backbone\_embedding/wide\_resnet50\_2/x64/baseline} \\
 PatchCore + AE-BN backbone
-  & \texttt{experiments/anomaly\_detection/patchcore/ae\_bn/x64/main/notebook.ipynb} \\
+  & \texttt{patchcore/ae\_bn/x64/main} \\
 PatchCore + ResNet18
-  & \texttt{experiments/anomaly\_detection/patchcore/resnet18/x64/main/notebook.ipynb} \\
+  & \texttt{patchcore/resnet18/x64/main} \\
 PatchCore + ResNet50
-  & \texttt{experiments/anomaly\_detection/patchcore/resnet50/x64/main/notebook.ipynb} \\
+  & \texttt{patchcore/resnet50/x64/main} \\
 PatchCore + WRN50-2 x64
-  & \texttt{experiments/anomaly\_detection/patchcore/wideresnet50/x64/main/notebook.ipynb} \\
+  & \texttt{patchcore/wideresnet50/x64/main} \\
 PatchCore + WRN50-2 x224
-  & \texttt{experiments/anomaly\_detection/patchcore/wideresnet50/x224/multilayer/notebook.ipynb} \\
+  & \texttt{patchcore/wideresnet50/x224/multilayer} \\
 PatchCore + WRN50-2 x224 UMAP
-  & \texttt{experiments/anomaly\_detection/patchcore/wideresnet50/x224/multilayer\_umap\_followup/notebook.ipynb} \\
+  & \texttt{patchcore/wideresnet50/x224/multilayer\_umap} \\
 PatchCore + EfficientNet-B0 x224
-  & \texttt{experiments/anomaly\_detection/patchcore/efficientnet\_b0/x224/main/notebook.ipynb} \\
+  & \texttt{patchcore/efficientnet\_b0/x224/main} \\
 PatchCore + EfficientNet-B1 x240
-  & \texttt{experiments/anomaly\_detection/patchcore/efficientnet\_b1/x240/main\_one\_layer/notebook.ipynb} \\
+  & \texttt{patchcore/efficientnet\_b1/x240/main\_one\_layer} \\
 PatchCore + ViT-B/16 x224
-  & \texttt{experiments/anomaly\_detection/patchcore/vit\_b16/x224/main/notebook.ipynb} \\
+  & \texttt{patchcore/vit\_b16/x224/main} \\
 TS + ResNet18
-  & \texttt{experiments/anomaly\_detection/teacher\_student/resnet18/x64/main/notebook.ipynb} \\
+  & \texttt{teacher\_student/resnet18/x64/main} \\
 TS + ResNet50
-  & \texttt{experiments/anomaly\_detection/teacher\_student/resnet50/x64/main/notebook.ipynb} \\
+  & \texttt{teacher\_student/resnet50/x64/main} \\
 TS + WRN50-2 layer2
-  & \texttt{experiments/anomaly\_detection/teacher\_student/wideresnet50\_2/x64/layer2\_self\_contained/notebook.ipynb} \\
+  & \texttt{teacher\_student/wideresnet50\_2/}\newline\texttt{x64/layer2\_self\_contained} \\
 TS + WRN50-2 multilayer
-  & \texttt{experiments/anomaly\_detection/teacher\_student/wideresnet50\_2/x64/multilayer\_self\_contained/notebook.ipynb} \\
+  & \texttt{teacher\_student/wideresnet50\_2/}\newline\texttt{x64/multilayer\_self\_contained} \\
 FastFlow sweep
-  & \texttt{experiments/anomaly\_detection/fastflow/x64/main/notebook.ipynb} \\
+  & \texttt{fastflow/x64/main} \\
 Score ensemble
-  & \texttt{experiments/anomaly\_detection/ensemble/x64/score\_ensemble/notebook.ipynb} \\
+  & \texttt{ensemble/x64/score\_ensemble} \\
 Report comparison figures
-  & \texttt{experiments/anomaly\_detection/report\_figures/notebook.ipynb} \\
+  & \texttt{report\_figures} \\
+Classifier (seed 07)
+  & \texttt{classifier/multiclass/x64/seed07} \\
+Classifier UMAP
+  & \texttt{classifier/multiclass/x64/umap} \\
 \bottomrule
 \end{tabularx}
 \end{table}
+
+\newpage
+\section{Appendix: Setup and Dependencies}
+\label{app:setup}
+
+\subsection{Dataset}
+
+The WM-811K / LSWMD dataset is available on Kaggle at:
+\begin{center}
+\texttt{https://www.kaggle.com/datasets/qingyi/wm811k-wafer-map}
+\end{center}
+Download \texttt{LSWMD.pkl} and place it at \texttt{data/raw/LSWMD.pkl} in the repository root before running any dataset-construction notebook.
+
+\subsection{Environment}
+
+Python 3.11 is required. Create a virtual environment and install the project package in editable mode:
+
+\begin{verbatim}
+py -3.11 -m venv .venv
+.venv\Scripts\Activate.ps1          # Windows
+# source .venv/bin/activate         # macOS / Linux
+pip install --upgrade pip
+pip install -e .
+pip install jupyter umap-learn
+\end{verbatim}
+
+The core dependencies and their minimum tested versions are listed in Table~\ref{tab:dependencies}.
+
+\begin{table}[H]
+\centering
+\caption{Core package dependencies.}
+\label{tab:dependencies}
+\begin{tabular}{ll}
+\toprule
+Package & Minimum version \\
+\midrule
+Python       & 3.11 \\
+torch        & 2.2 \\
+torchvision  & 0.17 \\
+timm         & 1.0 \\
+scikit-learn & 1.5 \\
+umap-learn   & 0.5 \\
+numpy        & 1.26 \\
+pandas       & 2.2 \\
+matplotlib   & 3.9 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Launch Jupyter from the repository root so that all relative notebook paths resolve correctly:
+
+\begin{verbatim}
+jupyter notebook
+\end{verbatim}
 
 \newpage
 \begin{thebibliography}{9}

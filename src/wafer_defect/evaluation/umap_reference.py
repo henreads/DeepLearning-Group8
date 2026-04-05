@@ -158,11 +158,11 @@ def plot_reference_umap(
 
     fig, ax = plt.subplots(figsize=(9, 7))
     style_map = {
-        "train_reference": dict(s=8, alpha=0.15, label="train_reference", c="#6c757d"),
-        "val_normal": dict(s=10, alpha=0.25, label="val_normal", c="#277da1"),
-        "val_anomaly": dict(s=12, alpha=0.65, label="val_anomaly", c="#8e44ad"),
-        "test_normal": dict(s=10, alpha=0.35, label="test_normal", c="#90be6d"),
-        "test_anomaly": dict(s=14, alpha=0.65, label="test_anomaly", c="#f94144"),
+        "train_reference": dict(s=8, alpha=0.20, label="train_reference", c="#b0b0b0"),
+        "val_normal":      dict(s=10, alpha=0.25, label="val_normal",      c="#c0c0c0"),
+        "val_anomaly":     dict(s=12, alpha=0.70, label="val_anomaly",     c="#e63946"),
+        "test_normal":     dict(s=10, alpha=0.35, label="test_normal",     c="#aaaaaa"),
+        "test_anomaly":    dict(s=14, alpha=0.75, label="test_anomaly",    c="#e63946"),
     }
     for split_name, group in umap_df.groupby("split_label"):
         style = style_map.get(split_name, dict(s=10, alpha=0.4, label=split_name))

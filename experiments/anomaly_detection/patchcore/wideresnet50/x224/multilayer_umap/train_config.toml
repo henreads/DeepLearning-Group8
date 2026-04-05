@@ -1,5 +1,5 @@
 [run]
-output_dir = "experiments/anomaly_detection/patchcore/wideresnet50/x224/multilayer_umap_followup/artifacts/patchcore-wideresnet50-multilayer-umap"
+output_dir = "experiments/anomaly_detection/patchcore/wideresnet50/x224/multilayer_umap/artifacts/patchcore-wideresnet50-multilayer-umap"
 seed = 42
 secondary_holdout_mode = false
 

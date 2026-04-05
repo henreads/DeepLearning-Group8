@@ -18,3 +18,5 @@ ViT-B/16 is naturally used at a larger image scale than the benchmark `x64` bran
   Two-block transformer feature branch.
 - `two_block_no_defect_tuning/`
   Two-block branch with normal-only threshold selection.
+- `FT/`
+  Fine-tuned ViT-B/16 branch: self-supervised rotation-prediction pretraining on WM-811K normals, then standard PatchCore on the domain-adapted features.

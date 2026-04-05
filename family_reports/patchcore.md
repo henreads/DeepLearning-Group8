@@ -267,7 +267,7 @@ Beyond the primary multilayer (layer2+layer3) experiment, we explored single-lay
 
 #### UMAP Follow-up Analysis
 
-A separate `multilayer_umap_followup` variant applied UMAP dimensionality reduction to the combined layer2+layer3 features before memory bank construction. Results were marginally worse (F1 ≈ 0.545), suggesting the concatenated feature space already has good separation and UMAP projection loses discriminative information.
+A separate `multilayer_umap` variant applied UMAP dimensionality reduction to the combined layer2+layer3 features before memory bank construction. Results were marginally worse (F1 ≈ 0.545), suggesting the concatenated feature space already has good separation and UMAP projection loses discriminative information.
 
 ---
 

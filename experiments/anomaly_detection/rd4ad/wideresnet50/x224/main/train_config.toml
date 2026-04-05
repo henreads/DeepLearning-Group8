@@ -1,0 +1,30 @@
+[run]
+output_dir = "experiments/anomaly_detection/rd4ad/wideresnet50/x224/main/artifacts/rd4ad_wrn50_x224"
+seed = 42
+
+[data]
+metadata_csv = "data/processed/x224/wm811k/metadata_50k_5pct.csv"
+image_size = 224
+batch_size = 128
+num_workers = 8
+
+[training]
+epochs = 50
+learning_rate = 0.0002
+weight_decay = 0.00001
+device = "auto"
+early_stopping_patience = 7
+early_stopping_min_delta = 0.0001
+checkpoint_every = 1
+use_amp = true
+
+[model]
+type = "rd4ad"
+backbone = "wide_resnet50_2"
+pretrained = true
+image_size = 224
+reduction = "topk_mean"
+topk_ratio = 0.10
+
+[scoring]
+threshold_quantile = 0.95

@@ -1,6 +1,12 @@
 # WRN50-2 layer2 PatchCore (`x224`)
 
-This branch is curated as a results-review notebook built from saved PatchCore sweep artifacts. The notebook does not retrain; it reloads the saved per-variant score CSVs, recomputes defect analysis using the local `x224` metadata, and repopulates each variant folder with plots.
+This branch is curated as a reproducibility and results-review notebook built from saved PatchCore sweep artifacts.
+
+Notebook execution modes:
+- `RETRAIN = False`: artifact-review mode. Load saved checkpoints, CSVs, and plots directly.
+- `RETRAIN = True`: full rerun mode. The notebook launches `scripts/run_patchcore_wrn50_x224_umap.py` with the same runner, train config, data config, output dir, and worker argument pattern used by the Modal app.
+
+In review mode the notebook reloads the saved per-variant score CSVs, recomputes defect analysis using the local `x224` metadata, and repopulates each variant folder with plots.
 
 Key files:
 - notebook: `experiments/anomaly_detection/patchcore/wideresnet50/x224/layer2/notebook.ipynb`

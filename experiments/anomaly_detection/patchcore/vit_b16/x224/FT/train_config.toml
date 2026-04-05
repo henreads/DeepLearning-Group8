@@ -1,0 +1,39 @@
+[run]
+output_dir = "experiments/anomaly_detection/patchcore/vit_b16/x224/FT/artifacts"
+seed = 42
+
+[data]
+image_size = 224
+batch_size = 64
+num_workers = 0
+
+[split]
+train_normal_n = 40000
+tune_normal_n = 5000
+test_normal_n = 5000
+test_defect_n = 250
+
+[finetune]
+method = "rotation_prediction"
+num_classes = 4
+unfreeze_blocks = 4
+epochs = 5
+lr = 3e-5
+batch_size = 64
+
+[model]
+type = "patchcore_finetuned_vit"
+backbone = "vit_base_patch16_224.augreg_in21k_ft_in1k"
+vit_feature_block = 9
+patch_embed_dim = 128
+memory_bank_max = 600000
+score_chunk = 512
+patchcore_nn_k = 3
+topk_patch_ratio = 0.1
+
+[threshold]
+method = "sigma_sweep"
+target_fpr = 0.02
+sigma_min = 1.5
+sigma_max = 3.5
+sigma_steps = 200

@@ -1532,8 +1532,8 @@ Purpose:
 
 Implementation:
 
-- notebook: [notebook.ipynb](experiments/anomaly_detection/patchcore/wideresnet50/x224/multilayer_umap_followup/notebook.ipynb)
-- artifact dir: [patchcore-wideresnet50-multilayer-umap](experiments/anomaly_detection/patchcore/wideresnet50/x224/multilayer_umap_followup/artifacts/patchcore-wideresnet50-multilayer-umap)
+- notebook: [notebook.ipynb](experiments/anomaly_detection/patchcore/wideresnet50/x224/multilayer_umap/notebook.ipynb)
+- artifact dir: [patchcore-wideresnet50-multilayer-umap](experiments/anomaly_detection/patchcore/wideresnet50/x224/multilayer_umap/artifacts/patchcore-wideresnet50-multilayer-umap)
 - checkpoint reused: selected `18A` variant `topk_mb50k_r005_x224`
 - visualization note: this follow-up is interpretive only; it does not introduce a new training run or change the reported metrics above
 
@@ -1544,7 +1544,7 @@ UMAP interpretation:
 - that pattern is still not a clean class split, so the task remains hard, but it is much more compatible with a local PatchCore score than with one global center-distance threshold
 - in other words, the UMAP supports the same conclusion as the metrics: the win came from stronger local geometry plus local scoring, not from backbone scale alone
 
-![WRN PatchCore x224 selected-checkpoint UMAP](experiments/anomaly_detection/patchcore/wideresnet50/x224/multilayer_umap_followup/artifacts/patchcore-wideresnet50-multilayer-umap/plots/selected_variant_umap_by_split.png)
+![WRN PatchCore x224 selected-checkpoint UMAP](experiments/anomaly_detection/patchcore/wideresnet50/x224/multilayer_umap/artifacts/patchcore-wideresnet50-multilayer-umap/plots/selected_variant_umap_by_split.png)
 
 The PatchCore family figure below now summarizes the full branch, including the newer WideResNet50-2 multilayer follow-up: the left panel compares the best PatchCore result from each backbone or source, while the right panel shows all PatchCore variants colored by backbone/source and marked by wafer-level reduction.
 
