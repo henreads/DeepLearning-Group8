@@ -15,3 +15,10 @@ venv/
 kaggle_outputs/
 uploads/
 .claude
+
+# Model/checkpoint artifacts
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.safetensors

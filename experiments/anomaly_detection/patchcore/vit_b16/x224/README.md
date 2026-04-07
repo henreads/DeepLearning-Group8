@@ -19,4 +19,4 @@ ViT-B/16 is naturally used at a larger image scale than the benchmark `x64` bran
 - `two_block_no_defect_tuning/`
   Two-block branch with normal-only threshold selection.
 - `FT/`
-  Fine-tuned ViT-B/16 branch: self-supervised rotation-prediction pretraining on WM-811K normals, then standard PatchCore on the domain-adapted features.
+  Fine-tuned ViT-B/16 experiments. Contains `MAE/`: masked patch reconstruction pre-training on WM-811K normals, then standard PatchCore on the domain-adapted features (AUPRC 0.717 vs 0.671 frozen).

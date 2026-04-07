@@ -1,0 +1,54 @@
+[run]
+output_dir = "experiments/anomaly_detection_defect/supervised_sweep/vit_b16/x224/main/artifacts/supervised_vit_sweep"
+seed = 42
+
+[data]
+# Raw pickle for extracting all labeled defects
+raw_pickle = "data/raw/LSWMD.pkl"
+# Existing processed normal arrays (train/val/test splits already defined)
+normal_metadata_csv = "data/processed/x224/wm811k/metadata_50k_5pct.csv"
+image_size = 224
+batch_size = 256
+num_workers = 4
+
+[split]
+# Defect classes withheld entirely from training and validation.
+# They still appear proportionally in the 250-defect test set so that
+# AUROC/AUPRC/F1 are on the same benchmark as the zero-defect PatchCore model.
+# Per-class recall exposes the failure on these unseen types.
+holdout_defect_types = ["Scratch", "Loc"]
+
+# Total test defects — matches the PatchCore benchmark exactly (5% of 5000 test normals)
+# Stratified proportionally across all 8 classes including holdout classes.
+test_defect_count = 250
+
+# Defects from non-holdout classes for early stopping validation
+val_defect_count = 250
+
+# Normal counts — match the anomaly detection benchmark exactly
+normal_train_count = 40000
+normal_val_count = 5000
+normal_test_count = 5000
+
+[sweep]
+# Fractions of the non-holdout training defect pool (seen classes only)
+# Approx counts: 0.001→~20, 0.0025→~49, 0.005→~99, 0.01→~197, 0.025→~493, 0.05→~985
+fractions = [0.001, 0.0025, 0.005, 0.01, 0.025, 0.05]
+
+[model]
+backbone = "vit_base_patch16_224.augreg_in21k_ft_in1k"
+pretrained = true
+freeze_backbone = true
+feature_dim = 768
+
+[training]
+epochs = 50
+learning_rate = 0.001
+weight_decay = 0.00001
+device = "auto"
+use_amp = true
+early_stopping_patience = 7
+
+[scoring]
+# Same protocol as zero-defect PatchCore: threshold at 95th percentile of val normals
+threshold_quantile = 0.95

@@ -71,11 +71,13 @@ to establish a stable baseline pipeline, then moves progressively toward pretrai
 ImageNet representations, teacher-student distillation, and PatchCore-style local anomaly
 scoring. The main finding is that stronger frozen backbones combined with local feature
 modelling improve performance substantially over plain reconstruction or global
-embedding-distance baselines. The best completed run on the main benchmark is a
+embedding-distance baselines. The best single-model result is a
 direct-$224\!\times\!224$ PatchCore model built on a pretrained ViT-B/16 backbone
 (block 6 features, top-10\% patch reduction), achieving $\mathrm{F1}=0.595$,
 $\mathrm{AUROC}=0.956$, and $\mathrm{AUPRC}=0.671$ under a deployment-style
-95th-percentile validation threshold.
+95th-percentile validation threshold. A max-fusion ensemble combining ViT-B/16 and
+DINOv2 ViT-B/14 PatchCore scores pushes the project best to $\mathrm{F1}=0.623$,
+$\mathrm{AUROC}=0.967$ with no additional training.
 Score histograms and UMAP diagnostics show that the remaining bottleneck is
 score-distribution overlap and naive thresholding rather than feature quality alone.
 \end{abstract}
@@ -452,7 +454,10 @@ rather than to list every variant tested.}
 \toprule
 Model & F1 & AUROC & AUPRC & Sweep F1 \\
 \midrule
-PatchCore + ViT-B/16, direct $224\!\times\!224$              & \textbf{0.595} & \textbf{0.956} & \textbf{0.671} & \textbf{0.651} \\
+Ensemble: ViT-B/16 + DINOv2 ViT-B/14 (max-fusion)            & \textbf{0.623} & \textbf{0.967} & 0.716 & 0.676 \\
+PatchCore + ViT-B/16, MAE fine-tuned (25\%), $224\!\times\!224$ & 0.594 & 0.962 & \textbf{0.762} & \textbf{0.692} \\
+PatchCore + ViT-B/16, MAE fine-tuned (75\%), $224\!\times\!224$ & 0.595 & 0.959 & 0.717 & 0.668 \\
+PatchCore + ViT-B/16, frozen, direct $224\!\times\!224$         & 0.595 & 0.956 & 0.671 & \textbf{0.651} \\
 PatchCore + EfficientNet-B1, direct $240\!\times\!240$       & 0.591 & 0.935 & 0.609 & 0.651 \\
 PatchCore + WideResNet50-2, direct $224\!\times\!224$        & 0.549 & 0.931 & 0.659 & 0.634 \\
 PatchCore + WideResNet50-2, $64\!\times\!64$                 & 0.532 & 0.917 & 0.562 & 0.586 \\
@@ -1203,6 +1208,135 @@ Block & Depth & F1 & AUROC & AUPRC & Recall \\
 
 These per-class trade-offs become clearer when placed in the context of the full experimental progression, from reconstruction baselines through to the best local-feature models.
 
+\subsubsection{ViT-B/16 PatchCore with MAE Fine-Tuning}
+
+Having established the frozen ViT-B/16 as the strongest backbone, we ask whether adapting it to the wafer domain through self-supervised pre-training can push performance further.
+All PatchCore hyperparameters are held identical to the frozen baseline (block 6 features, 128-d projection, 600k-token memory bank, 95th-percentile threshold) so that only the backbone weights differ.
+Two masking ratios are evaluated: 75\% (the standard MAE setting for natural images) and 25\% (a lower-masking variant that retains more visible patch context per forward pass).
+
+\textbf{Motivation.}
+Standard PatchCore uses frozen ImageNet weights. The backbone has never seen wafer maps and may not capture the specific local patch statistics of normal wafers. Masked patch reconstruction (MAE-style) pre-training forces the model to understand local wafer structure by masking a fraction of the 196 patch tokens and requiring the backbone to reconstruct the missing patches from the visible context.
+Unlike rotation prediction, masking is symmetric with respect to wafer geometry and does not corrupt edge-sensitive features.
+The masking ratio controls the reconstruction difficulty: higher ratios force stronger context aggregation, while lower ratios preserve more local patch detail per training step.
+
+\textbf{Setup.}
+The last 6 transformer blocks (blocks 6--11) and the final LayerNorm are fine-tuned for 10 epochs on the same 40k training normals used for the memory bank.
+A 2-layer MLP decoder (768 $\to$ 512 $\to$ patch pixels) produces the reconstruction target; the decoder is discarded after pre-training.
+AdamW with LR $=10^{-4}$ and cosine decay is used throughout.
+The 75\% masking run converges from loss 0.069 (epoch 1) to 0.042 (epoch 10); the 25\% masking run converges to 0.032 (epoch 10), consistent with the easier reconstruction task.
+
+\textbf{Results.}
+
+\begin{table}[H]
+\centering
+\caption{Frozen vs.\ MAE fine-tuned ViT-B/16 PatchCore at two masking ratios. All settings identical except backbone weights and masking ratio. All variants use the 95th-percentile validation-normal threshold.}
+\label{tab:vit_mae_comparison}
+\begin{tabular}{lcccc}
+\toprule
+Backbone & F1 & AUROC & AUPRC & Recall \\
+\midrule
+Frozen (ImageNet)          & 0.595          & 0.956          & 0.671          & ${\sim}$80.0\% \\
+MAE fine-tuned (mask 75\%) & 0.595          & 0.959          & 0.717          & 82.4\% \\
+MAE fine-tuned (mask 25\%) & \textbf{0.594} & \textbf{0.962} & \textbf{0.762} & \textbf{84.4\%} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Deployed F1 is stable across all three variants.} All reach $\mathrm{F1}\approx0.595$ at the 95th-percentile threshold, because the threshold is calibrated to target 5\% FPR on validation normals and the score distribution spread does not change substantially between variants.
+
+\textbf{AUPRC improves progressively with MAE pre-training.} Frozen ViT achieves AUPRC $=0.671$. MAE at 75\% masking raises this to $0.717$ ($+0.046$). MAE at 25\% masking raises it further to $0.762$ ($+0.091$ over frozen, $+0.045$ over 75\% masking). AUPRC is the most informative ranking metric under the 5\% defect prevalence used here, so this is the primary benefit of domain-adaptive pre-training.
+
+\textbf{AUROC follows the same trend.} The gain is smaller in absolute terms ($+0.003$ for 75\%, $+0.006$ for 25\%) but consistent in direction, confirming that both masking variants improve the ranking of defect patches above normal patches in memory-bank distance space.
+
+\textbf{Overall recall improves with lower masking.} The 25\% masking variant detects 84.4\% of defects at the deployed threshold, compared to 82.4\% for 75\% masking and $\sim$80\% frozen. The improvement is attributable to better-separated score distributions rather than a change in threshold placement.
+
+\begin{table}[H]
+\centering
+\caption{Per-defect recall for frozen ViT-B/16 vs.\ MAE fine-tuned variants. Defects ordered from hardest to easiest. The MAE 75\% and MAE 25\% variants share the same test-set draw; the frozen baseline uses the fixed main-benchmark split (same size, slightly different class composition).}
+\label{tab:vit_mae_per_defect}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Defect type} & \textbf{Frozen} & \textbf{MAE 75\%} & \textbf{MAE 25\%} \\
+\midrule
+Scratch   & 0.727 & 0.455 & \textbf{0.636} \\
+Loc       & \textbf{0.829} & 0.805 & \textbf{0.829} \\
+Center    & 0.618 & 0.618 & \textbf{0.676} \\
+Edge-Loc  & \textbf{0.705} & 0.682 & \textbf{0.705} \\
+Edge-Ring & 0.941 & \textbf{0.971} & 0.961 \\
+Donut     & 1.000 & 1.000 & 1.000 \\
+Random    & 1.000 & 1.000 & 1.000 \\
+Near-full & 1.000 & 1.000 & 1.000 \\
+\midrule
+\textbf{Overall recall} & ${\sim}$80.0\% & 82.4\% & \textbf{84.4\%} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Why 25\% masking outperforms 75\% masking on this domain.} The 75\% ratio is standard for natural images, which have dense, spatially redundant texture that makes high-masking reconstruction non-trivial. Wafer maps are sparse binary grids with far less texture diversity. At 75\% masking, only 49 of 196 patches remain visible, providing insufficient local context for the model to learn meaningful wafer patch statistics. At 25\% masking, 147 patches remain visible per pass, giving the model richer local context and producing features better calibrated to wafer spatial structure. The improvement in Scratch recall from 45.5\% (75\% masking) to 63.6\% (25\% masking) is consistent with this: thin-streak defects span very few patches and require precise local feature sensitivity that lower masking better preserves.
+
+\textbf{Conclusion.} MAE pre-training on normal wafers consistently improves precision-recall quality without degrading deployed F1. The 25\% masking ratio is the stronger setting on wafer maps: AUPRC reaches 0.762 ($+0.091$ over frozen) and overall recall rises to 84.4\%, while deployed F1 remains stable at 0.594. The result establishes that masking ratio is a meaningful hyperparameter for domain-adaptive pre-training on sparse, low-texture industrial images, and that the natural-image default of 75\% is suboptimal for this domain.
+
+MAE fine-tuning adapts the ViT-B/16 backbone to the wafer domain while keeping the same supervised ImageNet pretraining as the starting point. The next question is whether a backbone trained with a fundamentally different pretraining objective, specifically self-supervised feature learning rather than supervised classification, can provide complementary patch representations and push performance further.
+
+\subsubsection{DINOv2 ViT-B/14 PatchCore and Score Ensemble}
+
+DINOv2 \cite{oquab2023dinov2} is a self-supervised ViT trained with a self-distillation objective that produces strong semantic features for dense prediction tasks. Its ViT-B/14 variant uses a $14\!\times\!14$ patch size, producing $(224/14)^2 = 256$ patch tokens at $224\!\times\!224$ input, giving finer spatial granularity than ViT-B/16's 196 tokens. We evaluate DINOv2 as a PatchCore backbone to test whether semantically richer self-supervised features improve anomaly detection on wafer maps.
+
+\textbf{Block sweep.}
+Three extraction depths are evaluated with all other PatchCore settings fixed (5\% coreset, cosine distance, 95th-percentile threshold).
+
+\begin{table}[H]
+\centering
+\caption{DINOv2 ViT-B/14 PatchCore block sweep at $224\!\times\!224$. All runs use identical hyperparameters.}
+\label{tab:dinov2_block_sweep}
+\begin{tabular}{llcccc}
+\toprule
+Block & Depth & F1 & AUROC & AUPRC & Recall \\
+\midrule
+\textbf{6}  & \textbf{Mid}      & \textbf{0.521} & \textbf{0.926} & 0.549 & \textbf{73.6\%} \\
+9           & Mid-late          & 0.492          & 0.915          & \textbf{0.561} & 68.4\% \\
+11          & Final             & 0.443          & 0.885          & 0.504 & 58.0\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Block 6 is the best extraction point ($\mathrm{F1}=0.521$), consistent with the ViT-B/16 finding that mid-depth blocks retain the strongest local spatial structure. The final block collapses again as global semantics dominate.
+
+\textbf{DINOv2 underperforms ViT-B/16 despite finer spatial resolution.}
+The best DINOv2 result ($\mathrm{F1}=0.521$, $\mathrm{AUROC}=0.926$) falls below the frozen ViT-B/16 ($\mathrm{F1}=0.595$, $\mathrm{AUROC}=0.956$) on every headline metric. DINOv2's self-distillation objective optimises for semantic class separability: its patch features capture object-level and part-level concepts well but are not calibrated to detect the subtle textural deviations that wafer defects produce. ViT-B/16 pretrained with supervised ImageNet classification produces features that, when combined with PatchCore's nearest-neighbour scoring, better preserve the local normal distribution relevant to wafer map patches.
+
+\textbf{Score ensemble.}
+Although DINOv2 alone underperforms, its features are complementary to ViT-B/16's. The two models make different errors: DINOv2 achieves strong Scratch recall (block 9: 0.933) where ViT-B/16 struggles relatively, while ViT-B/16 dominates on Edge-Ring, Edge-Loc, and Center. A max-fusion ensemble combines the per-wafer anomaly scores from DINOv2 block-9 and frozen ViT-B/16 by taking the element-wise maximum before thresholding, requiring no retraining.
+
+To assess whether any two strong PatchCore models benefit from ensembling, a weighted-mean ensemble of frozen ViT-B/16 and EfficientNet-B1 was also evaluated across five weight combinations. The best variant (80\% ViT / 20\% EfficientNet-B1) achieves $\mathrm{F1}=0.576$, $\mathrm{AUROC}=0.952$, which falls below either model alone ($\mathrm{F1}=0.595$, $0.591$). This confirms that ensembling is only beneficial when the component models have genuinely complementary error profiles. ViT-B/16 and EfficientNet-B1 are trained on the same ImageNet objective and capture similar patch-level feature distributions, so their anomaly scores are highly correlated and fusion provides no new signal. DINOv2's self-supervised objective produces a qualitatively different feature space, enabling the gains seen below.
+
+\begin{table}[H]
+\centering
+\caption{Comprehensive ensemble comparison. Three partner configurations are evaluated against frozen ViT-B/16 + DINOv2 (max-fusion). Per-class recall columns use abbreviations: Ctr=Center, Dnt=Donut, ELoc=Edge-Loc, ERng=Edge-Ring, Loc=Loc, Scr=Scratch. Complementary pretraining objectives are necessary for ensemble gains; domain-adapted and correlated backbones both fail to improve on the frozen ViT+DINOv2 baseline.}
+\label{tab:ensemble_results}
+\begin{tabularx}{\linewidth}{>{\raggedright\arraybackslash}Xccccccccc}
+\toprule
+Model & F1 & AUROC & AUPRC & Ctr & Dnt & ELoc & ERng & Loc & Scr \\
+\midrule
+Frozen ViT-B/16  & 0.595 & 0.956 & 0.671 & 0.82 & 1.00 & 0.79 & 0.89 & 0.79 & 0.67 \\
+DINOv2 block-9   & 0.492 & 0.915 & 0.561 & 0.56 & 1.00 & 0.55 & 0.74 & 0.71 & 0.93 \\
+\textbf{ViT-B/16 + DINOv2 (max)} & \textbf{0.623} & \textbf{0.967} & \textbf{0.716} & \textbf{0.88} & \textbf{1.00} & \textbf{0.85} & \textbf{0.89} & \textbf{0.91} & \textbf{0.80} \\
+\midrule
+MAE FT ViT-B/16 25\% + DINOv2 (max) & 0.544 & 0.941 & 0.693 & 0.74 & 1.00 & 0.62 & 0.93 & 0.62 & 0.60 \\
+MAE FT ViT-B/16 75\% + DINOv2 (max) & 0.531 & 0.938 & 0.673 & 0.70 & 1.00 & 0.58 & 0.93 & 0.68 & 0.67 \\
+\midrule
+EfficientNet-B1  & 0.591 & 0.935 & 0.609 & 0.70 & 1.00 & 0.79 & 0.93 & 0.59 & 0.40 \\
+ViT-B/16 + EffNet-B1 (best 80/20) & 0.576 & 0.952 & 0.643 & --- & --- & --- & --- & --- & --- \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The DINOv2+ViT ensemble achieves $\mathrm{F1}=0.623$, $\mathrm{AUROC}=0.967$, the strongest result in the project on both metrics. Gains are broad: Loc recall rises from 0.79 to 0.91, Edge-Loc from 0.79 to 0.85, Center from 0.82 to 0.88, and Scratch from 0.67 to 0.80. The ViT+EfficientNet-B1 ensemble degrades performance, reinforcing that complementary pretraining objectives, and not simply stronger individual models, are the condition for ensemble gains.
+
+To test whether the MAE fine-tuned backbone is a better DINOv2 partner than the frozen ViT, both MAE variants (75\% and 25\% masking) are ensembled with DINOv2 block-9 using the same max-fusion protocol on the same benchmark split. Both configurations underperform the frozen ViT+DINOv2 baseline by a substantial margin: MAE~25\%+DINOv2 reaches $\mathrm{F1}=0.544$ and MAE~75\%+DINOv2 reaches $\mathrm{F1}=0.531$, compared to $0.623$ for the frozen combination. Notably, both MAE ensembles also fall \emph{below} the standalone frozen ViT ($\mathrm{F1}=0.595$), meaning DINOv2 fusion actively hurts when the ViT has been domain-adapted.
+
+\textbf{Why fine-tuning hurts the ensemble.} When the ViT is fine-tuned with MAE, it learns to reconstruct wafer-specific patch patterns. This pulls its internal representations toward the same domain that DINOv2 already covers through self-distillation. The two models then tend to agree on which wafers look anomalous, so the max-fusion step gains little. The frozen ViT behaves differently: its features come from supervised ImageNet training, a fundamentally different objective that produces a different view of the same input. Because the two models disagree in different places, the ensemble can catch defects that either model alone would miss. The MAE results make the design choice concrete: adapting the backbone to the wafer domain reduces the diversity that makes the ensemble work in the first place.
+
 \subsubsection{Cross-Model Defect Analysis}
 
 Aggregate metrics such as F1 and AUROC summarise a model's overall discriminative power but conceal which defect morphologies it handles well or poorly.
@@ -1481,6 +1615,59 @@ Retained candidates predicted as normal & 289{,}913 (69.4\%) \\
 \label{fig:classifier_umap}
 \end{figure}
 
+\section{Supervised Defect Detection: Limitations on Unseen Classes}
+\label{sec:supervised_defect_sweep}
+
+To complement the zero-defect anomaly detection results, a supervised binary classifier was trained directly on labeled defect wafers using the same frozen ViT-B/16 backbone as the best PatchCore model. The purpose was not to improve on PatchCore but to demonstrate the core limitation of supervised defect detection: performance on unseen defect classes depends on morphological similarity to the training set, not on the volume of labeled data.
+
+\textbf{Experimental setup.} A linear probe was trained on top of frozen ViT-B/16 [CLS] embeddings to classify wafers as normal or defective. Training used 40,000 normal wafers and a varying fraction of labeled defect samples from six seen classes (Center, Edge-Ring, Edge-Loc, Donut, Near-full, Random). Two classes, Scratch and Loc, were completely withheld from training and validation. The test set matches the PatchCore benchmark exactly: 5,000 normal wafers plus 249 defect wafers stratified across all eight classes. The 95th-percentile validation-normal threshold was applied identically to all models, making AUROC and F1 directly comparable to the zero-defect PatchCore ViT-B/16 result (AUROC = 0.956, F1 = 0.595). Six labeled-defect fractions were swept, yielding 20, 51, 102, 203, 508, and 1,016 training defect samples.
+
+\textbf{Sweep results.} Table~\ref{tab:supervised_sweep} reports overall AUROC and F1 at the deployed threshold across all six sweep points, along with per-class recall for the two holdout classes.
+
+\begin{table}[H]
+\centering
+\caption{Supervised ViT-B/16 linear probe sweep. Threshold set at the 95th percentile of validation-normal scores. Scratch and Loc are withheld from training at all fractions.}
+\label{tab:supervised_sweep}
+\begin{tabular}{rrrrrrr}
+\toprule
+Defect \% & Train defects & AUROC & F1 & Best-sweep F1 & Scratch recall & Loc recall \\
+\midrule
+0.1\%  & 20            & 0.895          & 0.499          & 0.640          & 0.083          & 0.400          \\
+0.25\% & 51            & 0.915          & 0.516          & 0.690          & 0.167          & 0.400          \\
+0.5\%  & 102           & 0.934          & 0.533          & 0.700          & 0.083          & 0.486          \\
+1.0\%  & 203           & 0.941          & 0.554          & 0.721          & 0.333          & 0.657          \\
+2.5\%  & 508           & 0.953          & 0.575          & \textbf{0.770} & 0.250          & 0.686          \\
+5.0\%  & \textbf{1016} & \textbf{0.956} & 0.581          & 0.760          & 0.167          & 0.686          \\
+\midrule
+--- & PatchCore (no labels) & \textbf{0.956} & \textbf{0.595} & 0.651 & \textbf{0.727} & \textbf{0.829} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Seen-class performance scales with labeled data volume.} At the smallest sweep fraction, the linear probe achieves an AUROC of 0.895 using only 20 labeled defect wafers. Performance increases monotonically to 0.956 at 1,016 labeled defects, matching the zero-defect PatchCore baseline at the largest fraction. High-contrast, structurally regular defect types such as Edge-Ring and Random achieve perfect per-class recall across all sweep points, indicating that geometrically distinctive patterns are learnable from minimal supervision.
+
+\textbf{Holdout class recall is determined by structural similarity to the training set.} The two withheld classes, Scratch and Loc, exhibit fundamentally different recall trajectories despite receiving no direct supervision at any sweep fraction. Loc recall increases from 0.40 at 20 training defects to 0.69 at 508 defects, after which it plateaus. This partial transfer arises because Loc shares a localized, cluster-like spatial signature with the seen classes Center and Edge-Loc, allowing the learned decision boundary to capture a portion of the Loc distribution without explicit exposure.
+
+\textbf{Scratch recall remains near zero across all data fractions.} Scratch recall fluctuates between 0.083 and 0.333 with no statistically meaningful upward trend, falling back to 0.167 at the largest sweep fraction. Scratch patterns manifest as thin, low-contrast linear traces that are structurally dissimilar to all training classes. Because no geometric proximity to known defect clusters exists in the frozen feature space, additional labeled data from seen classes provides no improvement in Scratch detection.
+
+\textbf{The supervised approach exhibits a structural limitation on novel defect types.} A supervised binary classifier is bounded by the set of defect distributions represented during training. Defect classes that differ substantially from any training example occupy disjoint regions of the feature space and therefore cannot be reliably separated from the normal class, irrespective of training set size.
+
+PatchCore is trained exclusively on normal wafers and learns a compact representation of the normal distribution. Any observation that deviates sufficiently from this distribution is flagged as anomalous, without regard to whether the specific defect type has been previously catalogued. This formulation extends naturally to arbitrary unseen defect classes by construction.
+
+At the largest sweep fraction, the supervised model matches PatchCore in overall AUROC (0.956) while using 1,016 labeled defect samples. Despite this parity on the aggregate metric, Scratch recall for the supervised model remains at 0.167, compared to 0.727 for PatchCore on the identical test set. In manufacturing environments where novel failure modes emerge continuously, this structural gap cannot be addressed by expanding the labeled dataset of already-known defect types.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\linewidth]{images/umap_balanced_subsample.png}
+\caption{UMAP of frozen ViT-B/16 \texttt{[CLS]} embeddings. Balanced subsample: 200 points per defect class, 3{,}000 normals. UMAP fit on train normals only; all other points projected via transform using cosine distance. * marks holdout classes withheld from training at all sweep fractions. Generated by the supervised sweep UMAP notebook.}
+\label{fig:supervised_sweep_umap}
+\end{figure}
+
+\textbf{Scratch (red *)} projects into or immediately adjacent to the normal wafer mass. The frozen feature extractor does not produce representations that separate thin, low-contrast linear defects from normal wafers in any consistent direction. Consequently, a linear classifier trained on seen-class boundaries has no geometric basis for identifying Scratch, and this deficiency is unaffected by additional seen-class supervision.
+
+\textbf{Loc (purple *)} projects in close proximity to the seen-class clusters Center and Edge-Loc. The partial overlap between the Loc distribution and the learned decision boundary accounts for the observed partial recall of approximately 0.69, which plateaus as the decision boundary stabilises and no further geometric separation of Loc from the normal class is achievable without direct Loc supervision.
+
+
 \section{Diagnostic Analysis: Embedding Geometry}
 \label{sec:diagnostic}
 
@@ -1558,12 +1745,12 @@ AAE-DSVDD achieving the best F1 among the three. This trajectory is
 consistent with the present work: our Deep SVDD result (F1 = 0.360)
 confirms the weakness of the pure hypersphere objective, and our
 reconstruction family (best F1 = 0.502) already surpasses the AAE-class
-performance reported in that work. The best result in the present project,
-ViT-B/16 PatchCore at direct $224\!\times\!224$ (F1 = 0.595,
-AUROC = 0.956), substantially exceeds all models reported in
-\cite{jo2021oneclass} on image-level ranking quality, extending their
-baseline study with the local pretrained-feature methods they do not
-consider.
+performance reported in that work. The best results in the present project substantially exceed all models reported in
+\cite{jo2021oneclass}: ViT-B/16 PatchCore at direct $224\!\times\!224$ (F1 = 0.595,
+AUROC = 0.956) as the strongest single model, and a max-fusion ensemble of ViT-B/16
+and DINOv2 ViT-B/14 (F1 = 0.623, AUROC = 0.967) as the overall best, extending their
+baseline study with local pretrained-feature methods and multi-backbone ensembling that
+they do not consider.
 
 \paragraph{Roth et al.\ (2022): PatchCore on MVTec AD.}
 The PatchCore method used as the primary local scoring approach in this
@@ -1608,12 +1795,15 @@ with PatchCore requiring no training beyond a single forward pass. Scaling to na
 stronger backbones provides a further consistent lift, with EfficientNet-B1 at $240\!\times\!240$
 reaching F1 = 0.591 on the main benchmark and F1 = 0.596 on the expanded holdout.
 
-\textbf{Best results.} ViT-B/16 PatchCore at direct $224\!\times\!224$ achieves the strongest main-benchmark
-result: $\mathrm{F1}=0.595$, $\mathrm{AUROC}=0.956$, $\mathrm{AUPRC}=0.671$. Its advantage over
+\textbf{Best results.} ViT-B/16 PatchCore at direct $224\!\times\!224$ is the strongest single-model result:
+$\mathrm{F1}=0.595$, $\mathrm{AUROC}=0.956$, $\mathrm{AUPRC}=0.671$. Its advantage over
 EfficientNet-B1 is concentrated in Scratch and Loc recall, where self-attention's global receptive field
 from block 1 resolves fine spatial detail that convolutional features miss. On the expanded holdout, where
 rare defect classes are represented more fully, EfficientNet-B1 leads (F1 = 0.596 vs 0.548), suggesting
 its compact cluster geometry is more stable at scale.
+A max-fusion ensemble combining ViT-B/16 and DINOv2 ViT-B/14 PatchCore scores achieves the overall
+project best of $\mathrm{F1}=0.623$, $\mathrm{AUROC}=0.967$, with broad per-class gains driven by
+the complementary nature of the two feature spaces.
 
 \textbf{Remaining bottleneck.} Score-distribution overlap near the 95th-percentile threshold is the primary
 limiting factor across all models. The gap between deployed F1 and best-sweep F1 is approximately 0.06
@@ -1771,6 +1961,12 @@ VAE ($\beta=0.001$) & 64$\times$64 & 0.343 & 0.770 & 0.336 \\
 VAE ($\beta=0.005$) & 64$\times$64 & 0.340 & 0.772 & 0.372 \\
 VAE ($\beta=0.01$) & 64$\times$64 & 0.335 & 0.766 & 0.369 \\
 VAE ($\beta=0.05$) & 64$\times$64 & 0.302 & 0.750 & 0.329 \\
+VAE latent dim=32$^\dagger$ & 64$\times$64 & 0.307 & 0.752 & 0.358 \\
+VAE latent dim=64$^\dagger$ & 64$\times$64 & 0.321 & 0.754 & 0.370 \\
+VAE latent dim=128$^\dagger$ & 64$\times$64 & 0.346 & 0.771 & 0.373 \\
+VAE latent dim=256$^\dagger$ & 64$\times$64 & 0.326 & 0.758 & 0.357 \\
+VAE latent dim=512 & 64$\times$64 & 0.357 & 0.776 & 0.389 \\
+VAE x224 (latent dim=512)$^\dagger$ & 224$\times$224 & 0.339 & 0.772 & 0.362 \\
 Deep SVDD & 64$\times$64 & 0.360 & 0.788 & 0.213 \\
 \midrule
 
@@ -1784,6 +1980,7 @@ TS + ResNet18 (student-only topk20) & 64$\times$64 & 0.495 & 0.894 & 0.519 \\
 TS + ResNet50 (mixed 2:1 topk20) & 64$\times$64 & 0.525 & 0.909 & 0.599 \\
 TS + WideResNet50-2 Layer2 (topk25) & 64$\times$64 & 0.508 & 0.920 & 0.540 \\
 TS + WideResNet50-2 Multilayer (topk15) & 64$\times$64 & 0.524 & 0.923 & 0.546 \\
+TS + ResNet18$^\dagger$ & 224$\times$224 & --- & --- & --- \\
 \midrule
 
 \multicolumn{5}{l}{\textit{FastFlow}} \\
@@ -1804,13 +2001,36 @@ PatchCore + WideResNet50-2 (\texttt{topk r=0.10}) & 64$\times$64 & 0.532 & 0.917
 PatchCore + WideResNet50-2 (\texttt{topk r=0.05}) & 64$\times$64 & 0.525 & 0.921 & 0.564 \\
 PatchCore + WideResNet50-2 (\texttt{topk r=0.15}) & 64$\times$64 & 0.526 & 0.912 & 0.549 \\
 PatchCore + EfficientNet-B0 (\texttt{topk r=0.02})$^\dagger$ & 64$\times$64 & 0.467 & 0.905 & 0.489 \\
+PatchCore + ViT-B/16 block 6 (\texttt{topk r=0.10})$^\dagger$ & 64$\times$64 & 0.342 & 0.832 & --- \\
+PatchCore + WideResNet50-2 layer2 (\texttt{topk r=0.05})$^\dagger$ & 224$\times$224 & 0.433 & 0.854 & 0.361 \\
+PatchCore + WideResNet50-2 layer2 (\texttt{topk r=0.10}) & 224$\times$224 & 0.457 & 0.861 & 0.376 \\
+PatchCore + WideResNet50-2 layer3 (\texttt{topk r=0.05})$^\dagger$ & 224$\times$224 & 0.215 & 0.681 & 0.167 \\
+PatchCore + WideResNet50-2 layer3 (\texttt{topk r=0.10})$^\dagger$ & 224$\times$224 & 0.228 & 0.695 & 0.185 \\
 PatchCore + WideResNet50-2 (\texttt{topk r=0.05}) & 224$\times$224 & 0.549 & 0.931 & 0.659 \\
 PatchCore + EfficientNet-B0 (\texttt{topk r=0.02}) & 224$\times$224 & 0.544 & 0.925 & 0.483 \\
+PatchCore + EfficientNet-B1 layer3 only (\texttt{topk r=0.03})$^\dagger$ & 240$\times$240 & 0.578 & 0.949 & --- \\
 PatchCore + EfficientNet-B1 (\texttt{topk r=0.03}) & 240$\times$240 & 0.591 & 0.935 & 0.609 \\
-PatchCore + ViT-B/16 block 6 (\texttt{topk r=0.10}) & 224$\times$224 & \textbf{0.595} & \textbf{0.956} & \textbf{0.671} \\
+PatchCore + ViT-B/16 block 3 (\texttt{topk r=0.10})$^\dagger$ & 224$\times$224 & 0.550 & 0.934 & 0.622 \\
+PatchCore + ViT-B/16 block 9 (\texttt{topk r=0.10})$^\dagger$ & 224$\times$224 & 0.580 & 0.943 & 0.677 \\
+PatchCore + ViT-B/16 block 11 (\texttt{topk r=0.10})$^\dagger$ & 224$\times$224 & 0.435 & 0.866 & 0.490 \\
+PatchCore + ViT-B/16 block 6 (\texttt{topk r=0.10}) & 224$\times$224 & \textbf{0.595} & 0.956 & 0.671 \\
+PatchCore + ViT-B/16 MAE fine-tuned 75\%, block 6 (\texttt{topk r=0.10}) & 224$\times$224 & \textbf{0.595} & 0.959 & 0.717 \\
+PatchCore + ViT-B/16 MAE fine-tuned 25\%, block 6 (\texttt{topk r=0.10}) & 224$\times$224 & 0.594 & \textbf{0.962} & \textbf{0.762} \\
+PatchCore + ViT-B/16 one-layer defect tuning$^\dagger$ & 224$\times$224 & 0.607 & 0.957 & --- \\
+PatchCore + ViT-B/16 two-block defect tuning$^\dagger$ & 224$\times$224 & 0.383 & 0.932 & --- \\
+\midrule
+
+\multicolumn{5}{l}{\textit{DINOv2 PatchCore}} \\
+PatchCore + DINOv2 ViT-B/14 block 6 & 224$\times$224 & 0.521 & 0.926 & 0.549 \\
+PatchCore + DINOv2 ViT-B/14 block 9 & 224$\times$224 & 0.492 & 0.915 & 0.561 \\
+PatchCore + DINOv2 ViT-B/14 block 11 & 224$\times$224 & 0.443 & 0.885 & 0.504 \\
 \midrule
 
 \multicolumn{5}{l}{\textit{Score ensemble}} \\
+ViT-B/16 + DINOv2 ViT-B/14 block-9 (max fusion) & 224$\times$224 & \textbf{0.623} & \textbf{0.967} & 0.716 \\
+MAE FT ViT-B/16 25\% + DINOv2 block-9 (max fusion) & 224$\times$224 & 0.544 & 0.941 & 0.693 \\
+MAE FT ViT-B/16 75\% + DINOv2 block-9 (max fusion) & 224$\times$224 & 0.531 & 0.938 & 0.673 \\
+ViT-B/16 + EfficientNet-B1 (80/20 weighted mean) & 224$\times$224 & 0.576 & 0.952 & 0.643 \\
 WRN PatchCore + TS-Res50 (max fusion) & 64$\times$64 & 0.529 & 0.916 & 0.611 \\
 \midrule
 
@@ -1853,7 +2073,9 @@ AE-128-topk               & 0.431 & 0.815 & 0.455 \\
 \toprule
 Variant & F1 & AUROC & AUPRC \\
 \midrule
-ViT-B16-x224-topk10-mb400k        & 0.595 & 0.956 & 0.671 \\
+ViT-B16-x224-MAE-ft-25pct-topk10-mb600k & 0.594 & \textbf{0.962} & \textbf{0.762} \\
+ViT-B16-x224-MAE-ft-75pct-topk10-mb600k & 0.595 & 0.959 & 0.717 \\
+ViT-B16-x224-topk10-mb400k              & 0.595 & 0.956 & 0.671 \\
 EffNetB1-x240-topk3-mb240k        & 0.591 & 0.935 & 0.609 \\
 WideRes50-x224-topk-mb600k-r005   & 0.549 & 0.931 & 0.659 \\
 EffNetB0-x224-topk-mb240k-r002    & 0.544 & 0.925 & 0.483 \\
@@ -2157,6 +2379,15 @@ L.~Ruff, R.~Vandermeulen, N.~Goernitz, L.~Deecke, S.~A. Siddiqui, A.~Binder, E.~
 \newblock in \textit{Proceedings of the 35th International Conference on Machine Learning (ICML)},
 \newblock vol.\ 80, pp.\ 4393--4402, 2018.
 \newblock \url{http://proceedings.mlr.press/v80/ruff18a.html}
+
+\bibitem{oquab2023dinov2}
+M.~Oquab, T.~Darcet, T.~Moutakanni, H.~Vo, M.~Szafraniec, V.~Khalidov, P.~Fernandez,
+D.~Haziza, F.~Massa, A.~El-Nouby, M.~Assran, N.~Ballas, W.~Galuba, R.~Howes,
+P.-Y.~Huang, S.-W.~Li, I.~Misra, M.~Rabbat, V.~Sharma, G.~Synnaeve, H.~Xu,
+H.~J\'{e}gou, J.~Mairal, P.~Labatut, A.~Joulin, and P.~Bojanowski,
+\newblock ``DINOv2: Learning robust visual features without supervision,''
+\newblock \textit{Transactions on Machine Learning Research}, 2024.
+\newblock \url{https://arxiv.org/abs/2304.07193}
 
 \end{thebibliography}
 

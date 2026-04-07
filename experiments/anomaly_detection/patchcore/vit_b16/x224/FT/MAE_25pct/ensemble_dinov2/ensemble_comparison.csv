@@ -1,0 +1,4 @@
+Model,F1,AUROC,AUPRC,Center,Donut,Edge-Loc,Edge-Ring,Loc,Near-full,Random,Scratch
+Frozen ViT-B/16 + DINOv2 (max),0.623,0.967,0.716,0.88,1.0,0.849,0.893,0.912,1.0,1.0,0.8
+MAE fine-tuned (75% mask) + DINOv2 (max),0.5306,0.9381,0.6731,0.7,1.0,0.585,0.929,0.676,1.0,1.0,0.667
+MAE fine-tuned (25% mask) + DINOv2 (max),0.5439,0.9411,0.6935,0.74,1.0,0.623,0.929,0.618,1.0,1.0,0.6
