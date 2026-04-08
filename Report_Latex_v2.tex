@@ -279,11 +279,25 @@ Teacher-student distillation
 PatchCore
   & None (memory bank only)
   & Patch nearest-neighbour distance
-  & ResNet18, ResNet50, WideResNet50-2, EfficientNet-B0, ViT-B/16 \\
+  & ResNet18, ResNet50, WideResNet50-2, EfficientNet-B0, EfficientNet-B1, ViT-B/16 (frozen), DINOv2 ViT-B/14 \\
 FastFlow
   & Normalising flow trained on normals
   & Log-likelihood under learned feature distribution
   & WideResNet50-2 (multilayer) \\
+\midrule
+PatchCore + MAE fine-tuning
+  & ViT fine-tuned on normals via masked autoencoding, then memory bank
+  & Patch nearest-neighbour distance
+  & ViT-B/16; mask ratios 25\% and 75\% \\
+Score ensemble
+  & None (post-hoc score fusion)
+  & Max-fused normalised anomaly scores
+  & ViT-B/16 $+$ DINOv2 ViT-B/14 (max); ViT-B/16 $+$ EfficientNet-B1 (weighted mean) \\
+\midrule
+Supervised binary classifier
+  & Linear head trained on labeled defect wafers
+  & Normal/defect logit
+  & ViT-B/16 (frozen); Scratch and Loc held out to probe unseen-class generalisation \\
 \bottomrule
 \end{tabularx}
 \end{table}
