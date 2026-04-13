@@ -129,10 +129,17 @@ A "What If?" counterfactual section after the method journey challenges the core
 - Slide 15: Sweep across backbones (ResNet18, ResNet50, WideResNet50, EfficientNet-B0/B1, ViT-B/16, DINOv2) and resolutions (64, 128, 224, 240px) with PatchCore.
 - Slide 16: Results — ViT-B/16 at 224×224 wins. Transformer attention captures global context while PatchCore preserves local structure. Show bar chart of AUROC per backbone.
 
-**Slides 17–18 — H5: Does fine-tuning the ViT backbone improve results?**
-- Slide 17: Setup — take the best frozen ViT-B/16 PatchCore model and fine-tune the backbone on normal wafers. Two variants: full fine-tune vs. partial (last N layers).
-- Slide 18: Results and trade-offs — compare fine-tuned vs frozen on AUROC/F1. Discuss whether the added compute cost is justified and any overfitting observed.
-- **Note:** Confirm fine-tuning experiments have been run and results are available before writing this slide's content.
+**Slides 17–18 — H5: Does MAE fine-tuning the ViT backbone improve results?**
+- Slide 17: Setup — apply Masked Autoencoding (MAE) pre-training to ViT-B/16 on normal wafers before PatchCore, testing two masking ratios (75% and 25%). All PatchCore hyperparameters held constant.
+- Slide 18: Results and key insight:
+
+| Backbone | F1 | AUROC | AUPRC | Recall |
+|---|---|---|---|---|
+| Frozen (ImageNet) | 0.595 | 0.956 | 0.671 | ~80% |
+| MAE fine-tuned (75% mask) | 0.595 | 0.959 | 0.717 | 82.4% |
+| MAE fine-tuned (25% mask) | 0.594 | 0.962 | 0.762 | 84.4% |
+
+Key insight: deployed F1 stays stable (threshold is fixed to 5% FPR on validation normals), but AUPRC improves substantially — 25% masking gains +0.091 over frozen. Lower masking ratio wins because wafer maps are sparse binary grids; 75% masking leaves too few visible patches (49 of 196) for the model to learn meaningful local structure. Scratch recall improves most: 72.7% (frozen) → 45.5% (75% mask) → 63.6% (25% mask).
 
 **Slides 19–20 — H6: Can ensembles push further?**
 - Slide 19: Ensemble approach — combine ViT-B/16 and DINOv2 anomaly scores using max-fusion.
@@ -143,14 +150,17 @@ A "What If?" counterfactual section after the method journey challenges the core
 ### Section 5 — What If? Counterfactual (Slides 21–22)
 
 **Slide 21 — The Question**
-- "We assumed normal-only training. What if we were wrong?"
-- Setup: take best model (PatchCore ViT-B/16); retrain with defect samples included
-- This tests whether the normal-only assumption actually costs us performance
+- "We trained only on normal wafers. What if we had used labelled defects too?"
+- Two angles tested: (1) defect-tuning variants on PatchCore ViT-B/16 — inject defect supervision into the backbone; (2) a supervised classifier trained on labelled defects as a direct comparison
+- Frame it as a challenge to the core assumption
 
 **Slide 22 — The Comparison**
-- Side-by-side: normal-only vs defect-included training
-- Metrics table: AUROC, AUPRC, F1 for both regimes
-- Interpretation: discuss what the result means for the anomaly detection assumption and its practical implications
+- Defect-tuning results (PatchCore ViT-B/16):
+  - Normal-only frozen: F1=0.595, AUROC=0.956
+  - One-layer defect tuning: F1=0.607, AUROC=0.957 (marginal gain)
+  - Two-block defect tuning: F1=0.383, AUROC=0.932 (catastrophic collapse)
+- Supervised classifier result (Section 5.7): matched AUROC=0.956 using 1,016 defect samples, but failed on Scratch (recall 0.167 vs 0.727 for normal-only PatchCore) — cannot detect unseen defect classes
+- Interpretation: normal-only is the more robust choice in practice. Defect supervision either barely helps or actively hurts when it disrupts the learned normal distribution. The supervised approach fails on generalisation to rare/unseen defect types.
 
 ---
 
@@ -171,7 +181,7 @@ A "What If?" counterfactual section after the method journey challenges the core
 - Pretrained frozen features beat training from scratch
 - ViT architecture outperforms CNNs for this task
 - Ensembles provide a small consistent gain
-- Normal-only training: the counterfactual result goes here once the comparison experiment is run
+- Normal-only training is the right choice: defect tuning either barely helps (one-layer: F1=0.607) or catastrophically hurts (two-block: F1=0.383); supervised classifier fails on unseen defect types (Scratch recall 0.167 vs 0.727)
 - Limitation: thresholding without defect labels is inherently imprecise
 
 **Slide 26 — Thank You / Q&A**
