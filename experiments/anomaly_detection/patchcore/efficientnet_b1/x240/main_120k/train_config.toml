@@ -1,0 +1,38 @@
+[run]
+output_dir = "experiments/anomaly_detection/patchcore/efficientnet_b1/x240/main_120k/artifacts/patchcore_efficientnet_b1_one_layer_120k"
+seed = 42
+
+[data]
+metadata_csv = "data/processed/x240/wm811k/metadata_120k_5pct.csv"
+image_size = 240
+batch_size = 96
+num_workers = 0
+persistent_workers = false
+prefetch_factor = 2
+
+[split]
+mode = "normal_only_120k_5pct"
+
+[training]
+device = "auto"
+
+[model]
+type = "patchcore"
+backbone_type = "efficientnet_b1"
+pretrained = true
+freeze_backbone = true
+backbone_input_size = 240
+feature_idx = 3
+patch_embed_dim = 512
+nn_k = 3
+query_chunk_size = 1024
+amp = true
+
+[scoring]
+threshold_quantile = 0.95
+
+[[sweep_variants]]
+name = "topk_mb240k_r003_x240_120k"
+memory_bank_size = 240000
+reduction = "topk_mean"
+topk_ratio = 0.03

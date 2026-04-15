@@ -40,4 +40,5 @@ Keeping these variants together under `data/dataset/` makes the preparation logi
 - `x128/benchmark_50k_5pct/` is the higher-resolution reconstruction branch used by the `x128` autoencoder baseline
 - `x224/benchmark_50k_5pct/` is the higher-resolution benchmark branch for larger pretrained backbones
 - `x240/benchmark_50k_5pct/` is the EfficientNet-oriented benchmark branch
+- `x240/benchmark_120k_5pct/` is the larger EfficientNet-oriented follow-up that keeps the same `5%` anomaly test rule while scaling the normal-only pool to `120k`
 - `x64/holdout70k_3p5k/` is the secondary holdout branch that preserves the base train and validation rows while replacing the test split

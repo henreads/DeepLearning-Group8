@@ -10,6 +10,8 @@ EfficientNet-B1 is closest to its pretrained operating scale at `x240`, so these
 
 - `main/`
   Local one-layer benchmark run with checkpoint, benchmark metrics, holdout evaluation, and UMAP exports.
+- `main_120k/`
+  Script-driven one-layer follow-up that keeps the same EfficientNet-B1 main recipe but scales the normal-only split to `120k`.
 - `one_layer/`
   Imported single-layer source notebook awaiting a full local training run.
 - `layer3_5/`

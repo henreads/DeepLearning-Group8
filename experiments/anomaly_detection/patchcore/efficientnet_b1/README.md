@@ -15,6 +15,7 @@ The subfamily focuses on:
 ## Branches
 
 - `x240/main/`
+- `x240/main_120k/`
 - `x240/one_layer/`
 - `x240/layer3_5/`
 - `x240/layer3_5_no_defect_tuning/`

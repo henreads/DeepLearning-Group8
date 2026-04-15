@@ -1,0 +1,30 @@
+[dataset]
+name = "wm811k"
+raw_pickle = "data/raw/LSWMD.pkl"
+processed_root = "data/processed/x240/wm811k"
+metadata_csv = "data/processed/x240/wm811k/metadata.csv"
+metadata_50k_csv = "data/processed/x240/wm811k/metadata_50k.csv"
+metadata_50k_5pct_csv = "data/processed/x240/wm811k/metadata_120k_5pct.csv"
+dev_metadata_csv = "data/processed/x240/wm811k/metadata_dev.csv"
+image_size = 240
+normal_label = "none"
+defect_label = "pattern"
+
+[split_generation]
+mode = "normal_only_test_defects"
+
+[splits]
+train_normal_fraction = 0.8
+val_normal_fraction = 0.1
+test_normal_fraction = 0.1
+random_seed = 42
+
+[dev_subset]
+enabled = true
+normal_count = 2000
+defect_count = 400
+
+[train_subset]
+normal_count = 120000
+use_all_defects_for_test = false
+test_defect_fraction_of_test_normals = 0.05
