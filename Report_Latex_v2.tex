@@ -1267,6 +1267,23 @@ Block 6 is the best extraction point ($\mathrm{F1}=0.521$), consistent with the 
 \textbf{DINOv2 underperforms ViT-B/16 despite finer spatial resolution.}
 The best DINOv2 result ($\mathrm{F1}=0.521$, $\mathrm{AUROC}=0.926$) falls below the frozen ViT-B/16 ($\mathrm{F1}=0.595$, $\mathrm{AUROC}=0.956$) on every headline metric. DINOv2's self-distillation objective optimises for semantic class separability: its patch features capture object-level and part-level concepts well but are not calibrated to detect the subtle textural deviations that wafer defects produce. ViT-B/16 pretrained with supervised ImageNet classification produces features that, when combined with PatchCore's nearest-neighbour scoring, better preserve the local normal distribution relevant to wafer map patches.
 
+\textbf{Spatial feature visualization.}
+Figure~\ref{fig:dinov2_viz} shows three complementary spatial heatmaps for edge-loc and edge-ring defect classes under the block-6 DINOv2 PatchCore model. Both classes produce spatially compact heatmaps aligned with the defect region, confirming that block-6 features retain sufficient local structure to localise edge-type defects reliably.
+
+\begin{itemize}
+    \item \textbf{PatchCore Heatmap.} Per-patch nearest-neighbour distance to the normal memory bank. Brighter regions indicate patches most dissimilar from normal wafers.
+    \item \textbf{Occlusion Map.} Drop in anomaly score when each 14$\times$14 patch is replaced with a background token. Directly measures each patch's contribution to the detection decision.
+    \item \textbf{Sensitivity Map.} L2 norm of the gradient of the anomaly score with respect to each patch's block-6 features. Highlights which patches the score is most sensitive to.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.9\linewidth]{images/vit/main/viz_Edge_Loc.png}
+\includegraphics[width=0.9\linewidth]{images/vit/main/viz_Edge_Ring.png}
+\caption{Spatial heatmaps for edge-loc and edge-ring defect classes under DINOv2 ViT-B/14 PatchCore (block~6). Each row shows one wafer image. Columns from left to right: raw wafer map, PatchCore distance heatmap, occlusion map, and sensitivity map. Misses (model predicted normal) are labelled Normal (MISS).}
+\label{fig:dinov2_viz}
+\end{figure}
+
 \textbf{Score ensemble.}
 Although DINOv2 alone underperforms, its features are complementary to ViT-B/16's. The two models make different errors: DINOv2 achieves strong Scratch recall (block 9: 0.933) where ViT-B/16 struggles relatively, while ViT-B/16 dominates on Edge-Ring, Edge-Loc, and Center. A max-fusion ensemble combines the per-wafer anomaly scores from DINOv2 block-9 and frozen ViT-B/16 by taking the element-wise maximum before thresholding, requiring no retraining.
 
