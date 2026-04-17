@@ -7,7 +7,6 @@ from torch import nn
 from torch.nn import functional as F
 
 from wafer_defect.models.resnet import ResNetFeatureExtractor
-from wafer_defect.models.vit import ViTFeatureExtractor
 from wafer_defect.scoring import spatial_max, spatial_mean, topk_spatial_mean
 
 
@@ -113,6 +112,8 @@ class TSDistillationModel(nn.Module):
         self.feature_dim = _teacher_feature_dim(self.teacher_backbone, self.teacher_layer)
 
         if self.teacher_backbone in {"vit_b16", "vit_base_patch16_224"}:
+            from wafer_defect.models.vit import ViTFeatureExtractor
+
             self.teacher = ViTFeatureExtractor(
                 backbone_name=self.teacher_backbone,
                 pretrained=teacher_pretrained,
