@@ -7,7 +7,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
+import torch
+from torch.utils.data import DataLoader
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -101,64 +104,95 @@ def run_eval(config_path: Path, output_dir: Path) -> None:
 
 
 def run_sweep(config_path: Path, output_dir: Path) -> None:
+    """Score sweep: load model once, collect maps in-memory, sweep all weight/reduction combos.
+
+    ResNet50 at 224x224 is expensive — spawning 42 evaluate subprocesses would take ~30 min.
+    Instead we collect normalised anomaly maps once and apply all combinations in Python.
+    """
+    sys.path.insert(0, str(REPO_ROOT / "src"))
+    from wafer_defect.config import load_toml
+    from wafer_defect.data.wm811k import WaferMapDataset
+    from wafer_defect.evaluation.reconstruction_metrics import summarize_threshold_metrics, sweep_threshold_metrics
+    from wafer_defect.models.ts_distillation import build_ts_distillation_from_config
+    from wafer_defect.scoring import spatial_max, spatial_mean, topk_spatial_mean
+
     checkpoints_dir, results_dir = _ensure_layout(output_dir)
     checkpoint_path = checkpoints_dir / "best_model.pt"
     if not checkpoint_path.exists():
         raise FileNotFoundError(f"Best checkpoint not found: {checkpoint_path}")
 
-    sweep_tmp_dir = results_dir / "_score_sweep_tmp"
-    if sweep_tmp_dir.exists():
-        shutil.rmtree(sweep_tmp_dir)
-    sweep_tmp_dir.mkdir(parents=True, exist_ok=True)
+    config = load_toml(config_path)
+    image_size = int(config["data"].get("image_size", 224))
+    batch_size = int(config["data"].get("batch_size", 256))
+    num_workers = int(config["data"].get("num_workers", 0))
+    metadata_path = REPO_ROOT / config["data"]["metadata_csv"]
 
-    rows: list[dict[str, float | str | None]] = []
-    for student_weight, auto_weight in SCORE_SWEEP_WEIGHTS:
+    requested_device = str(config["training"].get("device", "auto"))
+    device = torch.device("cuda" if requested_device == "auto" and torch.cuda.is_available() else requested_device)
+    print(f"Device: {device}", flush=True)
+
+    val_dataset = WaferMapDataset(metadata_path, split="val", image_size=image_size)
+    test_dataset = WaferMapDataset(metadata_path, split="test", image_size=image_size)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+
+    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
+    model = build_ts_distillation_from_config(config, image_size=image_size)
+    model.load_state_dict(checkpoint["model_state_dict"])
+    model.to(device).eval()
+    print(f"Loaded checkpoint from {checkpoint_path}", flush=True)
+
+    def collect_maps(loader: DataLoader) -> tuple[torch.Tensor, torch.Tensor, np.ndarray]:
+        s_maps, a_maps, lbls = [], [], []
+        with torch.inference_mode():
+            for inputs, batch_labels in loader:
+                inputs = inputs.to(device)
+                s_map, a_map = model.raw_anomaly_maps(inputs)
+                s_maps.append((s_map / model.student_map_scale.clamp_min(1e-6)).cpu())
+                a_maps.append((a_map / model.autoencoder_map_scale.clamp_min(1e-6)).cpu())
+                lbls.append(batch_labels.cpu())
+        return torch.cat(s_maps), torch.cat(a_maps), torch.cat(lbls).numpy()
+
+    def reduce_map(anomaly_map: torch.Tensor, reduction: str, topk_ratio: float | None) -> np.ndarray:
+        if reduction == "mean":
+            return spatial_mean(anomaly_map).numpy()
+        if reduction == "max":
+            return spatial_max(anomaly_map).numpy()
+        return topk_spatial_mean(anomaly_map, topk_ratio=topk_ratio).numpy()
+
+    print("Collecting val maps...", flush=True)
+    val_s, val_a, val_labels = collect_maps(val_loader)
+    print("Collecting test maps...", flush=True)
+    test_s, test_a, test_labels = collect_maps(test_loader)
+
+    rows: list[dict] = []
+    n_combos = len(SCORE_SWEEP_WEIGHTS) * len(SCORE_SWEEP_REDUCTIONS)
+    for i, (student_weight, auto_weight) in enumerate(SCORE_SWEEP_WEIGHTS):
+        val_map = student_weight * val_s + auto_weight * val_a
+        test_map = student_weight * test_s + auto_weight * test_a
         for reduction, topk_ratio in SCORE_SWEEP_REDUCTIONS:
             variant_name = f"s{student_weight:g}_a{auto_weight:g}_{reduction}" + ("" if topk_ratio is None else f"_r{topk_ratio:.2f}")
-            variant_dir = sweep_tmp_dir / variant_name
-            _run(
-                [
-                    sys.executable,
-                    str(REPO_ROOT / "scripts" / "evaluate_reconstruction_model.py"),
-                    "--checkpoint",
-                    str(checkpoint_path),
-                    "--config",
-                    str(config_path),
-                    "--model-type",
-                    "ts_distillation",
-                    "--threshold-quantile",
-                    str(THRESHOLD_QUANTILE),
-                    "--output-dir",
-                    str(variant_dir),
-                    "--reduction",
-                    reduction,
-                    *(["--topk-ratio", str(topk_ratio)] if topk_ratio is not None else []),
-                    "--score-student-weight",
-                    str(student_weight),
-                    "--score-autoencoder-weight",
-                    str(auto_weight),
-                ]
-            )
-            summary = json.loads((variant_dir / "summary.json").read_text(encoding="utf-8"))
-            metrics = summary["metrics_at_validation_threshold"]
-            best_sweep = summary["best_threshold_sweep"]
-            rows.append(
-                {
-                    "name": variant_name,
-                    "student_weight": student_weight,
-                    "auto_weight": auto_weight,
-                    "reduction": reduction,
-                    "topk_ratio": topk_ratio,
-                    "threshold": metrics["threshold"],
-                    "precision": metrics["precision"],
-                    "recall": metrics["recall"],
-                    "f1": metrics["f1"],
-                    "auroc": metrics["auroc"],
-                    "auprc": metrics["auprc"],
-                    "predicted_anomalies": metrics["predicted_anomalies"],
-                    "best_sweep_f1": best_sweep["f1"],
-                }
-            )
+            val_scores = reduce_map(val_map, reduction, topk_ratio)
+            test_scores = reduce_map(test_map, reduction, topk_ratio)
+            threshold = float(np.quantile(val_scores[val_labels == 0], THRESHOLD_QUANTILE))
+            metrics = summarize_threshold_metrics(test_labels, test_scores, threshold)
+            _, best_sweep = sweep_threshold_metrics(test_labels, test_scores)
+            rows.append({
+                "name": variant_name,
+                "student_weight": student_weight,
+                "auto_weight": auto_weight,
+                "reduction": reduction,
+                "topk_ratio": topk_ratio,
+                "threshold": threshold,
+                "precision": metrics["precision"],
+                "recall": metrics["recall"],
+                "f1": metrics["f1"],
+                "auroc": metrics["auroc"],
+                "auprc": metrics["auprc"],
+                "predicted_anomalies": metrics["predicted_anomalies"],
+                "best_sweep_f1": best_sweep["f1"],
+            })
+            print(f"[{len(rows)}/{n_combos}] {variant_name}  F1={metrics['f1']:.4f}  AUROC={metrics['auroc']:.4f}", flush=True)
 
     score_sweep_df = pd.DataFrame(rows).sort_values(["f1", "auprc", "auroc"], ascending=False).reset_index(drop=True)
     score_sweep_df.to_csv(results_dir / "score_sweep_summary.csv", index=False)
@@ -167,7 +201,6 @@ def run_sweep(config_path: Path, output_dir: Path) -> None:
     best_row["topk_ratio"] = None if pd.isna(best_row["topk_ratio"]) else float(best_row["topk_ratio"])
     (results_dir / "selected_score_variant.json").write_text(json.dumps(best_row, indent=2), encoding="utf-8")
 
-    shutil.rmtree(sweep_tmp_dir, ignore_errors=True)
     _write_phase_manifest(output_dir, "sweep")
     _write_run_manifest(output_dir)
 
