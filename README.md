@@ -6,7 +6,8 @@
 
 1. Create environment and install: `py -3.11 -m venv .venv && .venv\Scripts\Activate.ps1 && pip install -e .`
 2. Place the dataset at `data/raw/LSWMD.pkl` (WM-811K pickle)
-3. Launch Jupyter from the repo root: `jupyter notebook`
+3. Download the zip(contain the model/npz/matrix) from https://sutdapac-my.sharepoint.com/:f:/g/personal/henry_lee_mymail_sutd_edu_sg/IgDoXYip5GTZS68DEXWup5lIAcflFy-6c0__vcd4uaSOZOA?e=ljJtk6 and replace the folder with the same name
+4. Launch Jupyter from the repo root: `jupyter notebook`
 
 ---
 
