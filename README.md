@@ -4,11 +4,14 @@
 
 ## Quick Start
 
-1. Create environment and install: `py -3.11 -m venv .venv && .venv\Scripts\Activate.ps1 && pip install -e .`
-2. Place the dataset at `data/raw/LSWMD.pkl` (WM-811K pickle)
-3. Download the zip(contain the model/npz/matrix) from https://sutdapac-my.sharepoint.com/:f:/g/personal/henry_lee_mymail_sutd_edu_sg/IgDoXYip5GTZS68DEXWup5lIAcflFy-6c0__vcd4uaSOZOA?e=ljJtk6 and replace the folder with the same name
-4. Launch Jupyter from the repo root: `jupyter notebook`
+1. Create and activate the environment, then install the project: `py -3.11 -m venv .venv && .venv\Scripts\Activate.ps1 && pip install -e .`
+2. Place the raw WM-811K pickle at `data/raw/LSWMD.pkl`.
+3. Build the processed dataset by running notebook in data/dataset/ 
+    For example [notebook](data/dataset/x64/benchmark_50k_5pct/notebook.ipynb).
+4. Download the artifact bundle from https://sutdapac-my.sharepoint.com/:f:/g/personal/henry_lee_mymail_sutd_edu_sg/IgDoXYip5GTZS68DEXWup5lIAcflFy-6c0__vcd4uaSOZOA?e=ljJtk6 and replace the matching folder under `artifacts/` with the extracted contents.
+5. Open the experiment notebook you want to inspect or rerun. For the top-10 table, start with [experiments/anomaly_detection/patchcore/dinov2_vit_b14/x224/ensemble.ipynb](experiments/anomaly_detection/patchcore/dinov2_vit_b14/x224/ensemble.ipynb).
 
+If an experiment already has saved outputs, set `RETRAIN=False` in the notebook to load the stored artifacts instead of retraining.
 ---
 
 ## Top 10 Models
