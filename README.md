@@ -1,359 +1,185 @@
-# DeepLearning-Group8
+# Automated IC Wafer Defect Detection — WM-811K
 
-# Automated IC Wafer Defect Classification
+**Group 08** · Henry Lee Jun · Chia Tang · Genson Low
 
-**Group Number:** 08
-**Group Members:**
+## Quick Start
 
-- Henry Lee Jun, 1004219
-- Chia Tang, 1007200
-- Genson Low, 1006931
+**Dataset and Artifact download:** https://sutdapac-my.sharepoint.com/:f:/g/personal/henry_lee_mymail_sutd_edu_sg/IgDoXYip5GTZS68DEXWup5lIAcflFy-6c0__vcd4uaSOZOA?e=ljJtk6
 
-## Project Goal
+1. Create and activate the environment, then install the project: `py -3.11 -m venv .venv && .venv\Scripts\Activate.ps1 && pip install -e .`
+2. Download `LSWMD.pkl` from the link above and place it at `data/raw/LSWMD.pkl`.
+3. Build the processed datasets by running the relevant notebooks below (run all to reproduce every experiment):
+   - [data/dataset/x64/benchmark_50k_5pct/notebook.ipynb](data/dataset/x64/benchmark_50k_5pct/notebook.ipynb) — x64, main benchmark
+   - [data/dataset/x64/holdout70k_3p5k/notebook.ipynb](data/dataset/x64/holdout70k_3p5k/notebook.ipynb) — x64, holdout test set
+   - [data/dataset/x128/benchmark_50k_5pct/notebook.ipynb](data/dataset/x128/benchmark_50k_5pct/notebook.ipynb) — x128, main benchmark
+   - [data/dataset/x224/benchmark_50k_5pct/notebook.ipynb](data/dataset/x224/benchmark_50k_5pct/notebook.ipynb) — x224, main benchmark
+   - [data/dataset/x240/benchmark_50k_5pct/notebook.ipynb](data/dataset/x240/benchmark_50k_5pct/notebook.ipynb) — x240, main benchmark
+4. Download the artifact bundle from the link above and replace the matching folder under `artifacts/` with the extracted contents.
+5. Open the experiment notebook you want to inspect or rerun. For the top-10 table, start with [experiments/anomaly_detection/patchcore/dinov2_vit_b14/x224/ensemble.ipynb](experiments/anomaly_detection/patchcore/dinov2_vit_b14/x224/ensemble.ipynb).
 
-This project studies anomaly detection on semiconductor wafer maps using the WM-811K dataset.
-The initial codebase is organized around a simple baseline workflow:
+If an experiment already has saved outputs, set `RETRAIN=False` in the notebook to load the stored artifacts instead of retraining.
+---
 
-1. Place the raw WM-811K pickle under `data/raw/`
-2. Build processed arrays plus metadata CSV files
-3. Open the notebooks as the main workflow for training and analysis
-4. Use helper scripts only for data preparation or optional automation
-5. Save weights, evaluation outputs, and training history for reproducibility
+## Top 10 Models
+
+Ranked by val-threshold F1 (primary metric). All metrics from the main benchmark (5k normal / 250 anomaly test set).
+
+| Rank | Model | F1 | AUROC | AUPRC | Notebook |
+|---|---|---|---|---|---|
+| 1 | Ensemble: ViT-B/16 + DINOv2 ViT-B/14 (max-fusion) | 0.623 | 0.967 | 0.716 | [notebook](experiments/anomaly_detection/patchcore/dinov2_vit_b14/x224/ensemble.ipynb) |
+| 2 | PatchCore + ViT-B/16 (block 6, 224×224) | 0.595 | 0.956 | 0.671 | [notebook](experiments/anomaly_detection/patchcore/vit_b16/x224/main/notebook.ipynb) |
+| 3 | Ensemble: ViT-B/16 + DINOv2 ViT-B/14 (Mahalanobis) | 0.592 | 0.968 | 0.762 | [notebook](experiments/anomaly_detection/patchcore/dinov2_vit_b14/x224/ensemble.ipynb) |
+| 4 | PatchCore + EfficientNet-B1 (block 3, 240×240) | 0.591 | 0.935 | 0.609 | [notebook](experiments/anomaly_detection/patchcore/efficientnet_b1/x240/main_one_layer/notebook.ipynb) |
+| 5 | Ensemble: ViT-B/16 + EfficientNet-B1 (80/20) | 0.576 | 0.952 | 0.643 | [notebook](experiments/anomaly_detection/ensemble/x224/vit_effnetb1_ensemble/notebook.ipynb) |
+| 6 | PatchCore + WideResNet50-2 (layer2+3, 224×224) | 0.549 | 0.931 | 0.659 | [notebook](experiments/anomaly_detection/patchcore/wideresnet50/x224/multilayer_umap/notebook.ipynb) |
+| 7 | PatchCore + EfficientNet-B0 (blocks 3+6, 224×224) | 0.544 | 0.925 | 0.483 | [notebook](experiments/anomaly_detection/patchcore/efficientnet_b0/x224/main/notebook.ipynb) |
+| 8 | PatchCore + WideResNet50-2 (layer2+3, 64×64, r=0.10) | 0.532 | 0.917 | 0.562 | [notebook](experiments/anomaly_detection/patchcore/wideresnet50/x64/main/notebook.ipynb) |
+| 9 | Score Ensemble (PatchCore-WRN50-x64 + TS-Res50-x64) | 0.529 | 0.916 | 0.611 | [notebook](experiments/anomaly_detection/ensemble/x64/score_ensemble/notebook.ipynb) |
+| 10 | PatchCore + WideResNet50-2 (layer2+3, 64×64, r=0.15) | 0.526 | 0.912 | 0.549 | [notebook](experiments/anomaly_detection/patchcore/wideresnet50/x64/main/notebook.ipynb) |
+
+> Ranks 1 and 3 use the same ensemble notebook. Ranks 8 and 10 are sweep variants within the same notebook — set `RETRAIN=False` to load saved results for all variants.
+
+---
+
+## Per Family
+
+### Autoencoder
+
+| # | Model | F1 | AUROC | AUPRC | Notebook |
+|---|---|---|---|---|---|
+| 1 | AE x64 Baseline (Trainable) | 0.468 | 0.839 | 0.522 | [notebook](experiments/anomaly_detection/autoencoder/x64/baseline/notebook.ipynb) |
+| 2 | AE x64 + BatchNorm (Trainable) | 0.502 | 0.834 | 0.568 | [notebook](experiments/anomaly_detection/autoencoder/x64/batchnorm/notebook.ipynb) |
+| 3 | AE x64 + BatchNorm + Dropout sweep (Trainable) | 0.487 | 0.851 | 0.617 | [notebook](experiments/anomaly_detection/autoencoder/x64/batchnorm_dropout/notebook.ipynb) |
+| 4 | AE x64 Residual (Trainable) | 0.474 | 0.843 | 0.589 | [notebook](experiments/anomaly_detection/autoencoder/x64/residual/notebook.ipynb) |
+| 5 | AE x128 Baseline (Trainable) | 0.431 | 0.815 | 0.455 | [notebook](experiments/anomaly_detection/autoencoder/x128/baseline/notebook.ipynb) |
+| 6 | AE x224 Main (Trainable) | 0.510 | 0.901 | 0.596 | [notebook](experiments/anomaly_detection/autoencoder/x224/main/notebook.ipynb) |
+
+### VAE
+
+| # | Model | F1 | AUROC | AUPRC | Notebook |
+|---|---|---|---|---|---|
+| 1 | VAE x64 Baseline (Trainable) | 0.340 | 0.771 | 0.372 | [notebook](experiments/anomaly_detection/vae/x64/baseline/notebook.ipynb) |
+| 2 | VAE x64 Beta Sweep (Trainable) | 0.343 | 0.770 | 0.336 | [notebook](experiments/anomaly_detection/vae/x64/beta_sweep/notebook.ipynb) |
+| 3 | VAE x64 Latent Dim Sweep (Trainable) | 0.357 | 0.776 | 0.389 | [notebook](experiments/anomaly_detection/vae/x64/latent_dim_sweep/notebook.ipynb) |
+| 4 | VAE x224 Main (Trainable) | 0.339 | 0.772 | 0.362 | [notebook](experiments/anomaly_detection/vae/x224/main/notebook.ipynb) |
+
+> Sweep rows show best result. Set `RETRAIN=False` to load saved results for all variants.
+
+### SVDD
+
+| # | Model | F1 | AUROC | AUPRC | Notebook |
+|---|---|---|---|---|---|
+| 1 | Deep SVDD x64 (Trainable) | 0.360 | 0.788 | 0.213 | [notebook](experiments/anomaly_detection/svdd/x64/baseline/notebook.ipynb) |
+
+### Backbone Embedding
+
+| # | Model | F1 | AUROC | AUPRC | Notebook |
+|---|---|---|---|---|---|
+| 1 | Backbone Embedding ResNet18 x64 | 0.236 | 0.685 | 0.195 | [notebook](experiments/anomaly_detection/backbone_embedding/resnet18/x64/baseline/notebook.ipynb) |
+| 2 | Backbone Embedding WideResNet50-2 x64 | 0.243 | 0.677 | 0.142 | [notebook](experiments/anomaly_detection/backbone_embedding/wide_resnet50_2/x64/baseline/notebook.ipynb) |
+
+### Teacher-Student
+
+| # | Model | F1 | AUROC | AUPRC | Notebook |
+|---|---|---|---|---|---|
+| 1 | TS ResNet18 x64 (Trainable) | 0.495 | 0.894 | 0.519 | [notebook](experiments/anomaly_detection/teacher_student/resnet18/x64/main/notebook.ipynb) |
+| 2 | TS ResNet18 x224 (Trainable) *(missing artifacts — set RETRAIN=True)* | 0.511 | 0.907 | 0.503 | [notebook](experiments/anomaly_detection/teacher_student/resnet18/x224/main/notebook.ipynb) |
+| 3 | TS ResNet50 x64 Main (Trainable) | 0.525 | 0.909 | 0.599 | [notebook](experiments/anomaly_detection/teacher_student/resnet50/x64/main/notebook.ipynb) |
+| 4 | TS ResNet50 x64 Layer Ablation (Trainable) *(10-epoch run; see note)* | 0.520 | 0.877 | 0.550 | [notebook](experiments/anomaly_detection/teacher_student/resnet50/x64/layer_ablation/notebook.ipynb) |
+| 5 | TS ResNet50 x224 Main (Trainable) | 0.399 | 0.828 | 0.361 | [notebook](experiments/anomaly_detection/teacher_student/resnet50/x224/main/notebook.ipynb) |
+| 6 | TS ResNet50 x224 Feature AE Dim Sweep (Trainable) *(10-epoch run; see note)* | 0.362 | 0.813 | 0.331 | [notebook](experiments/anomaly_detection/teacher_student/resnet50/x224/feature_autoencoder_dim_sweep/notebook.ipynb) |
+| 7 | TS ViT-B/16 x224 (Trainable) *(10-epoch run; see note)* | 0.051 | 0.606 | 0.064 | [notebook](experiments/anomaly_detection/teacher_student/vit_b16/x224/main/notebook.ipynb) |
+| 8 | TS WideResNet50-2 x64 Layer2 (Trainable) | 0.508 | 0.920 | 0.540 | [notebook](experiments/anomaly_detection/teacher_student/wideresnet50_2/x64/layer2_self_contained/notebook.ipynb) |
+| 9 | TS WideResNet50-2 x64 Multilayer (Trainable) | 0.524 | 0.923 | 0.546 | [notebook](experiments/anomaly_detection/teacher_student/wideresnet50_2/x64/multilayer_self_contained/notebook.ipynb) |
+| 10 | TS WideResNet50-2 x224 Multilayer (Trainable) | 0.315 | 0.789 | 0.269 | [notebook](experiments/anomaly_detection/teacher_student/wideresnet50_2/x224/multilayer_self_contained/notebook.ipynb) |
+
+- Row 3 shows best sweep result (topk_mean r=0.20).
+- Rows 4, 6, and 7 were retrained for 10 epochs (quick mode); metrics are lower than the original full runs.
+- Row 7 (ViT-B/16) is a known failure regardless of training duration due to architectural mismatch between ViT and the CNN student; the original 30-epoch run also only reached F1=0.163.
+
+### PatchCore
+
+| # | Model | F1 | AUROC | AUPRC | Notebook |
+|---|---|---|---|---|---|
+| 1 | PatchCore AE-BN Backbone x64 (Trainable) | 0.336 | 0.851 | 0.226 | [notebook](experiments/anomaly_detection/patchcore/ae_bn/x64/main/notebook.ipynb) |
+| 2 | PatchCore ResNet18 x64 | 0.401 | 0.842 | 0.411 | [notebook](experiments/anomaly_detection/patchcore/resnet18/x64/main/notebook.ipynb) |
+| 3 | PatchCore ResNet50 x64 | 0.420 | 0.821 | 0.363 | [notebook](experiments/anomaly_detection/patchcore/resnet50/x64/main/notebook.ipynb) |
+| 4 | PatchCore WideResNet50-2 x64 | 0.532 | 0.917 | 0.562 | [notebook](experiments/anomaly_detection/patchcore/wideresnet50/x64/main/notebook.ipynb) |
+| 5 | PatchCore WideResNet50-2 x64 Labeled 120k | ~0.480 | — | — | [notebook](experiments/anomaly_detection/patchcore/wideresnet50/x64/labeled_120k/notebook.ipynb) |
+| 6 | PatchCore WideResNet50-2 x224 Layer2 | 0.512 | 0.918 | 0.623 | [notebook](experiments/anomaly_detection/patchcore/wideresnet50/x224/layer2/notebook.ipynb) |
+| 7 | PatchCore WideResNet50-2 x224 Layer3 | 0.498 | 0.906 | 0.595 | [notebook](experiments/anomaly_detection/patchcore/wideresnet50/x224/layer3/notebook.ipynb) |
+| 8 | PatchCore WideResNet50-2 x224 Multilayer | 0.549 | 0.931 | 0.659 | [notebook](experiments/anomaly_detection/patchcore/wideresnet50/x224/multilayer_umap/notebook.ipynb) |
+| 9 | PatchCore WideResNet50-2 x224 Weighted | 0.528 | 0.928 | 0.654 | [notebook](experiments/anomaly_detection/patchcore/wideresnet50/x224/weighted/notebook.ipynb) |
+| 10 | PatchCore EfficientNet-B0 x224 | 0.544 | 0.925 | 0.483 | [notebook](experiments/anomaly_detection/patchcore/efficientnet_b0/x224/main/notebook.ipynb) |
+| 11 | PatchCore EfficientNet-B1 x240 (one layer) | 0.591 | 0.935 | 0.609 | [notebook](experiments/anomaly_detection/patchcore/efficientnet_b1/x240/main_one_layer/notebook.ipynb) |
+| 12 | PatchCore EfficientNet-B1 x240 (layer 3+5) | 0.562 | 0.929 | 0.592 | [notebook](experiments/anomaly_detection/patchcore/efficientnet_b1/x240/layer3_5/notebook.ipynb) |
+| 13 | PatchCore EfficientNet-B1 x240 (layer 3+5, no defect tuning) | 0.541 | 0.920 | 0.563 | [notebook](experiments/anomaly_detection/patchcore/efficientnet_b1/x240/layer3_5_no_defect_tuning/notebook.ipynb) |
+| 14 | PatchCore ViT-B/16 x224 Main | 0.595 | 0.956 | 0.671 | [notebook](experiments/anomaly_detection/patchcore/vit_b16/x224/main/notebook.ipynb) |
+| 15 | PatchCore ViT-B/16 x224 Block Depth Sweep (best: block 6) | 0.580 | 0.954 | 0.642 | [notebook](experiments/anomaly_detection/patchcore/vit_b16/x224/block_depth_sweep/notebook.ipynb) |
+| 16 | PatchCore ViT-B/16 x224 One Layer Defect Tuning | 0.595 | 0.956 | 0.671 | [notebook](experiments/anomaly_detection/patchcore/vit_b16/x224/one_layer_defect_tuning/notebook.ipynb) |
+| 17 | PatchCore ViT-B/16 x224 One Layer No Defect Tuning | 0.573 | 0.953 | 0.643 | [notebook](experiments/anomaly_detection/patchcore/vit_b16/x224/one_layer_no_defect_tuning/notebook.ipynb) |
+| 18 | PatchCore ViT-B/16 x224 Two Block | 0.569 | 0.950 | 0.628 | [notebook](experiments/anomaly_detection/patchcore/vit_b16/x224/two_block/notebook.ipynb) |
+| 19 | PatchCore ViT-B/16 x224 Two Block No Defect Tuning | 0.551 | 0.943 | 0.602 | [notebook](experiments/anomaly_detection/patchcore/vit_b16/x224/two_block_no_defect_tuning/notebook.ipynb) |
+| 20 | PatchCore ViT-B/16 x64 | 0.342 | 0.832 | 0.348 | [notebook](experiments/anomaly_detection/patchcore/vit_b16/x64/main/notebook.ipynb) |
+| 21 | PatchCore DINOv2 ViT-B/14 x224 (block sweep, best: block 6) | 0.521 | 0.926 | 0.549 | [notebook](experiments/anomaly_detection/patchcore/dinov2_vit_b14/x224/notebook.ipynb) |
+
+> Row 4 shows best sweep result (r=0.10). Row 5 F1 is approximate (~0.48, AUROC/AUPRC not recorded). PatchCore AE-BN is trainable; all others use frozen pretrained backbones.
+
+### RD4AD
+
+| # | Model | F1 | AUROC | AUPRC | Notebook |
+|---|---|---|---|---|---|
+| 1 | RD4AD WideResNet50-2 x224 (Trainable) | 0.477 | 0.877 | 0.414 | [notebook](experiments/anomaly_detection/rd4ad/wideresnet50/x224/main/notebook.ipynb) |
+
+### FastFlow
+
+| # | Model | F1 | AUROC | AUPRC | Notebook |
+|---|---|---|---|---|---|
+| 1 | FastFlow x64 sweep (Trainable) | 0.482 | 0.871 | 0.489 | [notebook](experiments/anomaly_detection/fastflow/x64/main/notebook.ipynb) |
+
+> Shows best sweep result (WRN50-2 layer2+3, 4 flow steps).
+
+### Ensemble
+
+| # | Model | F1 | AUROC | AUPRC | Notebook |
+|---|---|---|---|---|---|
+| 1 | Ensemble: ViT-B/16 + DINOv2 ViT-B/14 (max-fusion) | 0.623 | 0.967 | 0.716 | [notebook](experiments/anomaly_detection/patchcore/dinov2_vit_b14/x224/ensemble.ipynb) |
+| 2 | Ensemble: ViT-B/16 + DINOv2 ViT-B/14 (Mahalanobis) | 0.592 | 0.968 | 0.762 | [notebook](experiments/anomaly_detection/patchcore/dinov2_vit_b14/x224/ensemble.ipynb) |
+| 3 | Ensemble: ViT-B/16 + EfficientNet-B1 (80/20) | 0.576 | 0.952 | 0.643 | [notebook](experiments/anomaly_detection/ensemble/x224/vit_effnetb1_ensemble/notebook.ipynb) |
+| 4 | Score Ensemble x64 (PatchCore-WRN50 + TS-Res50) | 0.529 | 0.916 | 0.611 | [notebook](experiments/anomaly_detection/ensemble/x64/score_ensemble/notebook.ipynb) |
+
+### Report Figures
+
+[experiments/anomaly_detection/report_figures/](experiments/anomaly_detection/report_figures/)
+
+### Supervised Multiclass Classifier
+
+| # | Model | Notebook |
+|---|---|---|
+| 1 | Multiclass Classifier x64 Training (Trainable) | [notebook](experiments/classifier/multiclass/x64/training/notebook.ipynb) |
+| 2 | Multiclass Classifier x64 Seed 07 (Trainable) | [notebook](experiments/classifier/multiclass/x64/seed07/notebook.ipynb) |
+| 3 | Multiclass Classifier x64 Final Labeling | [notebook](experiments/classifier/multiclass/x64/final_labeling/notebook.ipynb) |
+| 4 | Multiclass Classifier x64 Showcase (Trainable) | [notebook](experiments/classifier/multiclass/x64/showcase/notebook.ipynb) |
+
+### Supervised Defect Detection
+
+| # | Model | Notebook |
+|---|---|---|
+| 1 | Supervised Sweep ViT-B/16 x224 (Trainable) | [notebook](experiments/anomaly_detection_defect/supervised_sweep/vit_b16/x224/main/notebook.ipynb) |
+| 2 | Supervised CNN Full Defect | [notebook](experiments/anomaly_detection_defect/supervised_cnn/full_defect/notebook.ipynb) |
+| 3 | Supervised CNN Half Defect | [notebook](experiments/anomaly_detection_defect/supervised_cnn/half_defect/notebook.ipynb) |
+
+---
 
 ## Repository Layout
 
-```text
-configs/data/          Dataset preparation settings
-configs/training/      Model training settings
-scripts/               Notebook support scripts plus optional helpers
-src/wafer_defect/      Package code
-data/raw/              Local raw dataset files (ignored by git)
-data/processed/        Local processed outputs (ignored by git)
-artifacts/             Saved model outputs (ignored by git if desired later)
-```
-
-The processed data now has two separate anomaly-detection families:
-
-- `data/processed/x64/wm811k/` for the original `50k`-normal benchmark workflow used by most notebooks
-- `data/processed/x64/wm811k_patchcore_custom/` for the larger labeled WRN50 PatchCore split such as `120k / 10k / 20k`
-
-The notebooks are the primary way to run experiments in this repo.
-Top-level scripts are kept small on purpose:
-
-- `scripts/prepare_wm811k.py` prepares the dataset used by the notebooks
-- `scripts/evaluate_reconstruction_model.py` runs shared evaluation from saved checkpoints
-- `scripts/evaluate_autoencoder_scores.py` runs the autoencoder score-ablation evaluation used by several notebooks
-- `scripts/train_vae.py` stays at the top level because it is called directly from the VAE notebook
-- `scripts/train_ts_distillation.py` stays at the top level because notebook `12` calls it directly
-
-Optional ad hoc inspection helpers live under:
-
-- `scripts/dev/`
-
-Older standalone experiment-runner scripts were removed during cleanup.
-The experiment logic now lives primarily inside the notebooks plus reusable code under `src/wafer_defect/`.
-
-## Setup
-
-Install the package in editable mode inside your virtual environment:
-
-```powershell
-pip install -e .
-```
-
-For notebooks used in this repo, also install:
-
-```powershell
-pip install jupyter matplotlib
-```
-
-## Fresh Clone Setup
-
-Use these steps on a new machine or fresh clone.
-
-1. Clone the repo and enter it:
-
-```powershell
-git clone <repo-url>
-cd DeepLearning-Group8
-```
-
-2. Create and activate a Python 3.11 virtual environment:
-
-```powershell
-py -3.11 -m venv .venv
-.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-```
-
-3. Install the project in editable mode:
-
-```powershell
-pip install -e .
-pip install jupyter matplotlib
-```
-
-4. Place the raw WM-811K pickle here:
-
-```text
-data/raw/LSWMD.pkl
-```
-
-5. Build the processed dataset used by the main experiments:
-
-```powershell
-python scripts/prepare_wm811k.py
-```
-
-6. Verify the expected processed metadata exists:
-
-```powershell
-dir data\processed\x64\wm811k
-```
-
-The main `64x64` training configs expect:
-
-```text
-data/processed/x64/wm811k/metadata_50k_5pct.csv
-```
-
-If you also want the larger labeled WRN50 PatchCore split, prepare it separately:
-
-```powershell
-python scripts/prepare_wm811k.py --config configs/data/data_patchcore_wrn50_120k.toml
-```
-
-That writes to:
-
-```text
-data/processed/x64/wm811k_patchcore_custom/metadata_train120000_a6000_val10000_a500_test20000_a1000.csv
-```
-
-7. Open Jupyter only after the processed metadata exists:
-
-```powershell
-jupyter notebook
-```
-
-Open notebooks from the repo root so relative paths resolve correctly.
-
-## Common Path Issues
-
-If a fresh setup fails, check these first:
-
-- you are running commands from the repository root
-- you ran `pip install -e .`
-- the raw dataset file is exactly `data/raw/LSWMD.pkl`
-- you already ran `python scripts/prepare_wm811k.py`
-- `data/processed/x64/wm811k/metadata_50k_5pct.csv` exists before training
-- Jupyter was launched from the repo root, not from another folder
-
-## Expected Dataset Input
-
-The current preparation script expects the WM-811K pickle at:
-
-```text
-data/raw/LSWMD.pkl
-```
-
-The script assumes the pickle can be loaded by `pandas.read_pickle` and contains columns compatible
-with common WM-811K distributions, including:
-
-- `waferMap`
-- `failureType`
-- `trianTestLabel`
-
-If your downloaded dataset uses different column names or a different file format, adjust
-[scripts/prepare_wm811k.py](c:\Users\User\Desktop\Term%208\Deep%20Learning\Project\DeepLearning-Group8\scripts\prepare_wm811k.py).
-
-## First Commands
-
-Prepare a small development subset:
-
-```powershell
-python scripts/prepare_wm811k.py --dev
-```
-
-Then create the main training metadata used by the default `64x64` configs:
-
-```powershell
-python scripts/prepare_wm811k.py
-```
-
-Notes:
-
-- `--dev` switches to the small development subset and writes a variant-specific file such as `data/processed/x64/wm811k/metadata_dev_2kn_400d.csv`
-- with the current default config, `python scripts/prepare_wm811k.py` writes `data/processed/x64/wm811k/metadata_50k_5pct.csv`
-- the script also writes arrays to a matching variant folder such as `data/processed/x64/wm811k/arrays_50k_5pct`
-- `python scripts/prepare_wm811k.py --config configs/data/data_patchcore_wrn50_120k.toml` writes the larger labeled WRN50 PatchCore split under `data/processed/x64/wm811k_patchcore_custom/`
-- `--metadata-path` still works as an override; when you use it, the arrays folder name is derived from that metadata filename
-- with the current `configs/data/data.toml`, the main non-dev build uses `50000` normal wafers and samples test defects at `5%` of the test-normal count
-
-The default config locations are now:
-
-- data prep: `configs/data/data.toml`
-- large WRN50 labeled split: `configs/data/data_patchcore_wrn50_120k.toml`
-- training: `configs/training/*.toml`
-
-After preparing the dataset, use the notebooks for the main experiments. The notebook folders are now split by workflow:
-
-- `notebooks/anomaly_50k/` for the original anomaly-detection sequence on the `50k` benchmark split
-- `notebooks/anomaly_120k_labeled/` for larger labeled anomaly-detection workflows, currently including `patchcore_wrn50/`
-- `notebooks/classifier/` for the multiclass classification workflow
-
-Main anomaly-detection notebooks on the original `50k` benchmark split:
-
-- `notebooks/anomaly_50k/01_data_exploration.ipynb`
-  Explore the processed metadata, class balance, and sample wafer maps. If you switch dataset variants, update the metadata path in the first code cell.
-- `notebooks/anomaly_50k/02_autoencoder_training.ipynb`
-  Train and evaluate the baseline autoencoder.
-- `notebooks/anomaly_50k/03_vae_training.ipynb`
-  Train and evaluate the convolutional VAE.
-- `notebooks/anomaly_50k/04_svdd_training.ipynb`
-  Train and evaluate the Deep SVDD experiment.
-- `notebooks/anomaly_50k/05_autoencoder_batchnorm_training.ipynb`
-  Train and evaluate the BatchNorm autoencoder variant on the same `64x64` 5% dataset and evaluation protocol.
-- `notebooks/anomaly_50k/06_autoencoder_batchnorm_dropout_training.ipynb`
-  Train and evaluate the BatchNorm + Dropout autoencoder variant on the same `64x64` 5% dataset and evaluation protocol.
-- `notebooks/anomaly_50k/07_patchcore_training.ipynb`
-  Fit and evaluate a PatchCore-style local nearest-neighbor detector on the same `64x64` 5% dataset using the BatchNorm autoencoder checkpoint as the frozen feature backbone.
-- `notebooks/anomaly_50k/08_autoencoder_residual_training.ipynb`
-  Train and evaluate a stronger residual autoencoder backbone on the same `64x64` 5% dataset and evaluation protocol.
-- `notebooks/anomaly_50k/09_resnet18_backbone_baseline.ipynb`
-  Evaluate a frozen pretrained ResNet18 backbone with simple center-distance scoring on the same `64x64` 5% dataset.
-- `notebooks/anomaly_50k/10_patchcore_resnet18_training.ipynb`
-  Fit and evaluate PatchCore on a frozen pretrained ResNet18 backbone using the same `64x64` 5% dataset and validation-threshold protocol.
-- `notebooks/anomaly_50k/11_patchcore_resnet50_training.ipynb`
-  Fit and evaluate PatchCore on a frozen pretrained ResNet50 backbone using the same `64x64` 5% dataset and validation-threshold protocol.
-- `notebooks/anomaly_50k/12_ts_distillation_training.ipynb`
-  Train and evaluate the teacher-student distillation detector, including optional shared evaluation and ablation cells.
-- `notebooks/anomaly_50k/13_ts_resnet50_kaggle_import_analysis.ipynb`
-  Inspect the Kaggle-imported teacher-student ResNet50 results and compare imported artifacts before final reporting.
-- `notebooks/anomaly_120k_labeled/patchcore_wrn50/`
-  Dedicated WRN50 PatchCore workflow for the larger labeled split, including dataset prep, training review, and threshold-policy analysis.
-- `notebooks/classifier/1_multiclass_classifier_training.ipynb`
-  Prepare the `50k` labeled multiclass subset and train/evaluate the classifier without generating unlabeled predictions automatically.
-  The current training config runs for up to `80` epochs with learning-rate decay and early stopping, saves the best checkpoint by validation balanced accuracy, and marks only high-confidence unlabeled predictions as safe pseudo-label candidates.
-- `notebooks/classifier/1_multiclass_classifier_methodology.md`
-  Summarize the research-aligned rationale behind the current multiclass classifier design and pseudo-labeling workflow.
-- `notebooks/classifier/3_multiclass_classifier_final_labeling.ipynb`
-  Generate unlabeled pseudo-labels only after you have selected the final classifier checkpoint you want to trust.
-- `notebooks/classifier/4_multiclass_classifier_ensemble_workflow.ipynb`
-  Evaluate and use an ensemble of multiple multiclass classifier checkpoints trained with different random seeds.
-- `scripts/classifier/ensemble_multiclass_classifier.py`
-  Evaluate either a simple averaged ensemble or a validation-fitted stacking ensemble from multiple classifier checkpoints.
-  The stacking mode saves a reusable `stacking_combiner.json` file for later inference.
-- `scripts/classifier/predict_unlabeled_multiclass_ensemble.py`
-  Run unlabeled inference with the same checkpoint set, optionally using `--combiner-json` to apply a saved stacking combiner.
-- `notebooks/classifier/2_multiclass_classifier_showcase.ipynb`
-  Present the multiclass classifier results, plots, and example predictions after notebook `1` has produced the artifacts.
-
-Recommended run order for a fresh setup:
-
-1. Run `notebooks/anomaly_50k/01_data_exploration.ipynb` to confirm the processed dataset looks correct.
-2. Run `notebooks/anomaly_50k/02_autoencoder_training.ipynb` for the baseline autoencoder.
-3. Run `notebooks/anomaly_50k/03_vae_training.ipynb` if you want the VAE comparison.
-4. Run `notebooks/anomaly_50k/04_svdd_training.ipynb` if you want the Deep SVDD comparison.
-5. Run `notebooks/anomaly_50k/05_autoencoder_batchnorm_training.ipynb` if you want the BatchNorm autoencoder comparison.
-6. Run `notebooks/anomaly_50k/06_autoencoder_batchnorm_dropout_training.ipynb` if you want the BatchNorm + Dropout autoencoder comparison.
-7. Run `notebooks/anomaly_50k/07_patchcore_training.ipynb` if you want the PatchCore-style comparison.
-8. Run `notebooks/anomaly_50k/08_autoencoder_residual_training.ipynb` if you want the stronger residual autoencoder backbone comparison.
-9. Run `notebooks/anomaly_50k/09_resnet18_backbone_baseline.ipynb` if you want the plain pretrained ResNet18 backbone baseline.
-10. Run `notebooks/anomaly_50k/10_patchcore_resnet18_training.ipynb` if you want PatchCore with a pretrained ResNet18 backbone.
-11. Run `notebooks/anomaly_50k/11_patchcore_resnet50_training.ipynb` if you want PatchCore with a pretrained ResNet50 backbone.
-
-How to run them:
-
-- open the notebook you want
-- select the virtual-environment kernel where `pip install -e .` was run
-- run cells top to bottom
-- keep the config paths unchanged unless you intentionally want a different dataset variant
-
-## Changing the Test Defect Ratio
-
-This section applies to the original `50k` benchmark family under `configs/data/data.toml`.
-
-The test defect ratio is controlled in [configs/data/data.toml](DeepLearning-Group8\configs\data\data.toml):
-
-```toml
-[train_subset]
-normal_count = 50000
-use_all_defects_for_test = false
-test_defect_fraction_of_test_normals = 0.05
-```
-
-What this means:
-
-- the train and validation splits contain only normal wafers
-- the test split contains `5000` normal wafers
-- `test_defect_fraction_of_test_normals = 0.05` means `5% of 5000 = 250` defect wafers in test
-
-Examples:
-
-- `0.01` means about `50` test defects
-- `0.05` means `250` test defects
-- `1.0` means `5000` test defects
-- `use_all_defects_for_test = true` means use all available defect wafers in test
-
-## When Retraining Is Needed
-
-If you only change the test defect ratio and keep the same train/validation split:
-
-- you usually do not need to retrain
-- you can keep the trained checkpoint
-- you only need to reevaluate the frozen model on the new test metadata
-
-This is the recommended workflow when you want:
-
-- `5%` as a development benchmark
-- `1%` or closer-to-real-world prevalence as a final evaluation
-
-## Changing the Ratio by Re-running Prep
-
-You can change the ratio directly in `configs/data/data.toml` and rerun:
-
-```powershell
-python scripts/prepare_wm811k.py
-```
-
-Output names follow the active config:
-
-- `0.05` produces `metadata_50k_5pct.csv` and `arrays_50k_5pct`
-- `0.01` produces `metadata_50k_1pct.csv` and `arrays_50k_1pct`
-- `use_all_defects_for_test = true` produces a variant such as `metadata_50k_all.csv`
-
-This keeps different ratio variants in separate metadata files and arrays folders.
-
-## Safe Way to Evaluate a New Ratio
-
-If you only changed the test defect ratio:
-
-1. Update `test_defect_fraction_of_test_normals` in `configs/data/data.toml`.
-2. Run `python scripts/prepare_wm811k.py`.
-3. Point the notebook or config `metadata_csv` field to the newly generated metadata file.
-4. Reuse the same trained checkpoint if the train/validation split did not change.
-5. Re-run evaluation on the new test metadata.
-
-## Notes on Re-running Dataset Prep
-
-Re-running `scripts/prepare_wm811k.py` after a config change is safe as long as each dataset variant keeps its own metadata file and arrays folder.
-
-Reason:
-
-- the script now derives output names from the active config
-- different ratio settings produce different metadata filenames
-- different ratio settings also produce different arrays folders
-
-You can still overwrite an older variant if:
-
-- you manually pass the same `--metadata-path` as an existing variant
-- you change the config and then point training back to an older metadata file by mistake
-
-So after changing the ratio, make sure your training or evaluation config points to the new metadata file.
-
-## Recommended Use
-
-- For model development: keep the current `5%` split if you are already comparing experiments on it.
-- For final realism: make a separate `1%` metadata file and evaluate the final frozen model on that.
-- For fair reporting: do not keep changing the test ratio during tuning. Pick the final evaluation ratio first and report it clearly.
-
+| Folder | Contents |
+|---|---|
+| `experiments/` | All experiment notebooks, configs, and artifacts |
+| `data/dataset/` | Dataset construction notebooks |
+| `data/raw/` | Raw dataset files (not committed — place LSWMD.pkl here) |
+| `src/wafer_defect/` | Shared package code used by all notebooks |
+| `scripts/` | CLI utilities for dataset prep and evaluation |
+| `family_reports/` | Per-family result summaries and analysis |
+| `configs/` | Shared config snapshots |
+| `artifacts/` | Global shared artifacts and report plots |

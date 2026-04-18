@@ -1,0 +1,25 @@
+[run]
+output_dir = "experiments/anomaly_detection/autoencoder/x224/main/artifacts/autoencoder_x224"
+seed = 42
+
+[data]
+metadata_csv = "data/processed/x224/wm811k/metadata_50k_5pct.csv"
+image_size = 224
+batch_size = 512
+num_workers = 8
+
+[training]
+epochs = 20
+learning_rate = 0.001
+weight_decay = 0.0001
+device = "auto"
+early_stopping_patience = 5
+early_stopping_min_delta = 0.00005
+checkpoint_every = 5
+resume_from = ""
+
+[model]
+type = "autoencoder"
+latent_dim = 128
+use_batchnorm = false
+dropout_prob = 0.0

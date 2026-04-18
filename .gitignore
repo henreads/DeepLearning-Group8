@@ -14,3 +14,11 @@ venv/
 .DS_Store
 kaggle_outputs/
 uploads/
+.claude
+
+# Model/checkpoint artifacts
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.safetensors

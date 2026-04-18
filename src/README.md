@@ -1,42 +1,42 @@
 # `src/` Package Guide
 
-The notebooks are the main way to run this project.
+The project is notebook-first, but the reusable implementation lives under `src/wafer_defect/`.
 
-The code under `src/wafer_defect/` is the reusable library those notebooks import so logic does not have to be copied across notebooks.
+Use this folder when you want to understand the shared code that the curated notebooks and helper scripts import instead of duplicating logic cell by cell.
 
-## Folder Map
+## What Lives Here
 
-- `data/`
-  Loads processed wafer arrays and handles the legacy raw pickle format.
-- `classification/`
-  Groups the supervised multiclass classifier code so it stays separate from the anomaly-detection pipeline.
-- `models/`
-  Defines the model architectures used in experiments such as the autoencoder, VAE, SVDD encoder, PatchCore model, EfficientAD model, and ResNet feature extractor.
-- `training/`
-  Contains small training helpers such as one-epoch loops and PatchCore memory-bank utilities.
-- `evaluation/`
-  Converts anomaly scores into metrics like precision, recall, F1, AUROC, and threshold sweeps.
-- `scoring.py`
-  Computes anomaly scores from model outputs.
-- `config.py`
-  Loads TOML config files.
+- `wafer_defect/data/`
+  Dataset loading utilities, processed-array readers, and the legacy WM-811K pickle compatibility loader.
+- `wafer_defect/models/`
+  Model definitions for anomaly detection and backbone feature extraction.
+- `wafer_defect/training/`
+  Reusable training loops and fitting helpers used by notebooks and CLI scripts.
+- `wafer_defect/evaluation/`
+  Evaluation helpers for reconstruction metrics and UMAP-style analysis.
+- `wafer_defect/classification/`
+  Supervised multiclass classifier code kept separate from the anomaly-detection pipeline.
+- `wafer_defect/scoring.py`
+  Shared scoring helpers that turn model outputs into anomaly scores.
+- `wafer_defect/config.py`
+  Lightweight TOML config loading utilities.
 
-## How To Read It
+## Recommended Reading Order
 
-If you are following a notebook, the usual flow is:
+If you are following one of the curated notebooks, the usual flow is:
 
-1. `data/` loads the metadata CSV and wafer arrays.
-2. `models/` builds the model.
-3. `training/` runs one epoch or prepares fitting helpers.
-4. `scoring.py` turns outputs into anomaly scores.
-5. `evaluation/` summarizes those scores into metrics.
+1. `wafer_defect/data/` loads metadata and wafer arrays.
+2. `wafer_defect/models/` defines the model or feature extractor.
+3. `wafer_defect/training/` provides the reusable training or memory-bank logic.
+4. `wafer_defect/scoring.py` computes anomaly scores.
+5. `wafer_defect/evaluation/` summarizes those scores into metrics or visual analysis.
 
-## Why `training/` Exists
+## Important Boundary
 
-`src/training/` is not a second set of runnable scripts.
-It only stores reusable functions that the notebooks or helper scripts call.
+`src/` is not a second experiment tree.
 
-Example:
+The entry points for the submission remain the curated notebooks under `data/` and `experiments/`. The code in `src/` exists so those notebooks can stay readable and reproducible.
 
-- a notebook cell is the main entry point in this project
-- `src/wafer_defect/training/autoencoder.py` contains the reusable `run_autoencoder_epoch(...)` function that the script or notebook calls
+## More Detail
+
+See [wafer_defect package guide](c:\Users\User\Desktop\Term 8\Deep Learning\Project\DeepLearning-Group8\src\wafer_defect\README.md) for the package-level map.

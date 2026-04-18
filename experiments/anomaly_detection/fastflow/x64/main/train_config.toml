@@ -1,0 +1,76 @@
+[run]
+output_dir = "experiments/anomaly_detection/fastflow/x64/main/artifacts/fastflow_variant_sweep"
+seed = 42
+
+[data]
+metadata_csv = "data/processed/x64/wm811k/metadata_50k_5pct.csv"
+image_size = 64
+batch_size = 128
+num_workers = 4
+
+[training]
+epochs = 16
+learning_rate = 0.00005
+weight_decay = 0.00001
+device = "auto"
+early_stopping_patience = 4
+grad_clip_norm = 0.5
+amp = true
+checkpoint_every = 4
+
+[model]
+type = "fastflow"
+backbone_name = "wide_resnet50_2"
+backbone_pretrained = true
+
+[scoring]
+threshold_quantile = 0.95
+
+[[scoring.sweep_variants]]
+name = "mean"
+reduction = "mean"
+topk_ratio = 0.10
+
+[[scoring.sweep_variants]]
+name = "max"
+reduction = "max"
+topk_ratio = 0.10
+
+[[scoring.sweep_variants]]
+name = "topk_r005"
+reduction = "topk_mean"
+topk_ratio = 0.05
+
+[[scoring.sweep_variants]]
+name = "topk_r010"
+reduction = "topk_mean"
+topk_ratio = 0.10
+
+[[scoring.sweep_variants]]
+name = "topk_r015"
+reduction = "topk_mean"
+topk_ratio = 0.15
+
+[[variants]]
+name = "wrn50_l23_s6"
+layers = ["layer2", "layer3"]
+input_size = 224
+flow_steps = 6
+hidden_channels = 256
+scale_clamp = 1.3
+
+[[variants]]
+name = "wrn50_l2_s6"
+layers = ["layer2"]
+input_size = 224
+flow_steps = 6
+hidden_channels = 256
+scale_clamp = 1.3
+
+[[variants]]
+name = "wrn50_l23_s4"
+layers = ["layer2", "layer3"]
+input_size = 224
+flow_steps = 4
+hidden_channels = 256
+scale_clamp = 1.3

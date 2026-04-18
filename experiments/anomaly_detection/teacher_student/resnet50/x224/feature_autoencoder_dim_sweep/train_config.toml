@@ -1,0 +1,37 @@
+[run]
+output_dir = "experiments/anomaly_detection/teacher_student/resnet50/x224/feature_autoencoder_dim_sweep/artifacts/ts_resnet50_x224_ae_dim_sweep"
+seed = 42
+
+[data]
+metadata_csv = "data/processed/x224/wm811k/metadata_50k_5pct.csv"
+image_size = 224
+batch_size = 256
+num_workers = 8
+
+[training]
+epochs = 30
+learning_rate = 0.0003
+weight_decay = 0.00001
+device = "auto"
+early_stopping_patience = 5
+early_stopping_min_delta = 0.0001
+checkpoint_every = 5
+
+[model]
+type = "ts_distillation"
+teacher_backbone = "resnet50"
+teacher_layer = "layer2"
+teacher_pretrained = true
+teacher_input_size = 224
+normalize_teacher_input = true
+# feature_autoencoder_hidden_dim will be overridden per sweep dimension
+feature_autoencoder_hidden_dim = 128
+student_weight = 1.0
+autoencoder_weight = 1.0
+score_student_weight = 1.0
+score_autoencoder_weight = 0.0
+reduction = "topk_mean"
+topk_ratio = 0.20
+
+[scoring]
+threshold_quantile = 0.95

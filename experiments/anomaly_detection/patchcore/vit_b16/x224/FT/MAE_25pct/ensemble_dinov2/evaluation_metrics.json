@@ -1,0 +1,51 @@
+{
+  "ensemble": "MAE fine-tuned (25% mask) + DINOv2 block-9 (max-fusion)",
+  "roc_auc": 0.9411072,
+  "auprc": 0.6934559100752661,
+  "f1": 0.5439093484419264,
+  "precision": 0.42105263157894735,
+  "recall": 0.768,
+  "threshold": 0.33128086720901967,
+  "per_class": {
+    "Center": {
+      "n": 50,
+      "detected": 37,
+      "recall": 0.74
+    },
+    "Donut": {
+      "n": 7,
+      "detected": 7,
+      "recall": 1.0
+    },
+    "Edge-Loc": {
+      "n": 53,
+      "detected": 33,
+      "recall": 0.6226415094339622
+    },
+    "Edge-Ring": {
+      "n": 84,
+      "detected": 78,
+      "recall": 0.9285714285714286
+    },
+    "Loc": {
+      "n": 34,
+      "detected": 21,
+      "recall": 0.6176470588235294
+    },
+    "Near-full": {
+      "n": 2,
+      "detected": 2,
+      "recall": 1.0
+    },
+    "Random": {
+      "n": 5,
+      "detected": 5,
+      "recall": 1.0
+    },
+    "Scratch": {
+      "n": 15,
+      "detected": 9,
+      "recall": 0.6
+    }
+  }
+}

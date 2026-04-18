@@ -10,6 +10,7 @@ import random
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from wafer_defect.config import load_toml
 from wafer_defect.data.wm811k import WaferMapDataset
@@ -95,9 +96,24 @@ def main() -> None:
         best_state_dict = {key: value.detach().cpu().clone() for key, value in model.state_dict().items()}
         print(f"Resumed from {resume_path} at epoch {start_epoch}")
 
-    for epoch in range(start_epoch, int(config["training"]["epochs"])):
-        train_metrics = run_vae_epoch(model, train_loader, device, beta=beta, optimizer=optimizer)
-        val_metrics = run_vae_epoch(model, val_loader, device, beta=beta)
+    for epoch in tqdm(range(start_epoch, int(config["training"]["epochs"])), desc="Training epochs", total=int(config["training"]["epochs"]), initial=start_epoch):
+        train_metrics = run_vae_epoch(
+            model,
+            train_loader,
+            device,
+            beta=beta,
+            optimizer=optimizer,
+            progress_desc=f"train e{epoch + 1}",
+            leave_progress=False,
+        )
+        val_metrics = run_vae_epoch(
+            model,
+            val_loader,
+            device,
+            beta=beta,
+            progress_desc=f"val e{epoch + 1}",
+            leave_progress=False,
+        )
         record = {
             "epoch": epoch + 1,
             "train_loss": train_metrics.loss,

@@ -1,0 +1,24 @@
+[run]
+output_dir = "experiments/anomaly_detection/backbone_embedding/wide_resnet50_2/x64/baseline/artifacts/wide_resnet50_2_embedding_baseline"
+seed = 42
+
+[data]
+metadata_csv = "data/processed/x64/wm811k/metadata_50k_5pct.csv"
+image_size = 64
+batch_size = 64
+num_workers = 0
+
+[training]
+device = "auto"
+
+[model]
+type = "wide_resnet50_2_backbone"
+backbone_name = "wide_resnet50_2"
+pretrained = true
+freeze_backbone = true
+input_size = 224
+normalize_imagenet = true
+
+[scoring]
+name = "center_l2"
+threshold_quantile = 0.95

@@ -1,0 +1,35 @@
+[run]
+output_dir = "experiments/anomaly_detection/patchcore/wideresnet50/x224/weighted/artifacts/patchcore_wideresnet50_multilayer"
+seed = 42
+
+[data]
+metadata_csv = "data/processed/x64/wm811k/metadata_50k_5pct.csv"
+image_size = 64
+batch_size = 64
+num_workers = 4
+
+[training]
+device = "auto"
+
+[model]
+type = "patchcore"
+backbone_type = "wideresnet50_2"
+teacher_layers = ["layer2", "layer3"]
+pretrained = true
+freeze_backbone = true
+backbone_input_size = 224
+normalize_imagenet = true
+memory_bank_size = 50000
+reduction = "mean"
+topk_ratio = 0.10
+query_chunk_size = 1024
+memory_chunk_size = 4096
+
+[scoring]
+threshold_quantile = 0.95
+
+[sweep]
+variant_names = ["mean_mb20k", "mean_mb50k", "topk_mb50k_r010", "topk_mb50k_r015"]
+memory_bank_sizes = [20000, 50000]
+topk_ratios = [0.10, 0.15]
+reductions = ["mean", "topk_mean"]

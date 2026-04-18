@@ -1,0 +1,73 @@
+{
+  "roc_auc": 0.9615703999999999,
+  "auprc": 0.7618289429725922,
+  "threshold": 0.6135016679763794,
+  "threshold_quantile": 0.95,
+  "threshold_sigma": 1.7390955979393172,
+  "tune_mean": 0.5465481048882007,
+  "tune_std": 0.03849906995669126,
+  "tune_fpr": 0.05,
+  "overall_defect_recall": 0.844,
+  "bank_size": 600000,
+  "per_class": {
+    "Center": {
+      "n": 34,
+      "detected": 23,
+      "recall": 0.6764705882352942,
+      "mean_score": 0.6396809009944692
+    },
+    "Donut": {
+      "n": 2,
+      "detected": 2,
+      "recall": 1.0,
+      "mean_score": 0.762379378080368
+    },
+    "Edge-Loc": {
+      "n": 44,
+      "detected": 31,
+      "recall": 0.7045454545454546,
+      "mean_score": 0.6589318093928423
+    },
+    "Edge-Ring": {
+      "n": 102,
+      "detected": 98,
+      "recall": 0.9607843137254902,
+      "mean_score": 0.6932941780370825
+    },
+    "Loc": {
+      "n": 41,
+      "detected": 34,
+      "recall": 0.8292682926829268,
+      "mean_score": 0.666243207163927
+    },
+    "Near-full": {
+      "n": 3,
+      "detected": 3,
+      "recall": 1.0,
+      "mean_score": 0.7808957497278849
+    },
+    "Random": {
+      "n": 13,
+      "detected": 13,
+      "recall": 1.0,
+      "mean_score": 0.7640165549058181
+    },
+    "Scratch": {
+      "n": 11,
+      "detected": 7,
+      "recall": 0.6363636363636364,
+      "mean_score": 0.6315102523023431
+    }
+  },
+  "finetune": {
+    "method": "masked_patch_reconstruction",
+    "epochs": 10,
+    "lr": 0.0001,
+    "unfreeze_blocks": 6,
+    "mask_ratio": 0.25,
+    "patch_size": 16,
+    "decoder_hidden": 512,
+    "decoder_layers": 2,
+    "final_loss": 0.03195869312882423
+  }
+}

@@ -1,0 +1,42 @@
+[run]
+output_dir = "experiments/anomaly_detection/patchcore/wideresnet50/x224/multilayer_umap/artifacts/patchcore-wideresnet50-multilayer-umap"
+seed = 42
+secondary_holdout_mode = false
+
+[data]
+metadata_csv = "data/processed/x224/wm811k/metadata_50k_5pct.csv"
+image_size = 224
+batch_size = 128
+num_workers = 0
+
+[split]
+mode = "report_50k_5pct"
+
+[training]
+device = "auto"
+
+[model]
+type = "patchcore"
+backbone_type = "wideresnet50_2"
+teacher_layers = ["layer2", "layer3"]
+pretrained = true
+freeze_backbone = true
+backbone_input_size = 224
+normalize_imagenet = true
+query_chunk_size = 1024
+memory_chunk_size = 4096
+
+[scoring]
+threshold_quantile = 0.95
+
+[[sweep_variants]]
+name = "topk_mb50k_r010_x224"
+memory_bank_size = 600000
+reduction = "topk_mean"
+topk_ratio = 0.10
+
+[[sweep_variants]]
+name = "topk_mb50k_r005_x224"
+memory_bank_size = 600000
+reduction = "topk_mean"
+topk_ratio = 0.05

@@ -1,0 +1,38 @@
+[run]
+output_dir = "experiments/anomaly_detection/patchcore/vit_b16/x224/FT/MAE/artifacts"
+seed = 42
+
+[data]
+image_size = 224
+batch_size = 64
+num_workers = 0
+
+[split]
+train_normal_n = 40000
+tune_normal_n = 5000
+test_normal_n = 5000
+test_defect_n = 250
+
+[finetune]
+method = "masked_patch_reconstruction"
+mask_ratio = 0.75
+patch_size = 16
+decoder_hidden = 512
+decoder_layers = 2
+unfreeze_blocks = 6
+epochs = 10
+lr = 1e-4
+
+[model]
+type = "patchcore_finetuned_vit"
+backbone = "vit_base_patch16_224.augreg_in21k_ft_in1k"
+vit_feature_block = 6
+patch_embed_dim = 128
+memory_bank_max = 600000
+score_chunk = 512
+patchcore_nn_k = 3
+topk_patch_ratio = 0.1
+
+[threshold]
+method = "quantile"
+quantile = 0.95

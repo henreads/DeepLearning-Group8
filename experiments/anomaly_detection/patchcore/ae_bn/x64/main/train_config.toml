@@ -1,0 +1,22 @@
+[run]
+output_dir = "experiments/anomaly_detection/patchcore/ae_bn/x64/main/artifacts/patchcore_ae_bn"
+seed = 42
+
+[data]
+metadata_csv = "data/processed/x64/wm811k/metadata_50k_5pct.csv"
+image_size = 64
+batch_size = 64
+num_workers = 0
+
+[training]
+device = "auto"
+
+[model]
+type = "patchcore"
+backbone_checkpoint = "experiments/anomaly_detection/autoencoder/x64/batchnorm/artifacts/autoencoder_batchnorm/checkpoints/best_model.pt"
+use_batchnorm = true
+memory_bank_size = 50000
+reduction = "max"
+topk_ratio = 0.1
+query_chunk_size = 2048
+memory_chunk_size = 8192

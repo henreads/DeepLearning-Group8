@@ -194,6 +194,11 @@ def collect_features(
             if model_type == "autoencoder":
                 recon = model(inputs)
                 feat = (inputs - recon).view(inputs.size(0), -1)
+            elif model_type == "vae":
+                outputs = model(inputs)
+                if not isinstance(outputs, VAEOutput):
+                    raise TypeError("VAE model must return VAEOutput")
+                feat = (inputs - outputs.reconstruction).view(inputs.size(0), -1)
 
             elif model_type == "ts_distillation":
                 outputs = model(inputs)
@@ -208,6 +213,12 @@ def collect_features(
             elif model_type == "patchcore":
                 feat = model.embed(inputs)  
                 feat = feat.view(feat.size(0), -1)
+
+            elif model_type == "vae":
+                outputs = model(inputs)
+                if not isinstance(outputs, VAEOutput):
+                    raise TypeError("VAE model must return VAEOutput")
+                feat = outputs.mu
 
             else:
 
@@ -266,6 +277,8 @@ def main() -> None:
     device = resolve_device(args.device or config["training"].get("device", "auto"))
     batch_size = args.batch_size or int(data_config.get("batch_size", 64))
     image_size = infer_image_size(config, checkpoint_path)
+    output_dir = Path(args.output_dir) if args.output_dir else checkpoint_path.parent / "evaluation"
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     model = build_model(config, model_type, image_size=image_size)
     if model_type == "patchcore" and "memory_bank" in checkpoint["model_state_dict"]:
@@ -329,9 +342,6 @@ def main() -> None:
             model_type,
         )
 
-        np.save(output_dir / "test_features.npy", test_features)
-        np.save(output_dir / "test_labels.npy", test_labels)
-
         print(f"[INFO] Saved features: {test_features.shape}")
 
     labels = test_scores_df["is_anomaly"].to_numpy()
@@ -339,9 +349,6 @@ def main() -> None:
 
     metrics = summarize_threshold_metrics(labels, scores, threshold)
     threshold_sweep_df, best_sweep = sweep_threshold_metrics(labels, scores)
-
-    output_dir = Path(args.output_dir) if args.output_dir else checkpoint_path.parent / "evaluation"
-    output_dir.mkdir(parents=True, exist_ok=True)
 
     val_scores_df.to_csv(output_dir / "val_scores.csv", index=False)
     test_scores_df.to_csv(output_dir / "test_scores.csv", index=False)

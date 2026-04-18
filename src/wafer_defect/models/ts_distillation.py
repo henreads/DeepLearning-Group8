@@ -17,6 +17,8 @@ def _teacher_feature_dim(backbone_name: str, layer_name: str) -> int:
     dims = {
         "resnet18": {"layer1": 64, "layer2": 128, "layer3": 256, "layer4": 512},
         "resnet50": {"layer1": 256, "layer2": 512, "layer3": 1024, "layer4": 2048},
+        "vit_b16": {f"block{i}": 768 for i in range(12)},
+        "vit_base_patch16_224": {f"block{i}": 768 for i in range(12)},
     }
     if backbone_name not in dims or layer_name not in dims[backbone_name]:
         raise ValueError(f"Unsupported teacher backbone/layer combination: {backbone_name} / {layer_name}")
@@ -109,13 +111,24 @@ class TSDistillationModel(nn.Module):
         )
         self.feature_dim = _teacher_feature_dim(self.teacher_backbone, self.teacher_layer)
 
-        self.teacher = ResNetFeatureExtractor(
-            backbone_name=self.teacher_backbone,
-            pretrained=teacher_pretrained,
-            input_size=self.teacher_input_size,
-            freeze_backbone=True,
-            normalize_imagenet=normalize_teacher_input,
-        )
+        if self.teacher_backbone in {"vit_b16", "vit_base_patch16_224"}:
+            from wafer_defect.models.vit import ViTFeatureExtractor
+
+            self.teacher = ViTFeatureExtractor(
+                backbone_name=self.teacher_backbone,
+                pretrained=teacher_pretrained,
+                input_size=self.teacher_input_size,
+                freeze_backbone=True,
+                normalize_imagenet=normalize_teacher_input,
+            )
+        else:
+            self.teacher = ResNetFeatureExtractor(
+                backbone_name=self.teacher_backbone,
+                pretrained=teacher_pretrained,
+                input_size=self.teacher_input_size,
+                freeze_backbone=True,
+                normalize_imagenet=normalize_teacher_input,
+            )
         self.student = TSStudent(feature_dim=self.feature_dim, input_size=self.teacher_input_size)
         self.autoencoder = TeacherFeatureAutoencoder(
             feature_dim=self.feature_dim,
