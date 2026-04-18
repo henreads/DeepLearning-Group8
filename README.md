@@ -3,6 +3,7 @@
 **Group 08** · Henry Lee Jun · Chia Tang · Genson Low
 
 ## Quick Start
+Dateset and Artifact link: https://sutdapac-my.sharepoint.com/:f:/g/personal/henry_lee_mymail_sutd_edu_sg/IgDoXYip5GTZS68DEXWup5lIAcflFy-6c0__vcd4uaSOZOA?e=ljJtk6
 
 1. Create and activate the environment, then install the project: `py -3.11 -m venv .venv && .venv\Scripts\Activate.ps1 && pip install -e .`
 2. Place the raw WM-811K pickle at `data/raw/LSWMD.pkl`.
