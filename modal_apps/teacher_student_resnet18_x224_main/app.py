@@ -45,6 +45,8 @@ REMOTE_ARTIFACT_DIR = (
 )
 REMOTE_RUNNER = f"{REMOTE_PROJECT_ROOT}/scripts/run_ts_resnet18_x224_main_notebook.py"
 REMOTE_PREPARE_SCRIPT = f"{REMOTE_PROJECT_ROOT}/scripts/prepare_wm811k.py"
+QUICK_SWEEP_EPOCHS = 10
+FULL_SWEEP_EPOCHS = 30
 
 image = (
     modal.Image.debian_slim(python_version="3.11")
@@ -61,6 +63,11 @@ image = (
     )
     .add_local_python_source("wafer_defect", copy=True)
     .add_local_dir("configs", remote_path=f"{REMOTE_PROJECT_ROOT}/configs", copy=True)
+    .add_local_file(
+        "scripts/run_ts_resnet18_x224_main_notebook.py",
+        remote_path=REMOTE_RUNNER,
+        copy=True,
+    )
     .add_local_dir("scripts", remote_path=f"{REMOTE_PROJECT_ROOT}/scripts", copy=True)
     .add_local_dir(
         "experiments/anomaly_detection/teacher_student/resnet18/x224/main",
@@ -207,14 +214,22 @@ def _prepare_processed_dataset() -> None:
         REMOTE_ARTIFACT_DIR: artifact_volume,
     },
 )
-def run_ts_remote() -> dict[str, Any]:
+def run_ts_remote(quick: bool = True, epochs: int | None = None, run_sweep: bool = False) -> dict[str, Any]:
     _prepare_processed_dataset()
+    effective_config = Path("/tmp/ts_resnet18_x224_effective.toml")
+    config_text = Path(f"{REMOTE_PROJECT_ROOT}/experiments/anomaly_detection/teacher_student/resnet18/x224/main/train_config.toml").read_text(encoding="utf-8")
+    effective_epochs = int(epochs if epochs is not None else (QUICK_SWEEP_EPOCHS if quick else FULL_SWEEP_EPOCHS))
+    config_text = config_text.replace("epochs = 30", f"epochs = {effective_epochs}")
+    effective_config.write_text(config_text, encoding="utf-8")
     manifests: dict[str, Any] = {}
-    for phase in ["train", "eval", "sweep"]:
+    phases = ["train", "eval", *(["sweep"] if run_sweep else [])]
+    for phase in phases:
         command = [
             "python",
             "-u",
             REMOTE_RUNNER,
+            "--config",
+            str(effective_config),
             "--output-dir",
             "experiments/anomaly_detection/teacher_student/resnet18/x224/main/artifacts/ts_resnet18_x224",
             "--phase",
@@ -230,12 +245,18 @@ def run_ts_remote() -> dict[str, Any]:
     final_manifest = Path(REMOTE_ARTIFACT_DIR) / "ts_resnet18_x224" / "run_manifest.json"
     if final_manifest.exists():
         manifests["final"] = json.loads(final_manifest.read_text(encoding="utf-8"))
+    manifests["requested"] = {
+        "quick_mode": quick,
+        "epochs": effective_epochs,
+        "run_sweep": run_sweep,
+        "phases": phases,
+    }
     return manifests
 
 
 @app.local_entrypoint()
-def main(sync_back: bool = True) -> None:
-    result = run_ts_remote.remote()
+def main(sync_back: bool = True, quick: bool = True, epochs: int | None = None, run_sweep: bool = False) -> None:
+    result = run_ts_remote.remote(quick=quick, epochs=epochs, run_sweep=run_sweep)
     print(json.dumps(result, indent=2))
     if sync_back:
         _download_artifacts(str(LOCAL_ARTIFACT_DIR), "/ts_resnet18_x224")

@@ -15,7 +15,10 @@ APP_NAME = "wafer-defect-ts-resnet50-x224-ae-dim-sweep"
 RAW_VOLUME_NAME = "wafer-defect-lswmd-raw"
 PROCESSED_VOLUME_NAME = "wafer-defect-wm811k-x224-processed"
 ARTIFACT_VOLUME_NAME = "wafer-defect-ts-resnet50-x224-ae-dim-sweep-artifacts"
-AE_HIDDEN_DIMS = [64, 128, 256, 512, 768]
+FULL_AE_HIDDEN_DIMS = [64, 128, 256, 512, 768]
+QUICK_AE_HIDDEN_DIMS = [64, 128, 256]
+QUICK_SWEEP_EPOCHS = 10
+FULL_SWEEP_EPOCHS = 30
 
 
 def _resolve_local_repo_root() -> Path:
@@ -70,6 +73,7 @@ image = (
         "torch>=2.2",
         "torchvision>=0.17",
         "tqdm>=4.66",
+        "timm>=1.0",
     )
     .add_local_python_source("wafer_defect", copy=True)
     .add_local_dir("configs", remote_path=f"{REMOTE_PROJECT_ROOT}/configs", copy=True)
@@ -235,7 +239,7 @@ def _dump_toml(config_dict: dict[str, Any]) -> str:
         REMOTE_ARTIFACT_DIR: artifact_volume,
     },
 )
-def run_dimension_sweep(fresh_train: bool = False) -> dict[str, Any]:
+def run_dimension_sweep(fresh_train: bool = False, quick: bool = True, epochs: int | None = None) -> dict[str, Any]:
     import pandas as pd
     from wafer_defect.config import load_toml
 
@@ -273,8 +277,9 @@ def run_dimension_sweep(fresh_train: bool = False) -> dict[str, Any]:
     sweep_root = Path(REMOTE_SWEEP_ARTIFACT_DIR)
     sweep_root.mkdir(parents=True, exist_ok=True)
 
+    ae_hidden_dims = QUICK_AE_HIDDEN_DIMS if quick else FULL_AE_HIDDEN_DIMS
     rows: list[dict[str, Any]] = []
-    for ae_hidden_dim in AE_HIDDEN_DIMS:
+    for ae_hidden_dim in ae_hidden_dims:
         dim_name = f"ae_dim_{ae_hidden_dim}"
         dim_artifact_dir = sweep_root / dim_name
         dim_checkpoint_dir = dim_artifact_dir / "checkpoints"
@@ -293,6 +298,11 @@ def run_dimension_sweep(fresh_train: bool = False) -> dict[str, Any]:
         base_config = load_toml(REMOTE_CONFIG_PATH)
         base_config["model"]["feature_autoencoder_hidden_dim"] = ae_hidden_dim
         base_config["run"]["output_dir"] = dim_artifact_dir.as_posix()
+        base_config["data"]["batch_size"] = 512
+        base_config["data"]["num_workers"] = 4
+        base_config["training"]["epochs"] = int(
+            epochs if epochs is not None else (QUICK_SWEEP_EPOCHS if quick else FULL_SWEEP_EPOCHS)
+        )
         if latest_checkpoint_path.exists() and not fresh_train:
             base_config["training"]["resume_from"] = latest_checkpoint_path.as_posix()
         else:
@@ -364,7 +374,9 @@ def run_dimension_sweep(fresh_train: bool = False) -> dict[str, Any]:
 
     return {
         "artifact_dir": REMOTE_SWEEP_ARTIFACT_DIR,
-        "dimensions_requested": AE_HIDDEN_DIMS,
+        "quick_mode": quick,
+        "epochs": int(epochs if epochs is not None else QUICK_SWEEP_EPOCHS if quick else FULL_SWEEP_EPOCHS),
+        "dimensions_requested": ae_hidden_dims,
         "dimensions_completed": [row["ae_hidden_dim"] for row in rows],
         "summary_csv": summary_path.as_posix() if summary_path.exists() else None,
         "best_result": best_result,
@@ -372,8 +384,8 @@ def run_dimension_sweep(fresh_train: bool = False) -> dict[str, Any]:
 
 
 @app.local_entrypoint()
-def main(sync_back: bool = True, fresh_train: bool = False) -> None:
-    result = run_dimension_sweep.remote(fresh_train=fresh_train)
+def main(sync_back: bool = True, fresh_train: bool = False, quick: bool = True, epochs: int | None = None) -> None:
+    result = run_dimension_sweep.remote(fresh_train=fresh_train, quick=quick, epochs=epochs)
     print(json.dumps(result, indent=2))
     if sync_back:
         _download_artifacts(str(LOCAL_ARTIFACT_DIR), "/ts_resnet50_x224_ae_dim_sweep")
