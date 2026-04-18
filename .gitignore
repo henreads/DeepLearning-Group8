@@ -15,6 +15,10 @@ venv/
 kaggle_outputs/
 uploads/
 .claude
+.ipython_validation
+.superpowers
+Report_Latex_v2.tex
+appendix_ablations.tex
 
 # Model/checkpoint artifacts
 *.pt

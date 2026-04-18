@@ -175,7 +175,8 @@ Ranked by val-threshold F1 (primary metric). All metrics from the main benchmark
 
 | Folder | Contents |
 |---|---|
-| `experiments/` | All experiment notebooks, configs, and artifacts |
+| `experiments/anomaly_detection/` | Unsupervised anomaly detection experiments (AE, VAE, SVDD, Teacher-Student, PatchCore, RD4AD, FastFlow, Ensemble) |
+| `experiments/anomaly_detection_defect/` | Supervised defect detection experiments (CNN and ViT-B/16 sweep) |
 | `data/dataset/` | Dataset construction notebooks |
 | `data/raw/` | Raw dataset files (not committed — place LSWMD.pkl here) |
 | `src/wafer_defect/` | Shared package code used by all notebooks |
